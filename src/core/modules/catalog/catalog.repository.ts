@@ -16,6 +16,7 @@ interface CategoryRow {
 interface ProductRow {
   id: string;
   category_id: string;
+  tenant_id: string | null;
   name: string;
   description: string | null;
   base_price: number;
@@ -41,6 +42,7 @@ function toProduct(row: ProductRow): Product {
   return {
     id: row.id,
     categoryId: row.category_id,
+    tenantId: row.tenant_id,
     name: row.name,
     description: row.description ?? undefined,
     basePrice: row.base_price,
@@ -61,6 +63,12 @@ export class CatalogRepository {
 
   async findProductsByCategory(categoryId: string): Promise<Product[]> {
     const { data, error } = await supabase.from('products').select('*').eq('category_id', categoryId);
+    if (error) throw error;
+    return (data as ProductRow[]).map(toProduct);
+  }
+
+  async findProductsByTenant(tenantId: string): Promise<Product[]> {
+    const { data, error } = await supabase.from('products').select('*').eq('tenant_id', tenantId);
     if (error) throw error;
     return (data as ProductRow[]).map(toProduct);
   }

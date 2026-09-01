@@ -35,6 +35,7 @@ export interface Category {
 export interface Product {
   id: string;
   categoryId: string;
+  tenantId: string | null; // معرّف التاجر المالك للمنتج — عزل المستأجرين (§5, §26)
   name: string;
   description?: string;
   basePrice: number;
