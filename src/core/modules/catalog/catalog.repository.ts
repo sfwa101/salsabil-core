@@ -61,6 +61,12 @@ export class CatalogRepository {
     return (data as CategoryRow[]).map(toCategory);
   }
 
+  async findCategoryBySlug(slug: string): Promise<Category | null> {
+    const { data, error } = await supabase.from('categories').select('*').eq('slug', slug).maybeSingle();
+    if (error) throw error;
+    return data ? toCategory(data as CategoryRow) : null;
+  }
+
   async findProductsByCategory(categoryId: string): Promise<Product[]> {
     const { data, error } = await supabase.from('products').select('*').eq('category_id', categoryId);
     if (error) throw error;

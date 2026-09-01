@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+/* ألوان الدستور — SALSABIL_CONSTITUTION.md §21, ADR-006 في docs/DECISIONS.md */
+@theme {
+  --color-brand-green: #2d6a4f;
+  --color-brand-orange: #f4845f;
+}
+
+body {
+  background-color: #fafaf9;
+  color: #1c1917;
+}

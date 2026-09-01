@@ -1,9 +1,26 @@
 // src/core/modules/catalog/catalog.service.ts
-// محرك حساب السعر والتحقق — لا استدعاء لقاعدة بيانات هنا مباشرة
+// محرك حساب السعر والتحقق — لا استدعاء لقاعدة بيانات هنا مباشرة، فقط عبر catalogRepository
 
-import type { Product, ProductSelection } from './types';
+import { catalogRepository } from './catalog.repository';
+import type { Category, Product, ProductSelection } from './types';
 
 export class CatalogService {
+  async listCategories(): Promise<Category[]> {
+    return catalogRepository.findCategories();
+  }
+
+  async getCategoryBySlug(slug: string): Promise<Category | null> {
+    return catalogRepository.findCategoryBySlug(slug);
+  }
+
+  async listProductsByCategory(categoryId: string): Promise<Product[]> {
+    return catalogRepository.findProductsByCategory(categoryId);
+  }
+
+  async getProductById(id: string): Promise<Product | null> {
+    return catalogRepository.findProductById(id);
+  }
+
   /**
    * يتحقق من أن الاختيار (الحجم/الإضافات) صالح لهذا المنتج
    */

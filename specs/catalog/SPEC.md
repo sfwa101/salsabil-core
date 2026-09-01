@@ -44,7 +44,7 @@ source_of_truth: هذا الملف يوثّق التطابق/الفجوة — ا
 | حساب السعر من الخادم (calculatePrice) | `IMPLEMENTED` + **مُختبَر فعلياً** (100/150 جنيه للدجاجة) |
 | التحقق من صحة الخيارات المُرسَلة (validateOptions) | `IMPLEMENTED` |
 | CatalogRepository (getActiveCategories, getProductsByCategory) | `IMPLEMENTED` |
-| واجهة مستخدم لعرض المنتجات | `NOT_IMPLEMENTED` — لا صفحة واجهة بعد (مخطَّط لليوم 5) |
+| واجهة مستخدم لعرض المنتجات | `IMPLEMENTED` (اليوم 5) — `src/app/page.tsx`, `src/app/[category]/page.tsx`, `src/app/product/[id]/page.tsx` |
 | ربط منتج بتاجر (tenant_id) | `IMPLEMENTED` (اليوم 4) — راجع `specs/merchant/SPEC.md` |
 
 ## Business Rules
@@ -55,22 +55,36 @@ source_of_truth: هذا الملف يوثّق التطابق/الفجوة — ا
 
 ## UX Requirements
 
-`UNKNOWN` — لا تصميم واجهة موثَّق (راجع `docs/UI_UX_SYSTEM.md §6`).
+`IMPLEMENTED` (نطاق أولي، اليوم 5) — تصفح: أقسام → منتجات → تفاصيل منتج مع اختيار حجم/إضافة وسعر محسوب حياً. ألوان الدستور (`ADR-006`) مُطبَّقة. لا Spacing/Typography/Shadows موحَّدة بعد (لا تزال `OPEN_QUESTION` في `docs/UI_UX_SYSTEM.md §6`) — استُخدمت قيم Tailwind الافتراضية حيث لا قرار موثَّق.
 
 ## Technical Requirements
 
 ```
 src/core/modules/catalog/
   ├── types.ts (Product, Category, ProductOption, SizeOption, AddonOption)
-  ├── catalog.service.ts (calculatePrice, validateOptions)
-  └── catalog.repository.ts (getActiveCategories, getProductsByCategory)
+  ├── catalog.service.ts (calculatePrice, validateSelection, listCategories,
+  │                        getCategoryBySlug, listProductsByCategory, getProductById)
+  └── catalog.repository.ts (findCategories, findCategoryBySlug,
+                              findProductsByCategory, findProductsByTenant,
+                              findProductById, findProductByName)
+
+src/app/
+  ├── page.tsx                     (قائمة الأقسام)
+  ├── [category]/page.tsx          (منتجات القسم)
+  └── product/[id]/
+      ├── page.tsx                 (تفاصيل المنتج)
+      └── actions.ts                ('use server' — calculatePriceAction)
+
+src/components/
+  ├── CategoryCard.tsx, ProductCard.tsx
+  └── ProductOptions.tsx           ('use client' — اختيار الحجم/الإضافات)
 ```
 
-**قرار تصميم موثَّق:** JSONB بدل أعمدة ثابتة/EAV — راجع `docs/DECISIONS.md ADR-004`.
+**قرار تصميم موثَّق:** JSONB بدل أعمدة ثابتة/EAV — راجع `docs/DECISIONS.md ADR-004`. ألوان الدستور معتمدة فعلياً — راجع `ADR-006`.
 
 ## Security Requirements
 
-`validateOptions()` يمنع قبول خيار غير موجود فعلياً في المنتج — تطبيق مباشر لمبدأ "لا ثقة ببيانات العميل" (`CONSTITUTION §4`).
+`validateSelection()` يمنع قبول خيار غير موجود فعلياً في المنتج — تطبيق مباشر لمبدأ "لا ثقة ببيانات العميل" (`CONSTITUTION §4`). السعر المعروض للعميل يُحسَب دائماً عبر `calculatePriceAction` (Server Action، `docs/SECURITY.md` قاعدة 2) — لا حساب سعر في الواجهة (Client Component) يُعتمَد عليه مباشرة.
 
 ## Acceptance Criteria (للحالة الحالية)
 
@@ -78,7 +92,7 @@ src/core/modules/catalog/
 - [x] المنتجات تُقرأ مع خياراتها
 - [x] حساب السعر صحيح رياضياً (تحقق فعلي: 120 أساس، -20 صغير = 100، +30 كبير = 150)
 - [x] `npx tsc --noEmit` بلا أخطاء
-- [ ] واجهة مستخدم فعلية — **غير مكتمل**
+- [x] واجهة مستخدم فعلية — تصفح فعلي عبر متصفح حقيقي (Playwright headless): قسم → منتج → صغير=100 → كبير=150، بلا أخطاء console
 - [ ] ربط بمخزون فعلي عند الطلب — **غير مكتمل** (Orders غير موجود)
 
 ## Dependencies
@@ -102,4 +116,4 @@ src/core/modules/catalog/
 
 ## Status
 
-`PARTIALLY_IMPLEMENTED` — منطق العمل الأساسي وقاعدة البيانات جاهزان ومُختبَران، لا واجهة مستخدم، لا ربط بالطلبات بعد.
+`PARTIALLY_IMPLEMENTED` — منطق العمل، قاعدة البيانات، وواجهة تصفح أولية جاهزة ومُختبَرة فعلياً في متصفح حقيقي، لا ربط بالطلبات/السلة بعد (اليوم 6-7).

@@ -13,6 +13,16 @@ source_of_truth: هذا الملف + Git log
 
 ---
 
+## 2026-09-01 (اليوم 5) — واجهة العميل (Storefront)
+- تأسيس Next.js الفعلي (لم يكن موجوداً رغم تثبيته يوم 0): next.config.ts, postcss.config.mjs (Tailwind v4 عبر @tailwindcss/postcss), src/app/layout.tsx + globals.css، أُضيفت scripts (dev/build/start) لـ package.json
+- ADR-006: اعتماد ألوان الدستور (#2D6A4F, #F4845F) فعلياً لأول واجهة مستخدم
+- إضافة src/app/page.tsx (الأقسام)، src/app/[category]/page.tsx (منتجات القسم)، src/app/product/[id]/page.tsx + actions.ts (تفاصيل + حساب سعر عبر Server Action)
+- إضافة src/components/ (CategoryCard, ProductCard, ProductOptions)
+- تحديث catalog.service.ts بدوال قراءة رقيقة (listCategories, getCategoryBySlug, listProductsByCategory, getProductById) حفاظاً على اتجاه الاعتماد الموثَّق (components → service → repository)
+- تحقق فعلي عبر متصفح حقيقي (Playwright headless، لعدم توفر chromium-cli): المسار الكامل (أقسام → منتج → صغير=100 → كبير=150) يعمل، بلا أخطاء console
+- next dev أضاف تلقائياً قسم توثيقي في AGENTS.md (يُعاد إنشاؤه تلقائياً، يُحتفَظ به) يشير لـ node_modules/next/dist/docs/ لأن Next.js 16 يتجاوز معرفة تدريب النموذج — تم فحص دليل الترقية للتأكد من توافق params/Server Actions قبل الاستمرار
+- تحديث specs/catalog/SPEC.md (UX من UNKNOWN إلى IMPLEMENTED)، docs/UI_UX_SYSTEM.md، docs/DECISIONS.md
+
 ## 2026-09-01 — تنظيف: حذف ملفات مرجع سريع مكررة من الجذر
 - حذف ARCHITECTURE.md, DATABASE.md, DOMAIN_MAP.md, ROADMAP.md, SECURITY.md من جذر المستودع (نسخ اليوم 0/1 المبسطة) — استُبدلت بالكامل بـ docs/*.md الرسمية
 - حسم CONFLICT-004 في docs/DECISIONS.md بقرار صريح من المؤسس

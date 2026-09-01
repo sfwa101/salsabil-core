@@ -28,8 +28,8 @@ source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTI
 | 2 | ربط Supabase الفعلي + جدول users (RLS) | `DONE` |
 | 3 | محرك المنتج (Catalog) — categories, products, inventory | `DONE` |
 | 4 | نطاق التاجر (merchants, tenant isolation) | `DONE` |
-| 5 | واجهة العميل (Storefront) | `NEXT` |
-| 6 | السلة (Cart) | `PLANNED` |
+| 5 | واجهة العميل (Storefront) | `DONE` |
+| 6 | السلة (Cart) | `NEXT` |
 | 7 | Checkout | `PLANNED` |
 | 8 | دورة حياة الطلب (Orders) | `PLANNED` |
 | 9 | طلبات التاجر | `PLANNED` |
