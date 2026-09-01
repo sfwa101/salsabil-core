@@ -1,2 +1,7 @@
-node_modules/n.next/nbuild/ndist/n.env*.local
+node_modules/
+.next/
+build/
+dist/
+.env*.local
 .DS_Store
+tsconfig.tsbuildinfo
