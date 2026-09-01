@@ -76,6 +76,19 @@ Consequences: لا شيء سلبي متوقَّع — توثيق لواقع قا
 Related Documents: docs/ARCHITECTURE.md §3
 ```
 
+## ADR-006
+```
+Title: اعتماد ألوان الدستور المقترحة (#2D6A4F أخضر، #F4845F برتقالي) لواجهة العميل الأولى
+Status: ACCEPTED
+Date: 2026-09-01 (اليوم 5)
+Decision: استخدام القيم الدقيقة المذكورة في SALSABIL_CONSTITUTION.md §21 كنقطة انطلاق فعلية لواجهة العميل (Storefront)، بدل ترك التصميم بلا ألوان أو الانتظار لقرار لاحق.
+Context: docs/UI_UX_SYSTEM.md كان يصف هذه القيم كـ PROPOSED فقط، ويطلب التوقف والسؤال بدل الاختراع عند الحاجة لقيمة غير محسومة. اليوم 5 هو أول عمل فعلي على واجهة مستخدم حقيقية.
+Alternatives: (أ) استخدام ألوان Tailwind الافتراضية بلا قرار تصميم نهائي، (ب) تأجيل بناء الواجهة حتى حسم نظام تصميم كامل
+Why: المؤسس اختار صراحة استخدام قيم الدستور الآن بدل التأجيل — قرار مؤسس مباشر، لا اختراع من Claude.
+Consequences: Spacing/Typography/Shadows/Radius لا تزال OPEN_QUESTION، تُحسم عند الحاجة الفعلية التالية بنفس الطريقة (سؤال المؤسس، لا اختراع).
+Related Documents: docs/UI_UX_SYSTEM.md §2, SALSABIL_CONSTITUTION.md §21
+```
+
 ---
 
 ## سجل التعارضات (CONFLICT LOG)

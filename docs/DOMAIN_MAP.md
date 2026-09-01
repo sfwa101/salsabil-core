@@ -179,13 +179,17 @@ source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md �
 | يملك | لا شيء بعد (واجهة مفهومية فقط) |
 | الحالة | `PROPOSED` |
 
-### Tenant / Authorization
+### Tenant / Authorization (نطاق Merchant)
 
 | | |
 |---|---|
-| المسؤولية | عزل بيانات كل تاجر (`tenant_id` من JWT فقط) |
-| يملك | (مخطَّط) `merchants`, `stores` |
-| الحالة | `PROPOSED` — الأدوار الخمسة موثَّقة (`platform_admin`, `merchant_owner`, `merchant_manager`, `employee`, `customer`) في `khalil/types.ts` كـ`UserRole`، لكن لا جدول `merchants`/`stores` بعد، ولا `tenant_id` مربوط بأي جدول حالياً — **هذا سيتغيّر في اليوم 4 من الخطة (§23)** |
+| المسؤولية | عزل بيانات كل تاجر (`tenant_id` من الجلسة فقط، لا من طلب العميل) |
+| يملك | جدول `merchants` (`stores` لا يزال `CONCEPTUAL`) |
+| البيانات | راجع `docs/DATABASE.md` §3 (`merchants`) و`specs/merchant/SPEC.md` |
+| العلاقات | `Catalog.products.tenant_id` يُشير إلى `merchants.id`؛ يعتمد على `Session.tenantId` من Khalil |
+| لا يحق له | حساب الأسعار (يبقى في Catalog)، تعديل صلاحيات مستخدم مباشرة |
+| يستخدمه | ريف (الآن)، بوابة التاجر (مخطَّطة) |
+| الحالة | `PARTIALLY_IMPLEMENTED` — جدول `merchants` + `MerchantService`/`MerchantRepository` موجودة، عزل مُختبَر فعلياً (اليوم 4)، لا واجهة تسجيل تاجر بعد، `Session` لا يزال غير مربوط بمصادقة حقيقية (نفس فجوة Khalil) |
 
 ---
 
