@@ -27,8 +27,8 @@ source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTI
 | 1 | Khalil Engine (types, service) + 6 ملفات ذاكرة | `DONE` |
 | 2 | ربط Supabase الفعلي + جدول users (RLS) | `DONE` |
 | 3 | محرك المنتج (Catalog) — categories, products, inventory | `DONE` |
-| 4 | بوابة التاجر (merchants, stores, tenant isolation) | `NEXT` |
-| 5 | واجهة العميل (Storefront) | `PLANNED` |
+| 4 | نطاق التاجر (merchants, tenant isolation) | `DONE` |
+| 5 | واجهة العميل (Storefront) | `NEXT` |
 | 6 | السلة (Cart) | `PLANNED` |
 | 7 | Checkout | `PLANNED` |
 | 8 | دورة حياة الطلب (Orders) | `PLANNED` |
