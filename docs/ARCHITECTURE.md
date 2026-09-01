@@ -47,18 +47,41 @@ source_of_truth: هذا الملف (تفصيل)، SALSABIL_CONSTITUTION.md §4-�
 ```
 src/
 ├── app/                 → صفحات ونقاط دخول Next.js
-├── components/          → مكونات واجهة قابلة لإعادة الاستخدام
-│   └── ui/
+│   ├── layout.tsx        → Root Layout، يحمل data-world="diwan" على <html> (الافتراضي)
+│   ├── globals.css        → طبقتا التوكنز الدلالية لكل عالم — راجع §2.1 أدناه
+│   └── (reef)/            → Route Group لعالم ريف — layout.tsx يضع data-world="reef"
+│                             على عنصر جذر (لا على <html>)، لا يغيّر مسارات URL
+├── components/          → مكونات واجهة قابلة لإعادة الاستخدام، محايدة لونياً بالكامل
+│   │                       (تستهلك فقط bg-primary/text-foreground/border-border...)
+│   └── ui/               → فارغ حالياً — shadcn/ui **غير مثبّتة** (تحقَّق منه فعلياً
+│                             اليوم 6: لا components.json، لا cva/clsx/cn — راجع
+│                             docs/DECISIONS.md → CONFLICT-005)
+├── config/
+│   └── theme-registry.ts → IMPLEMENTED (اليوم 6) — السجل المركزي لثيمات كل عالم
+│                             (slug، الاسم AR/EN، التوكنز الدلالية الكاملة).
+│                             مصدر بيانات فقط؛ القيم المطبَّقة فعلياً كـ CSS في
+│                             globals.css ويجب أن تبقى متطابقة معه يدوياً.
 ├── core/
 │   ├── kernel/          → محركات النواة (خليل، تيسير، حكيم...) — راجع DOMAIN_MAP.md
 │   │   ├── khalil/       → IMPLEMENTED (types.ts, khalil.service.ts, khalil.repository.ts)
 │   │   └── database/     → IMPLEMENTED (supabase-client.ts)
 │   ├── modules/          → النطاقات (Catalog, Orders, Inventory...)
-│   │   └── catalog/      → IMPLEMENTED (types.ts, catalog.service.ts, catalog.repository.ts)
+│   │   ├── catalog/      → IMPLEMENTED (types.ts, catalog.service.ts, catalog.repository.ts)
+│   │   └── merchant/     → IMPLEMENTED (types.ts, merchant.service.ts, merchant.repository.ts)
 │   ├── offline/          → دعم العمل بلا إنترنت — PROPOSED، لم يُبنَ بعد
 │   └── telemetry/        → سجل الأحداث والتدقيق — PROPOSED، لم يُبنَ بعد
 └── types/                → أنواع TypeScript مشتركة عبر النطاقات
 ```
+
+### 2.1 معمارية الثيمات متعددة العوالم — Evidence: `IMPLEMENTED` (الآلية)، `PROPOSED` (قيم 5 عوالم لم تُبنَ واجهاتها بعد)
+
+راجع `docs/UI_UX_SYSTEM.md §8` للتفصيل الكامل، و`ADR-007` في `docs/DECISIONS.md` للقرار المعماري (لا يزال `PROPOSED` رسمياً — التنفيذ سبق الاعتماد الرسمي، نفس نمط ADR-006).
+
+طبقتان من CSS Variables داخل `src/app/globals.css`:
+- **الطبقة 1 (خام):** قيم Hex مباشرة تحت `[data-world="<slug>"]`، بادئة `--sb-` (بديل عن أسماء shadcn القياسية غير المسبوقة، لأن shadcn/ui غير مثبّتة).
+- **الطبقة 2 (دلالية):** `@theme inline` تربط `--color-primary` بـ `var(--sb-primary)` وهكذا لبقية التوكنز. **يجب استخدام `@theme inline` لا `@theme` العادية** — `@theme` العادية تُجمِّد القيمة عند `:root` وقت البناء، فلا يتغيّر أي شيء فعلياً عند تبديل `data-world` في عنصر متداخل (تحقَّق منه فعلياً: خطأ حقيقي وقع أثناء بناء اليوم 6، أُصلح باستخدام `@theme inline`).
+
+`data-world="diwan"` على `<html>` هو الافتراضي؛ كل قسم فرعي (مثل `(reef)`) يضع `data-world="<slug>"` على عنصر جذر خاص به (لا `<html>` مجدداً)، فيُعاد تعريف الطبقة الثانية فقط لذلك القسم من الشجرة.
 
 **قاعدة بنية كل نطاق (Domain Module) — Evidence: `IMPLEMENTED` (نمط مطبَّق في catalog وkhalil):**
 ```

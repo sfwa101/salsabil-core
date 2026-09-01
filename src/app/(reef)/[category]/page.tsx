@@ -16,12 +16,12 @@ export default async function CategoryPage({ params }: { params: Promise<{ categ
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
-      <Link href="/" className="mb-6 inline-block text-sm text-stone-500 hover:text-brand-green">
+      <Link href="/" className="mb-6 inline-block text-sm text-muted-foreground hover:text-primary">
         → كل الأحياء
       </Link>
-      <h1 className="mb-8 text-2xl font-semibold text-stone-900">{category.name}</h1>
+      <h1 className="mb-8 text-2xl font-semibold text-foreground">{category.name}</h1>
       {activeProducts.length === 0 ? (
-        <p className="text-stone-500">لا توجد منتجات في هذا القسم حالياً.</p>
+        <p className="text-muted-foreground">لا توجد منتجات في هذا القسم حالياً.</p>
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
           {activeProducts.map((product) => (

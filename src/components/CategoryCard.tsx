@@ -5,10 +5,10 @@ export function CategoryCard({ category }: { category: Category }) {
   return (
     <Link
       href={`/${category.slug}`}
-      className="flex items-center justify-between rounded-2xl border border-stone-200 bg-white p-6 transition hover:border-brand-green hover:shadow-sm"
+      className="flex items-center justify-between rounded-2xl border border-border bg-card p-6 transition hover:border-primary hover:shadow-sm"
     >
-      <span className="text-lg font-medium text-stone-800">{category.name}</span>
-      <span className="text-brand-green">←</span>
+      <span className="text-lg font-medium text-card-foreground">{category.name}</span>
+      <span className="text-primary">←</span>
     </Link>
   );
 }

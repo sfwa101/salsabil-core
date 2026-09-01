@@ -13,11 +13,11 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
-      <Link href="/" className="mb-6 inline-block text-sm text-stone-500 hover:text-brand-green">
+      <Link href="/" className="mb-6 inline-block text-sm text-muted-foreground hover:text-primary">
         → كل الأحياء
       </Link>
-      <h1 className="mb-2 text-2xl font-semibold text-stone-900">{product.name}</h1>
-      {product.description && <p className="mb-6 text-stone-600">{product.description}</p>}
+      <h1 className="mb-2 text-2xl font-semibold text-foreground">{product.name}</h1>
+      {product.description && <p className="mb-6 text-muted-foreground">{product.description}</p>}
       <ProductOptions product={product} />
     </main>
   );

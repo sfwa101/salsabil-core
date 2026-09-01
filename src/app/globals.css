@@ -1,12 +1,169 @@
 @import "tailwindcss";
 
-/* ألوان الدستور — SALSABIL_CONSTITUTION.md §21, ADR-006 في docs/DECISIONS.md */
-@theme {
-  --color-brand-green: #2d6a4f;
-  --color-brand-orange: #f4845f;
+/*
+ * معمارية الثيمات متعددة العوالم — طبقتان (docs/UI_UX_SYSTEM.md §8، ADR-007)
+ * القيم المصدر الكامل: src/config/theme-registry.ts — يجب أن يبقيا متطابقين.
+ *
+ * shadcn/ui غير مثبّتة في هذا المشروع (تحقَّق منه فعلياً — لا components.json،
+ * لا cva/clsx) لذا استُخدمت أسماء المتغيرات القياسية بادئة بـ --sb- بصيغة Hex
+ * مباشرة، بدل الأسماء غير المسبوقة بصيغة HSL التي تتوقعها shadcn.
+ *
+ * الطبقة 2 (Semantic Tokens) تُعرَّف هنا تحت [data-world="<slug>"] فقط —
+ * لا قيمة لونية على :root عامةً، لضمان أن كل قسم من الشجرة يُصرِّح صراحة
+ * بالعالم الذي يعمل بداخله (docs/UI_UX_SYSTEM.md §8.3).
+ */
+
+/*
+ * @theme inline (لا @theme عادية): تُبقي المرجع كـ var(--sb-primary) حياً داخل
+ * كل CSS class يولّده Tailwind، بدل تجميده إلى القيمة المحسوبة عند :root وقت
+ * البناء. بدونها، كل عالم متداخل تحت [data-world] يفشل في تغيير الألوان فعلياً
+ * لأن المتصفح يورّث القيمة المحسوبة عند :root لا التعريف الحي — تحقَّق منه
+ * فعلياً (اختبار تبديل data-world لم يُغيّر الألوان المعروضة قبل هذا التصحيح).
+ */
+@theme inline {
+  --color-background: var(--sb-background);
+  --color-foreground: var(--sb-foreground);
+  --color-card: var(--sb-card);
+  --color-card-foreground: var(--sb-card-foreground);
+  --color-primary: var(--sb-primary);
+  --color-primary-foreground: var(--sb-primary-foreground);
+  --color-secondary: var(--sb-secondary);
+  --color-secondary-foreground: var(--sb-secondary-foreground);
+  --color-accent: var(--sb-accent);
+  --color-accent-foreground: var(--sb-accent-foreground);
+  --color-muted: var(--sb-muted);
+  --color-muted-foreground: var(--sb-muted-foreground);
+  --color-border: var(--sb-border);
+  --color-destructive: var(--sb-destructive);
+  --color-destructive-foreground: var(--sb-destructive-foreground);
+}
+
+/* destructive مشتركة عبر كل العوالم — لا تُخصَّص لكل عالم (§8.2) */
+:root {
+  --sb-destructive: #dc2626;
+  --sb-destructive-foreground: #ffffff;
+}
+
+/* ديوان سلسبيل — الغلاف الرئيسي، slug: diwan */
+[data-world='diwan'] {
+  --sb-background: #faf8fd;
+  --sb-foreground: #241b3d;
+  --sb-card: #ffffff;
+  --sb-card-foreground: #241b3d;
+  --sb-primary: #5b3e96;
+  --sb-primary-foreground: #ffffff;
+  --sb-secondary: #e4d9f5;
+  --sb-secondary-foreground: #3d2463;
+  --sb-accent: #8b6dc7;
+  --sb-accent-foreground: #ffffff;
+  --sb-muted: #f1ecfa;
+  --sb-muted-foreground: #6e6285;
+  --sb-border: #e4dcf2;
+}
+
+/* ريف المدينة — القيم الفعلية المُنفَّذة، غير مُغيَّرة، slug: reef */
+[data-world='reef'] {
+  --sb-background: #fafbf7;
+  --sb-foreground: #1f2e24;
+  --sb-card: #ffffff;
+  --sb-card-foreground: #1f2e24;
+  --sb-primary: #2d6a4f;
+  --sb-primary-foreground: #ffffff;
+  --sb-secondary: #f4845f;
+  --sb-secondary-foreground: #ffffff;
+  --sb-accent: #f4a65f;
+  --sb-accent-foreground: #2e1b0f;
+  --sb-muted: #eef3ec;
+  --sb-muted-foreground: #5b6d5f;
+  --sb-border: #e3ede6;
+}
+
+/* أسراب طيبة — بيانات فقط، لا واجهة بعد، slug: asrab */
+[data-world='asrab'] {
+  --sb-background: #f8f7f2;
+  --sb-foreground: #1e2620;
+  --sb-card: #ffffff;
+  --sb-card-foreground: #1e2620;
+  --sb-primary: #1b4b43;
+  --sb-primary-foreground: #ffffff;
+  --sb-secondary: #c9a15d;
+  --sb-secondary-foreground: #2e2107;
+  --sb-accent: #e4c88a;
+  --sb-accent-foreground: #2e2107;
+  --sb-muted: #f0eee3;
+  --sb-muted-foreground: #5c6a5e;
+  --sb-border: #e3dfc9;
+}
+
+/* نبض — بيانات فقط، لا واجهة بعد، slug: nabdh */
+[data-world='nabdh'] {
+  --sb-background: #f6fafa;
+  --sb-foreground: #1c2b2a;
+  --sb-card: #ffffff;
+  --sb-card-foreground: #1c2b2a;
+  --sb-primary: #2f7a78;
+  --sb-primary-foreground: #ffffff;
+  --sb-secondary: #e8646b;
+  --sb-secondary-foreground: #ffffff;
+  --sb-accent: #9fd4d1;
+  --sb-accent-foreground: #143332;
+  --sb-muted: #eaf4f3;
+  --sb-muted-foreground: #5a7472;
+  --sb-border: #dcebea;
+}
+
+/* نور الدين — بيانات فقط، لا واجهة بعد، slug: noor */
+[data-world='noor'] {
+  --sb-background: #f7f8fb;
+  --sb-foreground: #1b2438;
+  --sb-card: #ffffff;
+  --sb-card-foreground: #1b2438;
+  --sb-primary: #24406b;
+  --sb-primary-foreground: #ffffff;
+  --sb-secondary: #e8a33d;
+  --sb-secondary-foreground: #2e1f04;
+  --sb-accent: #f0c878;
+  --sb-accent-foreground: #2e1f04;
+  --sb-muted: #eef1f7;
+  --sb-muted-foreground: #58627a;
+  --sb-border: #dce2ed;
+}
+
+/* تكوين — بيانات فقط، لا واجهة بعد، slug: takween */
+[data-world='takween'] {
+  --sb-background: #f6f7f9;
+  --sb-foreground: #1e222b;
+  --sb-card: #ffffff;
+  --sb-card-foreground: #1e222b;
+  --sb-primary: #3b4252;
+  --sb-primary-foreground: #ffffff;
+  --sb-secondary: #5b6ef5;
+  --sb-secondary-foreground: #ffffff;
+  --sb-accent: #a9b3f5;
+  --sb-accent-foreground: #232a4d;
+  --sb-muted: #ecedf1;
+  --sb-muted-foreground: #5c6270;
+  --sb-border: #e1e4ea;
+}
+
+/* بيان — بيانات فقط، لا واجهة بعد، slug: bayan */
+[data-world='bayan'] {
+  --sb-background: #fbf7f5;
+  --sb-foreground: #2b211d;
+  --sb-card: #ffffff;
+  --sb-card-foreground: #2b211d;
+  --sb-primary: #c97b5f;
+  --sb-primary-foreground: #ffffff;
+  --sb-secondary: #5fa8c9;
+  --sb-secondary-foreground: #ffffff;
+  --sb-accent: #e8b8a2;
+  --sb-accent-foreground: #2e1d14;
+  --sb-muted: #f4eae6;
+  --sb-muted-foreground: #6e5c54;
+  --sb-border: #efdfd8;
 }
 
 body {
-  background-color: #fafaf9;
-  color: #1c1917;
+  background-color: var(--sb-background);
+  color: var(--sb-foreground);
 }

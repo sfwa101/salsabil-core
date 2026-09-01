@@ -7,9 +7,9 @@ export default async function HomePage() {
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
-      <h1 className="mb-8 text-2xl font-semibold text-stone-900">أحياء ريف المدينة</h1>
+      <h1 className="mb-8 text-2xl font-semibold text-foreground">أحياء ريف المدينة</h1>
       {activeCategories.length === 0 ? (
-        <p className="text-stone-500">لا توجد أقسام متاحة حالياً.</p>
+        <p className="text-muted-foreground">لا توجد أقسام متاحة حالياً.</p>
       ) : (
         <div className="flex flex-col gap-4">
           {activeCategories.map((category) => (

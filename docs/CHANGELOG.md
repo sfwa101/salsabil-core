@@ -13,6 +13,18 @@ source_of_truth: هذا الملف + Git log
 
 ---
 
+## 2026-09-01 (اليوم 6) — معمارية الثيمات متعددة العوالم (Multi-World Theming)
+- إضافة src/config/theme-registry.ts: السجل المركزي لثيمات 7 عوالم (ديوان، ريف، أسراب، نبض، نور الدين، تكوين، بيان) — slug + اسم AR/EN + توكنز دلالية كاملة
+- تحقَّق فعلياً: shadcn/ui **غير مثبّتة** (لا components.json، src/components/ui/ فارغ، لا cva/clsx) — سُجِّل CONFLICT-005 في docs/DECISIONS.md، استُخدم بادئة --sb- بصيغة Hex كخطة احتياط موثَّقة مسبقاً
+- src/app/globals.css: طبقتان — [data-world="<slug>"] (خام) + @theme inline (دلالية) لكل الأسماء القياسية (bg-primary, text-foreground, border-border...)
+- **خطأ حقيقي وقع وأُصلح أثناء التنفيذ:** @theme العادية (لا inline) تُجمِّد قيمة --color-primary عند :root وقت البناء، فلا يتغيّر شيء فعلياً عند تبديل data-world في عنصر متداخل رغم أن --sb-primary نفسه يتغيّر بشكل صحيح. اكتُشف عبر لقطات شاشة فعلية (كانت تظهر ألوان ديوان الأرجوانية على صفحات ريف رغم DOM صحيح) — أُصلح باستخدام @theme inline، أُعيد التحقق والتقط لقطات جديدة تطابق الأصل تماماً
+- src/app/layout.tsx: data-world="diwan" على <html> (الافتراضي)
+- نقل صفحات ريف الثلاث إلى src/app/(reef)/ (Route Group، لا يغيّر مسارات URL) مع layout.tsx يضع data-world="reef" على عنصر جذر
+- تحديث CategoryCard, ProductCard, ProductOptions وصفحات (reef) لاستهلاك التوكنز الدلالية فقط (bg-card, text-foreground, border-primary...) بدل ألوان Tailwind الثابتة (stone-*, brand-green/orange) — بحث نصي عن hex خارج globals.css يُرجع صفر نتائج
+- تحقق فعلي عبر Playwright: (أ) واجهة ريف مطابقة بصرياً لليوم 5 بالضبط (نفس الأخضر/البرتقالي)، (ب) تبديل data-world يدوياً من reef إلى diwan غيّر --primary فوراً (#2d6a4f → #5b3e96) دون أي تعديل كود مكوّن، (ج) حساب السعر 100/150 لا يزال صحيحاً (Server Action لم يتأثر)، (د) صفر أخطاء console
+- تحديث docs/ARCHITECTURE.md §2 (+ §2.1 جديد)، docs/UI_UX_SYSTEM.md §8/§2، docs/ROADMAP.md (اليوم 6 → DONE)
+- حالة ADR-007 نفسها تبقى PROPOSED كما طلب المؤسس صراحة — لم تُغيَّر لـ ACCEPTED
+
 ## 2026-09-01 (اليوم 5) — واجهة العميل (Storefront)
 - تأسيس Next.js الفعلي (لم يكن موجوداً رغم تثبيته يوم 0): next.config.ts, postcss.config.mjs (Tailwind v4 عبر @tailwindcss/postcss), src/app/layout.tsx + globals.css، أُضيفت scripts (dev/build/start) لـ package.json
 - ADR-006: اعتماد ألوان الدستور (#2D6A4F, #F4845F) فعلياً لأول واجهة مستخدم

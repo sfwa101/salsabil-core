@@ -1,7 +1,7 @@
 ---
 title: خارطة الطريق
 status: ACTIVE
-version: 1.0
+version: 1.1
 last_updated: 2026-09-01
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTION.md §23 (الخطة الأصلية)
@@ -27,10 +27,10 @@ source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTI
 | 1 | Khalil Engine (types, service) + 6 ملفات ذاكرة | `DONE` |
 | 2 | ربط Supabase الفعلي + جدول users (RLS) | `DONE` |
 | 3 | محرك المنتج (Catalog) — categories, products, inventory | `DONE` |
-| 4 | نطاق التاجر (merchants, tenant isolation) | `DONE` |
-| 5 | واجهة العميل (Storefront) | `DONE` |
-| 6 | السلة (Cart) | `NEXT` |
-| 7 | Checkout | `PLANNED` |
+| 4 | بوابة التاجر (merchants, stores, tenant isolation) | `DONE` — commit `2de9345`، راجع `docs/DECISIONS.md → ADR-006` |
+| 5 | واجهة العميل (Storefront) — Next.js 16، Reef City Storefront | `DONE` — commit `2de9345`، راجع `docs/DECISIONS.md → ADR-006` |
+| 6 | معمارية الثيمات متعددة العوالم (Multi-World Theming) | `DONE` — راجع `docs/DECISIONS.md → ADR-007` (الآلية IMPLEMENTED، حالة ADR-007 نفسها لا تزال PROPOSED بانتظار اعتماد المؤسس) |
+| 7 | السلة (Cart) | `NEXT` — إزاحة يوم واحد عن الترقيم الأصلي، راجع الملاحظة أدناه |
 | 8 | دورة حياة الطلب (Orders) | `PLANNED` |
 | 9 | طلبات التاجر | `PLANNED` |
 | 10 | لوحة الإدارة الأساسية | `PLANNED` |
@@ -39,7 +39,9 @@ source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTI
 | 13 | التجهيز للإنتاج | `PLANNED` |
 | 14 | الإطلاق | `PLANNED` |
 
-**تفاصيل كل يوم:** راجع `SALSABIL_CONSTITUTION.md §23`.
+**تفاصيل كل يوم (الترقيم الأصلي 0-14):** راجع `SALSABIL_CONSTITUTION.md §23`.
+
+> **⚠️ ملاحظة إعادة تعريف (2026-09-01، `FOUNDER_DECISION` عبر محادثة UI/UX):** الخطة الأصلية في §23 من الدستور كانت تضع "السلة (Cart)" في اليوم 6. طلب المؤسس مباشرة بناء معمارية الثيمات متعددة العوالم كأولوية اليوم 6 بدلاً منها (راجع `docs/UI_UX_SYSTEM.md §8` و`docs/DECISIONS.md → ADR-007`)، بحجة منطقية: انعدام الهاردكود اللوني في `/src/components` أسهل وأرخص الآن (مكوّنات قليلة، ريف فقط) منه بعد بناء السلة والـ Checkout فوق مكوّنات ملوّنة بالفعل بشكل صلب. **هذا تغيير مرتّب لا حذف** — "السلة" لم تُلغَ، فقط أُزيحت يوماً واحداً (تصبح اليوم 7 فعلياً، وكل ما بعدها يُزاح يوماً واحداً تباعاً ما لم يقرر المؤسس خلاف ذلك). راجع `docs/DECISIONS.md → CONFLICT-004` لتوثيق هذا كتصحيح دَين توثيقي، لا كقرار استراتيجي بحاجة موافقة إضافية على تصحيح الحالة (DONE)، لكن الإزاحة نفسها لترتيب الأيام تُسجَّل هنا للشفافية ويُرجى تأكيدها.
 
 ---
 
@@ -59,7 +61,7 @@ source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTI
 
 ## Future / Research — بعيدة المدى، لا خطة تنفيذ حالية
 
-- أسراب، نبض، نور الدين (عوالم كاملة جديدة)
+- أسراب، نبض، نور الدين (عوالم كاملة جديدة) — **الهوية البصرية فقط (ألوان/رموز) صارت `PROPOSED` من اليوم 6، لا يعني هذا بدء بناء واجهاتها الفعلية بعد**
 - Rust (Phase 2 تقني) / Elixir-Erlang (Phase 3 تقني) — راجع `docs/ARCHITECTURE.md §6`
 - منظومة التطبيقات المصغّرة (Mini-Apps SDK) — سنة 2+ (§27 CONSTITUTION)
 - تحوّل سلسبيل لوقف — بعد نضج كامل (§27.1 CONSTITUTION)
