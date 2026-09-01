@@ -30,8 +30,8 @@ source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTI
 | 4 | بوابة التاجر (merchants, stores, tenant isolation) | `DONE` — commit `2de9345`، راجع `docs/DECISIONS.md → ADR-006` |
 | 5 | واجهة العميل (Storefront) — Next.js 16، Reef City Storefront | `DONE` — commit `2de9345`، راجع `docs/DECISIONS.md → ADR-006` |
 | 6 | معمارية الثيمات متعددة العوالم (Multi-World Theming) | `DONE` — راجع `docs/DECISIONS.md → ADR-007` (الآلية IMPLEMENTED، حالة ADR-007 نفسها لا تزال PROPOSED بانتظار اعتماد المؤسس) |
-| 7 | السلة (Cart) | `NEXT` — إزاحة يوم واحد عن الترقيم الأصلي، راجع الملاحظة أدناه |
-| 8 | دورة حياة الطلب (Orders) | `PLANNED` |
+| 7 | السلة (Cart) | `DONE` — راجع `docs/DECISIONS.md → ADR-008`، `docs/DATABASE.md §3` |
+| 8 | دورة حياة الطلب (Orders) | `NEXT` |
 | 9 | طلبات التاجر | `PLANNED` |
 | 10 | لوحة الإدارة الأساسية | `PLANNED` |
 | 11 | يوم الأمان الكامل | `PLANNED` |

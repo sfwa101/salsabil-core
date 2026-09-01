@@ -1,7 +1,7 @@
 ---
 title: مرجع قاعدة البيانات
 status: ACTIVE
-version: 1.0
+version: 1.1
 last_updated: 2026-09-01
 owner: المؤسس (أبوحتاب) + Claude
 source_of_truth: Supabase Project الفعلي (للجداول المنفَّذة) + هذا الملف (للتخطيط)
@@ -102,7 +102,46 @@ create table inventory (
   updated_at timestamptz not null default now()
 );
 ```
-**الحالة:** `IMPLEMENTED` (الجدول فقط) — لا منطق نقص تلقائي عند الطلب بعد (Orders غير موجود).
+**الحالة:** `IMPLEMENTED` (الجدول فقط) — لا منطق نقص تلقائي عند الطلب بعد (Orders غير موجود). عمود `quantity_available` يُستهلَك الآن للفحص فقط (لا حجز) عبر `InventoryService.isAvailable()` منذ اليوم 7.
+
+### `carts`, `cart_items` — Evidence: `IMPLEMENTED` (اليوم 7)
+
+> **ملاحظة توثيقية:** هذا القسم لم يكن موجوداً في هذا الملف قبل اليوم 7 رغم أن موجّه المهمة (`CART-001`) أشار إليه كـ"§4.1 — تصميم مقترح" قائم — لم يوجد أي تصميم سابق في المستودع، فأُنشئ من الصفر ضمن دورة Specification → Plan → Review (`AGENTS.md` §6) واعتمده المؤسس صراحة قبل التنفيذ.
+
+```sql
+create table carts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id),
+  session_token uuid unique,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint carts_identity_xor check (
+    (user_id is not null and session_token is null) or
+    (user_id is null and session_token is not null)
+  ),
+  constraint carts_user_id_unique unique (user_id)
+);
+alter table carts enable row level security;
+
+create table cart_items (
+  id uuid primary key default gen_random_uuid(),
+  cart_id uuid not null references carts(id) on delete cascade,
+  product_id uuid not null references products(id),
+  quantity int not null check (quantity > 0),
+  selection jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+alter table cart_items enable row level security;
+```
+
+**الحالة:** `IMPLEMENTED` — تحقَّق منه فعلياً عبر اختبار تكامل ضد Supabase الحقيقي (`src/core/modules/cart/cart.integration.test.ts`) وتصفح فعلي في متصفح حقيقي.
+
+**قرارات تصميم موثَّقة (Evidence: `FOUNDER_DECISION`، راجع `ADR-008` في `docs/DECISIONS.md`):**
+- **لا عمود سعر في `cart_items` إطلاقاً.** السعر يُحسَب دائماً حياً عبر `CatalogService.calculatePrice()` عند القراءة — لا تكرار لمنطق التسعير، ولا ثقة بأي سعر يصل من العميل (`docs/SECURITY.md` قاعدة 2).
+- **`user_id` و`session_token` — أحدهما فقط، أبداً كلاهما أو لا شيء** (`CHECK` صريح). سلة الزائر مدعومة عبر `session_token` عشوائي (`crypto.randomUUID()`) يُخزَّن في cookie `httpOnly`، لأنه لا يوجد تسجيل دخول حقيقي مربوط بـ Supabase Auth بعد (نفس فجوة `specs/identity/SPEC.md`).
+- **RLS مفعَّل بلا أي policy على الجدولين** — قفل كامل لـ`anon`/`authenticated` (نفس نمط `merchants`)، **وليس نمط "قراءة عامة" المعتاد على `products`/`categories`/`inventory`** لأن بيانات السلة خاصة بصاحبها. كل الوصول يمر حصرياً عبر `src/core/kernel/database/supabase-admin-client.ts` (مفتاح `service_role`، خادم فقط) — هذا ضروري لأن السلة تُكتَب بلا مصادقة حقيقية (زائر)، فـRLS مسموح لـ`anon` لا يوفر حماية فعلية (كان سيخالف `docs/SECURITY.md` قاعدة 3).
+- لا عمود `status` (سلة نشطة واحدة فقط لكل هوية، لا أرشفة/تحويل — يُبنى لاحقاً مع Orders، اليوم 9).
 
 ---
 
@@ -113,8 +152,8 @@ create table inventory (
 | الجدول | ينتمي لِـ | مخطَّط لليوم | الحالة |
 |---|---|---|---|
 | `stores` | Tenant (طبقة فرعية تحت `merchants`) | غير مجدوَل بعد | `CONCEPTUAL` |
-| `sessions` | Khalil | اليوم 4 (مع تسجيل الدخول) | `CONCEPTUAL` — لم يُبنَ بعد رغم إنشاء `merchants`
-| `orders`, `order_items`, `order_status_history` | Orders | اليوم 6-8 | `CONCEPTUAL` |
+| `sessions` | Khalil | مع تسجيل الدخول | `CONCEPTUAL` — لم يُبنَ بعد رغم إنشاء `merchants` و`carts` |
+| `orders`, `order_items`, `order_status_history` | Orders | اليوم 9 (بعد إزاحة يوم، راجع `docs/ROADMAP.md`) | `CONCEPTUAL` |
 | `audit_log` | Audit | اليوم 11 (يوم الأمان) | `CONCEPTUAL` |
 | `product_variant`, `sku`, `barcode`, `packaging` | Catalog (العمق الكامل) | غير مجدوَل بعد — أُجِّل لصالح Vertical Slice أولاً | `CONCEPTUAL` |
 
@@ -138,6 +177,7 @@ create table inventory (
 | `products` | قراءة عامة للمنتجات النشطة | `IMPLEMENTED` |
 | `inventory` | قراءة عامة | `IMPLEMENTED` |
 | `merchants` | تمنع إدراج/كتابة بمفتاح `anon` (تحقَّق منه فعلياً) — نص السياسة الدقيق `OPEN_QUESTION` | `IMPLEMENTED` (جزئياً موثَّق) |
+| `carts`, `cart_items` | بلا أي policy — قفل كامل لـ`anon`/`authenticated`، وصول حصري عبر `service_role` (اليوم 7، `ADR-008`) | `IMPLEMENTED` |
 
 **سياسات الكتابة (Insert/Update/Delete) لا تزال غير موجودة/موثَّقة على `users`/`categories`/`products`/`inventory` — `OPEN_QUESTION` صريح يحتاج حسماً قبل بناء بوابة التاجر الكاملة (اليوم 5+).**
 

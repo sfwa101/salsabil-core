@@ -1,7 +1,7 @@
 ---
 title: خريطة النطاقات
 status: ACTIVE (يحتوي OPEN_QUESTION واحد جوهري)
-version: 1.1
+version: 1.2
 last_updated: 2026-09-01
 owner: المؤسس (أبوحتاب) + Claude (معماري)
 source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md §6-§8 (المصدر الأصلي)
@@ -162,16 +162,30 @@ source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md �
 | يملك | (مخطَّط) `orders`, `order_items`, `order_status_history` |
 | العلاقات | يستدعي Catalog للتحقق من السعر/التوفر، Khalil لمعرفة العميل، برق للتوصيل، تيسير للدفع |
 | لا يحق له | تعديل سعر منتج، تعديل مخزون مباشرة (يطلب من Catalog/Inventory) |
-| الحالة | `PROPOSED` — مخطَّط في الدستور واليوم 8 (بعد إزاحة يوم واحد، راجع `docs/ROADMAP.md`)، لم يُبنَ بعد |
+| الحالة | `PROPOSED` — مخطَّط في الدستور واليوم 8 (راجع `docs/ROADMAP.md`)، لم يُبنَ بعد |
 
-### Inventory
+### Cart (السلة) — Evidence: `IMPLEMENTED` (اليوم 7، `CART-001`)
 
 | | |
 |---|---|
-| المسؤولية | تتبع الكمية المتاحة لحظياً |
+| المسؤولية | تجميع منتجات العميل قبل الطلب — حساب إجمالي حي، فحص توفر مخزون |
+| يملك | جدولا `carts`, `cart_items` |
+| البيانات | راجع `docs/DATABASE.md §3` (قسم `carts`, `cart_items`) |
+| العلاقات | يقرأ السعر/التحقق من Catalog عبر `CatalogService.calculatePrice`/`validateSelection` (لا يُعيد كتابتهما)، يقرأ التوفر من Inventory عبر `InventoryService.isAvailable` (فحص فقط، بلا حجز) |
+| لا يحق له | تخزين سعر، حجز/تجميد مخزون (ذلك يخص Orders لاحقاً)، تحديد هوية عميل حقيقية (لا يوجد تسجيل دخول بعد — يعتمد على `session_token` زائر) |
+| يستخدمه | ريف (الآن) |
+| الحالة | `IMPLEMENTED` — `types.ts`, `cart.service.ts`, `cart.repository.ts` (`src/core/modules/cart/`)، مُختبَر (وحدة + تكامل ضد Supabase حقيقي + متصفح فعلي). هوية الزائر عبر `session_token` وحماية الكتابة عبر `service_role` موثَّقتان في `ADR-008` (`docs/DECISIONS.md`) |
+
+### Inventory — Evidence: `IMPLEMENTED` (نطاق برمجي، اليوم 7 — الجدول وحده كان `IMPLEMENTED` منذ اليوم 3)
+
+| | |
+|---|---|
+| المسؤولية | فحص توفر الكمية المطلوبة فقط — لا حجز ولا تجميد |
 | يملك | جدول `inventory` |
-| العلاقات | Catalog، Orders (عند تأكيد الطلب يُنقَص المخزون) |
-| الحالة | `IMPLEMENTED` (الجدول فقط) — منطق نقص المخزون عند الطلب غير منفَّذ بعد (لأن Orders غير موجود بعد) |
+| العلاقات | يستخدمه Cart (فحص قبل الإضافة)، سيستخدمه Orders لاحقاً (نقص فعلي عند تأكيد الطلب) |
+| لا يحق له | حجز/تجميد كمية، تعديل سعر |
+| يستخدمه | Cart (الآن)، مستقبلاً Orders |
+| الحالة | `IMPLEMENTED` — `types.ts`, `inventory.service.ts` (`isAvailable`), `inventory.repository.ts` (`src/core/modules/inventory/`). منطق نقص المخزون الفعلي عند تأكيد الطلب لا يزال غير منفَّذ (Orders غير موجود بعد) |
 
 ### Payments
 
@@ -181,13 +195,19 @@ source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md �
 | يملك | لا شيء بعد (واجهة مفهومية فقط) |
 | الحالة | `PROPOSED` |
 
-### Tenant / Authorization
+### Tenant / Authorization (نطاق Merchant) — Evidence: `PARTIALLY_IMPLEMENTED`
+
+> **ملاحظة (اليوم 7):** هذا القسم عاد إلى نسخة قديمة (`PROPOSED`) في تحديث خارجي سابق رغم أن `merchants` مُنفَّذ فعلياً منذ اليوم 4 (commit `0df6226`، وليس `2de9345` كما ورد سابقاً هنا — `2de9345` هو commit اليوم 5). صُحِّح هنا مجدداً استناداً للكود الفعلي في المستودع، لا لأي وصف خارجي.
 
 | | |
 |---|---|
-| المسؤولية | عزل بيانات كل تاجر (`tenant_id` من JWT فقط) |
-| يملك | (مخطَّط) `merchants`, `stores` |
-| الحالة | `PROPOSED` — الأدوار الخمسة موثَّقة (`platform_admin`, `merchant_owner`, `merchant_manager`, `employee`, `customer`) في `khalil/types.ts` كـ`UserRole`، لكن لا جدول `merchants`/`stores` بعد، ولا `tenant_id` مربوط بأي جدول حالياً — كان من المخطَّط أن "يتغيّر هذا في اليوم 4"؛ **يحتاج تأكيداً من المؤسس** هل بوابة التاجر المُنجزة فعلياً في commit `2de9345` (اليوم 4) شملت هذا الجدول فعلياً أم لا زال معلَّقاً (راجع `docs/DECISIONS.md → CONFLICT-004`) |
+| المسؤولية | عزل بيانات كل تاجر (`tenant_id` من الجلسة فقط، لا من طلب العميل) |
+| يملك | جدول `merchants` (`stores` لا يزال `CONCEPTUAL`) |
+| البيانات | راجع `docs/DATABASE.md §3` (`merchants`) و`specs/merchant/SPEC.md` |
+| العلاقات | `Catalog.products.tenant_id` يُشير إلى `merchants.id`؛ يعتمد على `Session.tenantId` من Khalil |
+| لا يحق له | حساب الأسعار (يبقى في Catalog)، تعديل صلاحيات مستخدم مباشرة |
+| يستخدمه | ريف (الآن)، بوابة التاجر (مخطَّطة) |
+| الحالة | `PARTIALLY_IMPLEMENTED` — جدول `merchants` + `MerchantService`/`MerchantRepository` موجودة، عزل مُختبَر فعلياً (اليوم 4)، لا واجهة تسجيل تاجر بعد، `Session` لا يزال غير مربوط بمصادقة حقيقية (نفس فجوة Khalil) |
 
 ---
 

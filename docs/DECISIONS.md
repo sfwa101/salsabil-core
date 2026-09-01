@@ -1,7 +1,7 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.2
+version: 1.3
 last_updated: 2026-09-01
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف
@@ -102,6 +102,20 @@ Alternatives: (أ) نسخ مكوّنات منفصلة لكل عالم — يخا
 Why: الطبقتان تفصلان "ما هو اللون الخام لهذا العالم" عن "ما يستهلكه المكوّن"، فتحافظان على حياد المكوّنات الكامل (§4 بند 8 من الدستور) وتفتحان الباب لتخصيص لحظي (Runtime) لكل مستأجر دون Build جديد — نفس فلسفة الخلايا الجذعية (§4، §8) مطبَّقة على طبقة الواجهة بدل طبقة البيانات فقط.
 Consequences: يتطلب انضباطاً صارماً بعدم كتابة أي قيمة Hex مباشرة داخل /src/components (قابل للتحقق آلياً عبر بحث نصي في CI مستقبلاً). التخصيص لكل مستأجر (JSONB) غير مبني بعد — بنية تحتية جاهزة فقط، لا تُفعَّل قبل وجود جدول merchants/stores فعلي (راجع DOMAIN_MAP.md → Tenant/Authorization).
 Related Documents: docs/UI_UX_SYSTEM.md §8، docs/ARCHITECTURE.md §2 (هيكل src/components)، docs/DOMAIN_MAP.md → Tenant/Authorization، ADR-004 (سابقة JSONB)
+```
+
+## ADR-008
+```
+Title: هوية سلة الزائر عبر session_token + حماية الكتابة عبر service_role
+Status: ACCEPTED
+Date: 2026-09-01 (اليوم 7 من خطة الـ14 يوماً، CART-001)
+Decision: (أ) carts.user_id و carts.session_token — أحدهما فقط غير NULL (CHECK صريح). لا تسجيل دخول حقيقي بعد، فسلة الزائر تُعرَّف عبر session_token عشوائي (crypto.randomUUID()) في cookie httpOnly.
+          (ب) RLS على carts/cart_items مفعَّل بلا أي policy لـanon/authenticated (قفل كامل، مثل merchants) — كل الوصول عبر عميل Supabase جديد بمفتاح service_role (src/core/kernel/database/supabase-admin-client.ts)، خادم فقط، لا يُستورَد أبداً في Client Component (حزمة server-only كحارس بناء).
+Context: بناء أول نطاق يكتب بيانات "عميل" (Cart) قبل وجود نظام دخول حقيقي مربوط بـ Supabase Auth. RLS مسموح لـanon لا يوفّر حماية حقيقية لأن anon key نفسه علني، ولا فرق بين زائر يملك session_token صحيح وآخر يحاول تخمينه — هذا يخالف SECURITY.md قاعدة 3 (كل mutation يتطلب مصادقة).
+Alternatives: (أ) تأجيل السلة حتى بناء تسجيل الدخول — يوقف التقدّم على الخطة بلا داعٍ. (ب) RLS مفتوح لـanon معتمداً على صعوبة تخمين session_token فقط — وسمناها غير كافية، تخالف SECURITY.md صراحة.
+Why: قرار المؤسس المباشر في هذه المحادثة (سؤالان صريحان، راجع سجل المحادثة) بعد عرض كلا الخيارين مع تبعاتهما الأمنية.
+Consequences: يتطلب SUPABASE_SERVICE_ROLE_KEY في .env.local (سر خادم فقط، أضافه المؤسس). أي نطاق مستقبلي يكتب بيانات بلا مصادقة حقيقية (مثل Orders قبل بناء تسجيل الدخول) يجب أن يتبع نفس النمط، لا نمط RLS-مفتوح-لـanon.
+Related Documents: docs/DATABASE.md §3 (carts, cart_items)، docs/SECURITY.md قاعدة 3، specs/identity/SPEC.md (فجوة تسجيل الدخول الأصلية)
 ```
 
 ---

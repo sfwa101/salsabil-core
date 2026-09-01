@@ -13,6 +13,18 @@ source_of_truth: هذا الملف + Git log
 
 ---
 
+## 2026-09-01 (اليوم 7) — نطاق السلة (Cart Domain, CART-001)
+- خطة Specification+Plan صريحة قبل أي كود (دورة §24 السبعية) — قرارا المؤسس المعتمدان قبل التنفيذ: (أ) سلة زائر عبر session_token nullable، (ب) حماية الكتابة عبر service_role خادم فقط لا RLS مفتوح لـanon — موثَّقان في ADR-008
+- إنشاء جدولي carts, cart_items في Supabase (لا عمود سعر إطلاقاً، CHECK يفرض user_id XOR session_token، RLS بلا policy)
+- إضافة src/core/kernel/database/supabase-admin-client.ts (مفتاح service_role، حزمة server-only كحارس بناء)
+- إضافة نطاق src/core/modules/inventory/ جديد بالكامل (types, service: isAvailable فقط بلا حجز, repository) — لم يكن موجوداً رغم أن جدول inventory IMPLEMENTED منذ اليوم 3
+- إضافة src/core/modules/cart/ (types, cart.service.ts, cart.repository.ts) — السعر يُحسَب دائماً حياً عبر catalogService.calculatePrice، لا تكرار لمنطق التسعير
+- إضافة src/app/(reef)/cart/ (actions.ts بكوكي session httpOnly، page.tsx) وزر "أضف للسلة" في ProductOptions.tsx — تحقَّق أولاً أن shadcn/ui لا تزال غير مثبَّتة (نفس فحص اليوم 6)، تُستهلَك التوكنز الدلالية فقط
+- BR-016 (الحد الأدنى للطلب) جديد بحالة OPEN_QUESTION — لا رقم مُخترَع، TODO صريح في الكود
+- إضافة vitest: 8 اختبارات وحدة (منطق cart.service/inventory.service، الوصول لقاعدة البيانات مُموَّه) + 3 اختبارات تكامل (ضد Supabase حقيقي، تنظّف بياناتها في afterAll) — كلها خضراء
+- تحقق فعلي عبر متصفح حقيقي (Playwright): إضافة "دجاجة كاملة طازجة" (صغير) → ظهورها في /cart بسعر 100 → زيادة الكمية إلى 200 حياً → حذف → سلة فارغة، بلا أخطاء console
+- تحديث docs/DATABASE.md (§3 carts/cart_items)، docs/DOMAIN_MAP.md (Cart جديد، Inventory محدَّث، تصحيح قسم Tenant/Authorization الذي عاد لحالة قديمة خاطئة في تحديث خارجي)، docs/BUSINESS_RULES.md (BR-016)
+
 ## 2026-09-01 (اليوم 6) — معمارية الثيمات متعددة العوالم (Multi-World Theming)
 - إضافة src/config/theme-registry.ts: السجل المركزي لثيمات 7 عوالم (ديوان، ريف، أسراب، نبض، نور الدين، تكوين، بيان) — slug + اسم AR/EN + توكنز دلالية كاملة
 - تحقَّق فعلياً: shadcn/ui **غير مثبّتة** (لا components.json، src/components/ui/ فارغ، لا cva/clsx) — سُجِّل CONFLICT-005 في docs/DECISIONS.md، استُخدم بادئة --sb- بصيغة Hex كخطة احتياط موثَّقة مسبقاً

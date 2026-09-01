@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { calculatePriceAction } from '@/app/(reef)/product/[id]/actions';
+import { addToCartAction } from '@/app/(reef)/cart/actions';
 import type { Product } from '@/core/modules/catalog/types';
 
 export function ProductOptions({ product }: { product: Product }) {
@@ -13,6 +14,8 @@ export function ProductOptions({ product }: { product: Product }) {
   const [price, setPrice] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [addState, setAddState] = useState<'idle' | 'adding' | 'added' | 'error'>('idle');
+  const [addError, setAddError] = useState<string | null>(null);
 
   useEffect(() => {
     startTransition(async () => {
@@ -29,6 +32,18 @@ export function ProductOptions({ product }: { product: Product }) {
 
   function toggleAddon(addonId: string) {
     setAddonIds((prev) => (prev.includes(addonId) ? prev.filter((id) => id !== addonId) : [...prev, addonId]));
+  }
+
+  async function handleAddToCart() {
+    setAddState('adding');
+    setAddError(null);
+    const result = await addToCartAction({ productId: product.id, quantity: 1, selection: { sizeId, addonIds } });
+    if ('error' in result) {
+      setAddState('error');
+      setAddError(result.error);
+    } else {
+      setAddState('added');
+    }
   }
 
   return (
@@ -95,6 +110,16 @@ export function ProductOptions({ product }: { product: Product }) {
           </span>
         )}
       </div>
+
+      <button
+        type="button"
+        onClick={handleAddToCart}
+        disabled={addState === 'adding' || !!error}
+        className="rounded-xl bg-primary px-4 py-3 font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+      >
+        {addState === 'adding' ? 'جارٍ الإضافة...' : addState === 'added' ? 'أُضيف للسلة ✓' : 'أضف للسلة'}
+      </button>
+      {addState === 'error' && addError && <span className="text-center text-sm text-destructive">{addError}</span>}
     </div>
   );
 }
