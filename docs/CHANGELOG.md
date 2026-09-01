@@ -13,6 +13,11 @@ source_of_truth: هذا الملف + Git log
 
 ---
 
+## 2026-09-01 — تنظيف: حذف ملفات مرجع سريع مكررة من الجذر
+- حذف ARCHITECTURE.md, DATABASE.md, DOMAIN_MAP.md, ROADMAP.md, SECURITY.md من جذر المستودع (نسخ اليوم 0/1 المبسطة) — استُبدلت بالكامل بـ docs/*.md الرسمية
+- حسم CONFLICT-004 في docs/DECISIONS.md بقرار صريح من المؤسس
+- AGENTS.md وSALSABIL_CONSTITUTION.md بقيا في الجذر (غير مكررين مع docs/)
+
 ## 2026-09-01 (اليوم 4) — نطاق التاجر وتعدد المستأجرين (Merchant Domain & Multi-Tenancy)
 - إنشاء جدول merchants + عمود products.tenant_id في Supabase
 - إنشاء src/core/modules/merchant/ (types.ts, merchant.service.ts, merchant.repository.ts)

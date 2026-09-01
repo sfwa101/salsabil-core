@@ -104,7 +104,7 @@ Related Documents: docs/ARCHITECTURE.md §3
 الوصف: كلا المجموعتين موجودتان معاً في المستودع الآن. حسب docs/DOCUMENTATION_RULES.md §1، طبقة docs/ هي مصدر الحقيقة الرسمي — لكن ملفات الجذر لم تُحذف أو تُعلَّم كـ SUPERSEDED صراحة.
 التأثير: احتمال قراءة نسخة قديمة (الجذر) بدل النسخة الرسمية المحدَّثة (docs/) من قِبل أداة أو شخص لا يعرف بوجود docs/DOCUMENTATION_RULES.md
 يحتاج قراراً من: المؤسس — هل تُحذف ملفات الجذر، أم تبقى كـ"ملخص فهرسة" مع إحالة صريحة لـ docs/؟
-الحالة: OPEN
+الحالة: RESOLVED — 2026-09-01، قرار المؤسس: حذف ملفات الجذر المكررة (ARCHITECTURE.md, DATABASE.md, DOMAIN_MAP.md, ROADMAP.md, SECURITY.md). docs/ هي المصدر الوحيد الآن. AGENTS.md وSALSABIL_CONSTITUTION.md بقيا في الجذر (غير مكررين).
 ```
 
 ### CONFLICT-003
