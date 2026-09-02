@@ -97,6 +97,10 @@ export class OrdersService {
     return order;
   }
 
+  // ⚠️ أمان (اليوم 12، ADR-014): بلا أي فحص تاجر داخلي — عكس transitionStatus عمداً. لا مستهلك
+  // واحد لهذه الدالة في src/app اليوم (فخ كامن لا ثغرة نشطة، راجع docs/DATABASE.md §6). ممنوع
+  // استدعاؤها من أي Server Action/صفحة مستقبلية (مثال: تفاصيل طلب) بلا تمرير tenantId من الجلسة
+  // والتحقق منه أولاً، بنفس نمط transitionStatus.
   async getOrderWithItems(orderId: string): Promise<OrderWithItems | null> {
     const order = await ordersRepository.findOrderById(orderId);
     if (!order) return null;
@@ -104,6 +108,7 @@ export class OrdersService {
     return { order, items };
   }
 
+  // ⚠️ أمان (اليوم 12، ADR-014): نفس تحذير getOrderWithItems أعلاه بالضبط — بلا فحص تاجر داخلي.
   async getStatusHistory(orderId: string): Promise<OrderStatusHistoryEntry[]> {
     return ordersRepository.findStatusHistory(orderId);
   }
@@ -120,8 +125,8 @@ export class OrdersService {
     return ordersRepository.findAll();
   }
 
-  // سجل تدقيق عام (كل الطلبات) — للوحة الإدارة فقط (اليوم 11). يعرض ما هو مسجَّل فعلياً في
-  // order_status_history فقط — لا audit_log عام جديد اليوم (مؤجَّل لليوم 12، يوم الأمان).
+  // سجل تدقيق خاص بالطلبات فقط — للوحة الإدارة (اليوم 11). يعرض order_status_history تحديداً،
+  // منفصل عمداً عن audit_log العام (اليوم 12، ADR-014) الذي يغطي ما هو خارج نطاق الطلب.
   async getRecentStatusHistory(limit: number = 50): Promise<OrderStatusHistoryEntry[]> {
     return ordersRepository.findAllStatusHistory(limit);
   }

@@ -98,7 +98,14 @@ export class CartService {
     return this.getSummary(cartId);
   }
 
+  // اليوم 12 (ADR-014، IDOR): يتحقق أن itemId ينتمي فعلاً لـcartId قبل الحذف — نفس نمط
+  // updateItemQuantity المجاور تماماً. carts/cart_items بلا جلسة حقيقية (سلة زائر)، فحماية
+  // UUID وحدها غير كافية (docs/SECURITY.md قاعدة 5، النمط 2).
   async removeItem(cartId: string, itemId: string): Promise<CartSummary> {
+    const items = await cartRepository.findItems(cartId);
+    const item = items.find((i) => i.id === itemId);
+    if (!item) throw new Error(`بند السلة غير موجود: ${itemId}`);
+
     await cartRepository.deleteItem(itemId);
     return this.getSummary(cartId);
   }

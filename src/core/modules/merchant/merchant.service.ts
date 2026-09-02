@@ -4,6 +4,7 @@
 import { khalilService } from '../../kernel/khalil/service';
 import type { Session } from '../../kernel/khalil/types';
 import { merchantRepository } from './merchant.repository';
+import { auditService } from '../audit/audit.service';
 import type { Merchant, MerchantAgreement, MerchantRegistrationInput } from './types';
 
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -31,17 +32,48 @@ export class MerchantService {
    */
   async loginOwnerByPhone(phone: string): Promise<{ token: string; session: Session } | null> {
     const user = await khalilService.findUserByPhone(phone);
-    if (!user || user.role !== 'merchant_owner') return null;
+    if (!user || user.role !== 'merchant_owner') {
+      await auditService.log({
+        actorId: user?.id ?? null,
+        actorRole: user?.role ?? 'anonymous',
+        action: 'auth.login_failed',
+        entityType: 'user',
+        entityId: user?.id ?? null,
+        metadata: { phone, attemptedRole: 'merchant_owner' },
+      });
+      return null;
+    }
 
     const merchant = await merchantRepository.findByOwnerId(user.id);
-    if (!merchant || !merchant.isActive) return null;
+    if (!merchant || !merchant.isActive) {
+      await auditService.log({
+        actorId: user.id,
+        actorRole: user.role,
+        action: 'auth.login_failed',
+        entityType: 'user',
+        entityId: user.id,
+        metadata: { phone, reason: merchant ? 'merchant_inactive' : 'no_merchant_linked' },
+      });
+      return null;
+    }
 
-    return khalilService.createSession({
+    const result = await khalilService.createSession({
       userId: user.id,
       tenantId: merchant.id,
       role: user.role,
       ttlSeconds: MERCHANT_SESSION_TTL_SECONDS,
     });
+
+    await auditService.log({
+      actorId: user.id,
+      actorRole: user.role,
+      action: 'auth.login_success',
+      entityType: 'user',
+      entityId: user.id,
+      metadata: { phone },
+    });
+
+    return result;
   }
 
   isOwner(merchant: Merchant, userId: string): boolean {
@@ -52,6 +84,10 @@ export class MerchantService {
   // صلاحية هنا — مسؤولية المستدعي التأكد أن الفاعل platform_admin قبل الوصول لهاتين الدالتين.
   async listAll(): Promise<Merchant[]> {
     return merchantRepository.findAll();
+  }
+
+  async findById(id: string): Promise<Merchant | null> {
+    return merchantRepository.findById(id);
   }
 
   async setActiveStatus(id: string, isActive: boolean): Promise<Merchant> {

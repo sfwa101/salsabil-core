@@ -140,12 +140,21 @@ describe('CartService.updateItemQuantity', () => {
 });
 
 describe('CartService.removeItem', () => {
-  it('يحذف البند ويُعيد ملخصاً محدَّثاً', async () => {
-    vi.mocked(cartRepository.findItems).mockResolvedValue([]);
+  it('يحذف البند ويُعيد ملخصاً محدَّثاً عندما ينتمي فعلاً لهذه السلة', async () => {
+    const item = makeItem();
+    // الاستدعاء الأول: فحص الملكية (يجد البند)؛ الثاني: getSummary بعد الحذف الفعلي (لا بند بعدها)
+    vi.mocked(cartRepository.findItems).mockResolvedValueOnce([item]).mockResolvedValueOnce([]);
 
-    const summary = await cartService.removeItem(cart.id, 'item-1');
+    const summary = await cartService.removeItem(cart.id, item.id);
 
-    expect(cartRepository.deleteItem).toHaveBeenCalledWith('item-1');
+    expect(cartRepository.deleteItem).toHaveBeenCalledWith(item.id);
     expect(summary.lines).toHaveLength(0);
+  });
+
+  it('اختبار أمني حاسم (IDOR، اليوم 12): يرفض حذف itemId لا ينتمي لهذه السلة، بلا لمس deleteItem إطلاقاً', async () => {
+    vi.mocked(cartRepository.findItems).mockResolvedValue([]); // سلة الفاعل فارغة — البند ينتمي لسلة أخرى
+
+    await expect(cartService.removeItem(cart.id, 'item-from-another-cart')).rejects.toThrow(/غير موجود/);
+    expect(cartRepository.deleteItem).not.toHaveBeenCalled();
   });
 });

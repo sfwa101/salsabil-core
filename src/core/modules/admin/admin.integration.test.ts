@@ -64,8 +64,13 @@ describe('Admin login integration (Supabase حقيقي، اليوم 11)', () => 
 describe('Admin merchant management integration (Supabase حقيقي، اليوم 11)', () => {
   let originalIsActive: boolean;
   let testMerchantId: string;
+  let testActor: { id: string; role: 'platform_admin' };
 
   beforeAll(async () => {
+    const adminUser = await khalilService.findUserByPhone(TEST_ADMIN_PHONE);
+    if (!adminUser) throw new Error('مدير المنصة التجريبي غير موجود في قاعدة البيانات الحقيقية');
+    testActor = { id: adminUser.id, role: 'platform_admin' };
+
     const merchants = await adminService.listMerchants();
     const testMerchant = merchants.find((m) => m.phone === '01000000000' || m.businessName.includes('تجريبي'));
     if (!testMerchant) throw new Error('التاجر التجريبي غير موجود في قاعدة البيانات الحقيقية');
@@ -74,7 +79,7 @@ describe('Admin merchant management integration (Supabase حقيقي، اليو�
   });
 
   afterAll(async () => {
-    await adminService.setMerchantActiveStatus(testMerchantId, originalIsActive);
+    await adminService.setMerchantActiveStatus(testMerchantId, originalIsActive, testActor);
   });
 
   it('listMerchants يعيد التاجر التجريبي الحقيقي ضمن النتائج', async () => {
@@ -85,7 +90,7 @@ describe('Admin merchant management integration (Supabase حقيقي، اليو�
   it('دورة تبديل is_active كاملة تنعكس فعلياً في قراءة لاحقة، بلا تعديل أي حقل آخر', async () => {
     const before = (await adminService.listMerchants()).find((m) => m.id === testMerchantId)!;
 
-    const toggled = await adminService.setMerchantActiveStatus(testMerchantId, !before.isActive);
+    const toggled = await adminService.setMerchantActiveStatus(testMerchantId, !before.isActive, testActor);
     expect(toggled.isActive).toBe(!before.isActive);
     expect(toggled.businessName).toBe(before.businessName); // لم يتغيّر أي حقل آخر
     expect(toggled.phone).toBe(before.phone);
@@ -95,7 +100,75 @@ describe('Admin merchant management integration (Supabase حقيقي، اليو�
 
     // إعادة الحالة الأصلية فوراً (لا الاعتماد على afterAll فقط) — يبقي بقية الاختبارات في هذا
     // الملف متسقة إن اعتمدت على كون التاجر نشطاً
-    await adminService.setMerchantActiveStatus(testMerchantId, before.isActive);
+    await adminService.setMerchantActiveStatus(testMerchantId, before.isActive, testActor);
+  });
+
+  it('اختبار أمني حاسم (اليوم 12، ADR-014): تفعيل/تعطيل تاجر يُسجَّل فعلياً في audit_log بالفاعل والقيمتين قبل/بعد — الفجوة المذكورة صراحة في ADR-013', async () => {
+    const before = (await adminService.listMerchants()).find((m) => m.id === testMerchantId)!;
+
+    await adminService.setMerchantActiveStatus(testMerchantId, !before.isActive, testActor);
+
+    const { data: rows, error } = await supabaseAdmin
+      .from('audit_log')
+      .select('*')
+      .eq('entity_type', 'merchant')
+      .eq('entity_id', testMerchantId)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (error) throw error;
+
+    expect(rows).toHaveLength(1);
+    expect(rows![0].actor_id).toBe(testActor.id);
+    expect(rows![0].actor_role).toBe('platform_admin');
+    expect(rows![0].action).toBe(!before.isActive ? 'merchant.activated' : 'merchant.deactivated');
+    expect(rows![0].metadata).toMatchObject({ before: { isActive: before.isActive }, after: { isActive: !before.isActive } });
+
+    // إعادة الحالة الأصلية
+    await adminService.setMerchantActiveStatus(testMerchantId, before.isActive, testActor);
+  });
+});
+
+describe('Admin/Merchant login audit trail integration (اليوم 12، ADR-014، Supabase حقيقي)', () => {
+  const tokensToClean: string[] = [];
+
+  afterAll(async () => {
+    for (const token of tokensToClean) {
+      await khalilService.destroySession(token);
+    }
+  });
+
+  it('دخول إدارة ناجح يُسجَّل في audit_log كـ auth.login_success', async () => {
+    const result = await adminService.loginByPhone(TEST_ADMIN_PHONE);
+    tokensToClean.push(result!.token);
+
+    const { data: rows, error } = await supabaseAdmin
+      .from('audit_log')
+      .select('*')
+      .eq('action', 'auth.login_success')
+      .eq('entity_type', 'user')
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (error) throw error;
+
+    expect(rows).toHaveLength(1);
+    expect(rows![0].actor_role).toBe('platform_admin');
+  });
+
+  it('محاولة دخول إدارة برقم هاتف غير مسجَّل تُسجَّل في audit_log كـ auth.login_failed بفاعل anonymous', async () => {
+    const randomPhone = `0198${Math.floor(1000000 + Math.random() * 8999999)}`;
+    await adminService.loginByPhone(randomPhone);
+
+    const { data: rows, error } = await supabaseAdmin
+      .from('audit_log')
+      .select('*')
+      .eq('action', 'auth.login_failed')
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (error) throw error;
+
+    expect(rows).toHaveLength(1);
+    expect(rows![0].actor_role).toBe('anonymous');
+    expect(rows![0].metadata).toMatchObject({ phone: randomPhone, attemptedRole: 'platform_admin' });
   });
 });
 

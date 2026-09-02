@@ -17,7 +17,7 @@ source_of_truth: Supabase Project الفعلي (للجداول المنفَّذ�
 
 - لا استدعاء مباشر لقاعدة البيانات من الواجهة — فقط عبر `[domain].repository.ts`.
 - `tenant_id` يأتي من الجلسة/JWT فقط، أبداً من طلب العميل. **`IMPLEMENTED` منذ اليوم 10** — `products.tenant_id` يُشير إلى `merchants.id`؛ `Session.tenantId` أصبح حقيقياً الآن (جدول `sessions`، تسجيل دخول تاجر بالهاتف، اليوم 10، `ADR-012`) — لا يزال بلا كلمة مرور حقيقية ولا Supabase Auth كاملة (`specs/identity/SPEC.md` لا يزال الفجوة الأشمل)، لكن `tenant_id` نفسه صار يُقرأ فعلياً من جلسة server-side لا من مدخل عميل. لا `stores` بعد.
-- RLS مفعَّل على كل جدول يحوي بيانات — `IMPLEMENTED` على الأحد عشر جدولاً الموجودة حالياً (`users`, `categories`, `products`, `merchants`, `inventory`, `carts`, `cart_items`, `orders`, `order_items`, `order_status_history`, `sessions`). ثلاثة أنماط: (أ) قراءة عامة + كتابة ممنوعة لـ`anon` (`categories`/`products`/`inventory` فقط — **`merchants` أُزيلت من هذه المجموعة اليوم 10**، راجع الملاحظة أدناه)، (ب) قفل كامل بلا أي policy، وصول حصري عبر `service_role` (`carts`, `cart_items`, `orders`, `order_items`, `order_status_history`, **`merchants`**, `sessions` — راجع ADR-008/ADR-009/ADR-010/ADR-012)، (ج) قراءة الذات فقط (`users`).
+- RLS مفعَّل على كل جدول يحوي بيانات — `IMPLEMENTED` على الاثني عشر جدولاً الموجودة حالياً (`users`, `categories`, `products`, `merchants`, `inventory`, `carts`, `cart_items`, `orders`, `order_items`, `order_status_history`, `sessions`, `audit_log`). ثلاثة أنماط: (أ) قراءة عامة + كتابة ممنوعة لـ`anon` (`categories`/`products`/`inventory` فقط — **`merchants` أُزيلت من هذه المجموعة اليوم 10**، راجع الملاحظة أدناه)، (ب) قفل كامل بلا أي policy، وصول حصري عبر `service_role` (`carts`, `cart_items`, `orders`, `order_items`, `order_status_history`, **`merchants`**, `sessions`, **`audit_log`** — راجع ADR-008/ADR-009/ADR-010/ADR-012/ADR-014)، (ج) قراءة الذات فقط (`users`، **معطَّلة عملياً حالياً — راجع §6**).
 - **تصحيح تاريخي (اليوم 9.5، تحقُّق حي):** إلى اليوم 9، `merchants` كانت مصنَّفة خطأً هنا كجزء من النمط (ب)، بينما كانت فعلياً في النمط (أ) — قابلة للقراءة العامة بالكامل عبر `anon` (`phone`/`owner_id` مكشوفان). اليوم 10 (`ADR-012`) نقلها فعلياً وحقيقياً للنمط (ب) — حُذفت سياسة القراءة العامة (`"Merchants are viewable by everyone"`) بعد تأكيد عدم وجود أي مستهلك فعلي لها في الكود.
 - كل سعر يُعاد حسابه من الخادم دائماً، لا يُصدَّق من العميل.
 
@@ -46,6 +46,13 @@ alter table users enable row level security;
 create policy "Users can read own data" on users for select using (auth.uid() = id);
 ```
 **الحالة:** `IMPLEMENTED` — RLS مفعَّل، سياسة قراءة واحدة فقط (المستخدم يقرأ بياناته الخاصة). **لا سياسات Insert/Update/Delete بعد — `OPEN_QUESTION`: من يملك حق إنشاء مستخدم جديد؟ (Auth مباشرة أم عبر service مخصص؟)**
+
+**نموذج الهوية المرحلي (اليوم 12، `ADR-015`):** لا صف `users` يُنشَأ إطلاقاً لزائر يتصفّح أو يشتري كعميل عادي —
+هويته عبر `carts.session_token` وحده (`ADR-008`) حتى لحظة Checkout حيث يُطلَب الهاتف فقط
+(`khalilService.findOrCreateCustomerByPhone`، `ADR-009`). `phone` يبقى `not null unique` كما هو — الزائر بلا
+توثيق مُحقَّق عبر غياب صف `users` أصلاً، لا عبر جعل `phone` قابلاً لـ`NULL`. `national_id`/`is_verified` (Phase 2:
+توثيق هوية إجباري عند طلب الانضمام كتاجر/شركاء النجاح/تيسير) **غير موجودَين في الجدول إطلاقاً بعد** — `CONCEPTUAL`،
+راجع §4 أدناه.
 
 ### `categories`
 ```sql
@@ -247,6 +254,43 @@ create index sessions_user_id_idx on sessions (user_id);
 | `01000000000` | `merchant_owner` | مالك "محل الدواجن التجريبي" — أُنشئ اليوم 4، يُستخدَم في اختبارات `orders`/`merchant` منذ اليوم 8 |
 | `01000000001` | `platform_admin` | أُنشئ يدوياً عبر `service_role` اليوم 11 — أول حساب إدارة في المشروع، لا واجهة "Bootstrap Admin" |
 
+### `audit_log` — Evidence: `IMPLEMENTED` (اليوم 12، `ADR-014`)
+
+```sql
+create table audit_log (
+  id uuid primary key default gen_random_uuid(),
+  actor_id uuid references users(id),
+  actor_role text not null
+    check (actor_role in ('platform_admin','merchant_owner','merchant_manager','employee','customer','system','anonymous')),
+  action text not null,
+  entity_type text not null,
+  entity_id text,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+alter table audit_log enable row level security;
+-- بلا أي policy — نفس نمط merchants/orders/sessions، وصول حصري عبر service_role (ADR-008)
+create index audit_log_entity_idx on audit_log (entity_type, entity_id);
+create index audit_log_created_at_idx on audit_log (created_at desc);
+```
+
+**الحالة:** `IMPLEMENTED` — كان `CONCEPTUAL` منذ اليوم 8 (راجع §4 أدناه)، بُني الآن عند يوم الأمان المخطَّط له تحديداً.
+**سجل تدقيق عام خارج نطاق طلب واحد** — عكس `order_status_history` (خاص بدورة حياة الطلب فقط، يبقى كما هو بلا لمس).
+
+**قرارات تصميم (راجع `ADR-014` في `docs/DECISIONS.md` للتفصيل الكامل):**
+- **`entity_id text` لا `uuid references`** — الجدول متعدد الأشكال (تاجر، مستخدم...)، لا FK واحد ممكن. نفس فلسفة
+  `products.options jsonb` (`ADR-004`): مرونة SQL، انضباط TypeScript (`AuditAction` union type في
+  `src/core/modules/audit/types.ts`).
+- **`actor_role` يضيف `'anonymous'`** لقيم `order_status_history` الموجودة — محاولة دخول فاشلة برقم هاتف غير
+  مسجَّل ليس لها صف `users` مطابق، فلا دور معروف.
+- **`action` نص حر منضبط عبر type** لا enum SQL — يتجنب هجرة `ALTER TYPE` عند كل عملية حساسة جديدة مستقبلاً.
+  القيم المستخدمة فعلياً اليوم: `merchant.activated`, `merchant.deactivated`, `auth.login_success`,
+  `auth.login_failed`.
+- **بلا أي policy** — نفس نمط `merchants`/`carts`/`orders`/`sessions`، وصول حصري عبر `service_role`
+  (`src/core/modules/audit/audit.repository.ts`).
+- **لا بيانات حساسة في `metadata`** — لا كلمة مرور (غير موجودة أصلاً في التصميم)، لا Token جلسة، فقط قيم قبل/بعد
+  أو رقم الهاتف/الدور المستخدَم في محاولة الدخول.
+
 ---
 
 ## 4. الجداول — CONCEPTUAL (مخطَّطة في الدستور، لم تُبنَ)
@@ -256,7 +300,7 @@ create index sessions_user_id_idx on sessions (user_id);
 | الجدول | ينتمي لِـ | مخطَّط لليوم | الحالة |
 |---|---|---|---|
 | `stores` | Tenant (طبقة فرعية تحت `merchants`) | غير مجدوَل بعد | `CONCEPTUAL` |
-| `audit_log` | Audit (عام، خارج نطاق طلب واحد) | اليوم 12 (يوم الأمان، بعد الإزاحة) | `CONCEPTUAL` — `order_status_history` (تدقيق خاص بالطلبات فقط) `IMPLEMENTED` منذ اليوم 9، راجع §3 |
+| `users.national_id`, `users.is_verified` (أعمدة جديدة على `users`، لا جدول منفصل) | Identity — Phase 2 من نموذج الهوية المرحلي (`ADR-015`) | يُبنى عند بدء نطاق تاجر جديد/شركاء النجاح/تيسير تحديداً — غير مجدوَل بعد | `CONCEPTUAL` — توثيق هوية إجباري فقط عند تلك الخدمات، لا للتصفح/الشراء العادي |
 | `product_variant`, `sku`, `barcode`, `packaging` | Catalog (العمق الكامل) | غير مجدوَل بعد — أُجِّل لصالح Vertical Slice أولاً | `CONCEPTUAL` |
 
 ---
@@ -274,7 +318,7 @@ create index sessions_user_id_idx on sessions (user_id);
 
 | الجدول | السياسة | الحالة |
 |---|---|---|
-| `users` | قراءة الذات فقط | `IMPLEMENTED` |
+| `users` | قراءة الذات فقط (`auth.uid() = id`) — **معطَّلة عملياً، راجع الملاحظة أدناه** | `IMPLEMENTED` (بلا أثر فعلي بعد) |
 | `categories` | قراءة عامة للأقسام النشطة | `IMPLEMENTED` |
 | `products` | قراءة عامة للمنتجات النشطة | `IMPLEMENTED` |
 | `inventory` | قراءة عامة | `IMPLEMENTED` |
@@ -282,10 +326,15 @@ create index sessions_user_id_idx on sessions (user_id);
 | `carts`, `cart_items` | بلا أي policy — قفل كامل لـ`anon`/`authenticated`، وصول حصري عبر `service_role` (اليوم 7، `ADR-008`) | `IMPLEMENTED` |
 | `orders`, `order_items`, `order_status_history` | بلا أي policy — نفس نمط القفل الكامل (اليوم 8، `ADR-009`؛ الثالث اليوم 9، `ADR-010`) | `IMPLEMENTED` (دورة حياة كاملة) |
 | `sessions` | بلا أي policy — قفل كامل، وصول حصري عبر `service_role` (اليوم 10، `ADR-012`) | `IMPLEMENTED` |
+| `audit_log` | بلا أي policy — قفل كامل، وصول حصري عبر `service_role` (اليوم 12، `ADR-014`) | `IMPLEMENTED` |
 
-**سياسات الكتابة (Insert/Update/Delete) لا تزال غير موجودة/موثَّقة على `users`/`categories`/`products`/`inventory` — `OPEN_QUESTION` صريح يحتاج حسماً قبل بناء بوابة التاجر الكاملة (اليوم 5+).**
+**سياسات الكتابة (Insert/Update/Delete) لا تزال غير موجودة/موثَّقة على `users`/`categories`/`products`/`inventory` — `OPEN_QUESTION` صريح. مراجعة اليوم 12 تحقَّقت حياً: لا كود كتابة إطلاقاً على `categories`/`products`/`inventory` حتى الآن (`catalog.repository.ts`/`inventory.repository.ts` قراءة فقط) — لا خطر فعلي اليوم. **قاعدة القرار المعتمدة لأي كتابة مستقبلية على هذه الجداول** (مثال: بوابة تاجر تضيف منتجاً): يُحسَم عندها تحديداً بين نقل الجدول لعميل `service_role` (نمط ب) أو سياسة كتابة مقيَّدة بالدور — لا يُقرَّر مسبقاً بلا حاجة فعلية (نفس منهج `ADR-008`).**
+
+**ملاحظة أمنية (اليوم 12، `ADR-014`): سياسة `users` ميتة فعلياً.** `auth.uid() = id` لا تُطابِق شيئاً أبداً لأنه لا Supabase Auth حقيقية في المشروع بعد — الدخول بالكامل عبر جدول `sessions` المخصَّص بكوكي عشوائي، لا JWT حقيقي بمعرّف مستخدم (`specs/identity/SPEC.md`). **غير خطيرة** (تمنع القراءة بدل أن تسمح بها خطأً — فشل آمن) لكنها كانت موثَّقة سابقاً هنا وكأنها فعّالة. تبقى في مكانها بلا تغيير SQL — ستُفعَّل تلقائياً عند بناء Supabase Auth حقيقية مستقبلاً.
 
 **✅ ملاحظة أمنية محلولة (اكتُشفت أثناء تخطيط اليوم 10، حُسمت في تنفيذه):** إلى اليوم 9، `merchants` كانت قابلة للقراءة العامة بالكامل عبر `anon` — `phone` و`owner_id` لكل تاجر مقروءان من أي طرف يملك مفتاح `anon` العام. تحقَّقنا فعلياً أن لا مستهلك واحد لهذه القراءة العامة في كامل الكود (النطاق دُفن منذ اليوم 4 بلا استخدام)، فحُذفت السياسة بالكامل (`ADR-012`) بدل تقييدها لأعمدة علنية فقط — الحل الأبسط الممكن لأن لا حاجة فعلية للقراءة العامة أصلاً حتى الآن.
+
+**⚠️ ملاحظة أمنية (اليوم 12، `ADR-014`) — فخ كامن لا ثغرة نشطة:** `orders.service.ts` → `getOrderWithItems(orderId)` و`getStatusHistory(orderId)` بلا أي فحص تاجر داخلي (عكس `transitionStatus`). لا مستهلك واحد لهما في `src/app` اليوم فلا خطر فعلي، لكن **ممنوع** استدعاؤهما من أي Server Action/صفحة مستقبلية (مثال: صفحة تفاصيل طلب) بلا تمرير `tenantId` من الجلسة والتحقق منه أولاً، بنفس نمط `transitionStatus`. راجع التعليق التحذيري فوق التعريفين في الكود نفسه.
 
 ---
 

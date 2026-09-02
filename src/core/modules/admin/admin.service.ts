@@ -4,6 +4,7 @@
 
 import { khalilService } from '../../kernel/khalil/service';
 import { merchantService } from '../merchant/merchant.service';
+import { auditService } from '../audit/audit.service';
 import type { Session } from '../../kernel/khalil/types';
 import type { Merchant } from '../merchant/types';
 
@@ -18,22 +19,57 @@ export class AdminService {
    */
   async loginByPhone(phone: string): Promise<{ token: string; session: Session } | null> {
     const user = await khalilService.findUserByPhone(phone);
-    if (!user || user.role !== 'platform_admin') return null;
+    if (!user || user.role !== 'platform_admin') {
+      await auditService.log({
+        actorId: user?.id ?? null,
+        actorRole: user?.role ?? 'anonymous',
+        action: 'auth.login_failed',
+        entityType: 'user',
+        entityId: user?.id ?? null,
+        metadata: { phone, attemptedRole: 'platform_admin' },
+      });
+      return null;
+    }
 
-    return khalilService.createSession({
+    const result = await khalilService.createSession({
       userId: user.id,
       tenantId: null,
       role: user.role,
       ttlSeconds: ADMIN_SESSION_TTL_SECONDS,
     });
+
+    await auditService.log({
+      actorId: user.id,
+      actorRole: user.role,
+      action: 'auth.login_success',
+      entityType: 'user',
+      entityId: user.id,
+      metadata: { phone },
+    });
+
+    return result;
   }
 
   async listMerchants(): Promise<Merchant[]> {
     return merchantService.listAll();
   }
 
-  async setMerchantActiveStatus(id: string, isActive: boolean): Promise<Merchant> {
-    return merchantService.setActiveStatus(id, isActive);
+  // اليوم 12: يستقبل الفاعل صراحة لتسجيل التدقيق (ADR-014) — بلا هذا، فجوة "تفعيل/تعطيل التاجر
+  // بلا سجل" المذكورة صراحة في ADR-013 تبقى مفتوحة.
+  async setMerchantActiveStatus(id: string, isActive: boolean, actor: { id: string; role: Session['role'] }): Promise<Merchant> {
+    const before = await merchantService.findById(id);
+    const updated = await merchantService.setActiveStatus(id, isActive);
+
+    await auditService.log({
+      actorId: actor.id,
+      actorRole: actor.role,
+      action: isActive ? 'merchant.activated' : 'merchant.deactivated',
+      entityType: 'merchant',
+      entityId: id,
+      metadata: { before: { isActive: before?.isActive ?? null }, after: { isActive: updated.isActive } },
+    });
+
+    return updated;
   }
 }
 

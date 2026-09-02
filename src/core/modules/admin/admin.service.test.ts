@@ -44,20 +44,28 @@ vi.mock('../../kernel/khalil/service', () => ({
 vi.mock('../merchant/merchant.service', () => ({
   merchantService: {
     listAll: vi.fn(async () => [merchant]),
+    findById: vi.fn(async () => merchant),
     setActiveStatus: vi.fn(async (id: string, isActive: boolean) => ({ ...merchant, id, isActive })),
+  },
+}));
+
+vi.mock('../audit/audit.service', () => ({
+  auditService: {
+    log: vi.fn(),
   },
 }));
 
 const { adminService } = await import('./admin.service');
 const { khalilService } = await import('../../kernel/khalil/service');
 const { merchantService } = await import('../merchant/merchant.service');
+const { auditService } = await import('../audit/audit.service');
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 describe('AdminService.loginByPhone', () => {
-  it('ينجح: هاتف platform_admin حقيقي → token وجلسة بـ tenantId: null', async () => {
+  it('ينجح: هاتف platform_admin حقيقي → token وجلسة بـ tenantId: null، ويُسجَّل auth.login_success', async () => {
     vi.mocked(khalilService.findUserByPhone).mockResolvedValue(adminUser);
 
     const result = await adminService.loginByPhone(adminUser.phone);
@@ -70,24 +78,33 @@ describe('AdminService.loginByPhone', () => {
       role: 'platform_admin',
       ttlSeconds: expect.any(Number),
     });
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'auth.login_success', actorId: adminUser.id, actorRole: 'platform_admin' })
+    );
   });
 
-  it('يرفض (null) رقماً غير مسجَّل إطلاقاً', async () => {
+  it('يرفض (null) رقماً غير مسجَّل إطلاقاً، ويُسجَّل auth.login_failed بفاعل anonymous', async () => {
     vi.mocked(khalilService.findUserByPhone).mockResolvedValue(null);
 
     const result = await adminService.loginByPhone('01099999999');
 
     expect(result).toBeNull();
     expect(khalilService.createSession).not.toHaveBeenCalled();
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'auth.login_failed', actorId: null, actorRole: 'anonymous' })
+    );
   });
 
-  it('يرفض (null) مستخدماً مسجَّلاً لكن دوره ليس platform_admin (مثال: merchant_owner)', async () => {
+  it('يرفض (null) مستخدماً مسجَّلاً لكن دوره ليس platform_admin (مثال: merchant_owner)، ويُسجَّل auth.login_failed بدوره الحقيقي', async () => {
     vi.mocked(khalilService.findUserByPhone).mockResolvedValue(merchantOwner);
 
     const result = await adminService.loginByPhone(merchantOwner.phone);
 
     expect(result).toBeNull();
     expect(khalilService.createSession).not.toHaveBeenCalled();
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'auth.login_failed', actorId: merchantOwner.id, actorRole: 'merchant_owner' })
+    );
   });
 });
 
@@ -99,10 +116,20 @@ describe('AdminService merchant management', () => {
     expect(result).toEqual([merchant]);
   });
 
-  it('setMerchantActiveStatus يفوّض لـ merchantService.setActiveStatus بنفس المعاملات', async () => {
-    const result = await adminService.setMerchantActiveStatus('merchant-1', false);
+  it('setMerchantActiveStatus يفوّض لـ merchantService.setActiveStatus بنفس المعاملات، ويُسجِّل تدقيقاً بالفاعل والقيمتين قبل/بعد', async () => {
+    const actor = { id: adminUser.id, role: adminUser.role };
+
+    const result = await adminService.setMerchantActiveStatus('merchant-1', false, actor);
 
     expect(merchantService.setActiveStatus).toHaveBeenCalledWith('merchant-1', false);
     expect(result.isActive).toBe(false);
+    expect(auditService.log).toHaveBeenCalledWith({
+      actorId: adminUser.id,
+      actorRole: 'platform_admin',
+      action: 'merchant.deactivated',
+      entityType: 'merchant',
+      entityId: 'merchant-1',
+      metadata: { before: { isActive: merchant.isActive }, after: { isActive: false } },
+    });
   });
 });

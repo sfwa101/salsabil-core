@@ -1,8 +1,8 @@
 ---
 title: مرجع الأمن
 status: ACTIVE
-version: 1.2
-last_updated: 2026-09-01
+version: 1.3
+last_updated: 2026-09-02
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md §4, §26 (المبدأ)
 ---
@@ -33,7 +33,12 @@ Supabase يصدر JWT تلقائياً عبر Auth. **لم يُستخدَم فع
 
 **النمط 1 — قراءة عامة، مفتاح `anon`:** `categories`, `products`, `inventory`. RLS يسمح بالقراءة للجميع (بيانات كتالوج عامة بطبيعتها). **سياسات الكتابة (Insert/Update/Delete) على هذه الجداول لا تزال غير موجودة/موثَّقة — `OPEN_QUESTION`.**
 
-**النمط 2 — قفل كامل، مفتاح `service_role` (اليوم 7، `ADR-008`؛ توسَّع لليوم 8، `ADR-009`):** `merchants`, `carts`, `cart_items`, `orders`, `order_items`. RLS مفعَّل **بلا أي policy إطلاقاً** — هذا يمنع `anon`/`authenticated` تماماً، بما في ذلك القراءة. كل وصول (قراءة وكتابة) يمر حصرياً عبر `src/core/kernel/database/supabase-admin-client.ts` (مفتاح `service_role`، خادم فقط، محمي بحزمة `server-only` لمنع تسرّبه لأي Client Component). **متى يُستخدَم هذا النمط:** عندما يكتب بيانات مستخدم غير مُصادَق عليه حقيقياً (سلة الزائر عبر `session_token`) — RLS مسموح لـ`anon` في هذه الحالة لا يوفر حماية فعلية أصلاً، لأن مفتاح `anon` نفسه علني ولا يميّز بين طالب شرعي وآخر يخمّن معرّفات (كان سيخالف §2 أدناه). **قاعدة القرار لأي جدول جديد:** بيانات قراءتها عامة وآمنة للجميع ← النمط 1. بيانات خاصة بصاحبها ولا مصادقة حقيقية تحميها ← النمط 2، لا نمط وسط "RLS مفتوح لـanon باعتماد على صعوبة تخمين معرّف" (غير آمن، راجع `DECISIONS.md → ADR-008` للنقاش الكامل).
+**النمط 2 — قفل كامل، مفتاح `service_role` (اليوم 7، `ADR-008`؛ توسَّع لليوم 8، `ADR-009`):** `merchants`, `carts`, `cart_items`, `orders`, `order_items`, `order_status_history`, `sessions`, **`audit_log`** (اليوم 12، `ADR-014`). RLS مفعَّل **بلا أي policy إطلاقاً** — هذا يمنع `anon`/`authenticated` تماماً، بما في ذلك القراءة. كل وصول (قراءة وكتابة) يمر حصرياً عبر `src/core/kernel/database/supabase-admin-client.ts` (مفتاح `service_role`، خادم فقط، محمي بحزمة `server-only` لمنع تسرّبه لأي Client Component). **متى يُستخدَم هذا النمط:** عندما يكتب بيانات مستخدم غير مُصادَق عليه حقيقياً (سلة الزائر عبر `session_token`) — RLS مسموح لـ`anon` في هذه الحالة لا يوفر حماية فعلية أصلاً، لأن مفتاح `anon` نفسه علني ولا يميّز بين طالب شرعي وآخر يخمّن معرّفات (كان سيخالف §2 أدناه). **قاعدة القرار لأي جدول جديد:** بيانات قراءتها عامة وآمنة للجميع ← النمط 1. بيانات خاصة بصاحبها ولا مصادقة حقيقية تحميها ← النمط 2، لا نمط وسط "RLS مفتوح لـanon باعتماد على صعوبة تخمين معرّف" (غير آمن، راجع `DECISIONS.md → ADR-008` للنقاش الكامل).
+
+**⚠️ مراجعة RLS شاملة (اليوم 12، `ADR-014`) — النتيجة: بلا تغيير معماري، إصلاح واحد فقط.** الأنماط أعلاه صحيحة ومقصودة على كل الجداول القائمة (لا حاجة لإعادة بناء). ثلاث نقاط وُثِّقت صراحة بدل تصحيحها بلا داعٍ:
+1. **سياسة `users` (`auth.uid() = id`) معطَّلة عملياً** — لا Supabase Auth حقيقية بعد، فـ`auth.uid()` لا يُطابِق شيئاً. غير خطيرة (فشل آمن — تمنع بدل أن تسمح خطأً)، تُفعَّل تلقائياً عند بناء Auth حقيقية لاحقاً.
+2. **سياسات الكتابة المفقودة على `categories`/`products`/`inventory` (النمط 1) ليست خطراً فعلياً اليوم** — تحقُّق حي أكَّد عدم وجود أي كود كتابة عليها إطلاقاً حتى الآن (`catalog.repository.ts`/`inventory.repository.ts` قراءة فقط). القرار: تُحسَم عند بناء أول ميزة كتابة فعلية على هذه الجداول، لا مسبقاً.
+3. **ثغرة IDOR حقيقية أُصلِحت** — `cartService.removeItem` (`src/core/modules/cart/cart.service.ts`) كان يحذف `itemId` بلا التحقق من انتمائه لـ`cartId` المُمرَّر. أُصلِح بنفس نمط `updateItemQuantity` المجاور (فحص الملكية عبر `findItems` قبل الحذف). مُختبَر حياً (`cart.integration.test.ts` → "Cart IDOR").
 
 ## 6. Server-Side Validation — Evidence: `IMPLEMENTED` (في Catalog)
 
@@ -47,9 +52,17 @@ Supabase يصدر JWT تلقائياً عبر Auth. **لم يُستخدَم فع
 
 `PaymentProvider` (واجهة) + `CashOnDeliveryProvider` (التطبيق الوحيد الفعلي) في `src/core/modules/payments/`. لا معالجة دفع فعلية — COD ينجح فوراً دائماً (`charge()` يُعيد `success:true`)، لا اتصال بمزوّد خارجي. باقي المزوّدين (VodafoneCash, Instapay, Card, DiwanWallet) لا تزال `PROPOSED` (`ARCHITECTURE.md §4`) — لم تُلمَس.
 
-## 9. Audit Logs — Evidence: `CONCEPTUAL`
+## 9. Audit Logs — Evidence: `IMPLEMENTED` (اليوم 12، `ADR-014`)
 
-جدول `audit_log` مخطَّط (`DATABASE.md §4`)، غير منفَّذ. مخطَّط لليوم 11 من §23.
+جدول `audit_log` عام (`docs/DATABASE.md` §3) — يغطي كل عملية حساسة خارج دورة حياة الطلب (التي تبقى في
+`order_status_history` كما هي منذ اليوم 9، بلا لمس). **مُطبَّق فعلياً اليوم على نطاقين محدَّدين** (لا أكثر، حسب
+فجوات موثَّقة صراحة في `ADR-013`):
+1. تفعيل/تعطيل التاجر (`AdminService.setMerchantActiveStatus` → `merchant.activated`/`merchant.deactivated`) —
+   الفجوة المذكورة حرفياً في `ADR-013` كـ"غير مسجَّلة".
+2. محاولات دخول التاجر والإدارة، نجاحاً وفشلاً (`MerchantService.loginOwnerByPhone`/`AdminService.loginByPhone` →
+   `auth.login_success`/`auth.login_failed`).
+
+لا بيانات حساسة في `metadata` (لا Token جلسة، لا كلمة مرور — غير موجودة أصلاً). راجع `src/core/modules/audit/`.
 
 ## 10. حماية البيانات / Secrets — Evidence: `IMPLEMENTED`
 
@@ -59,9 +72,16 @@ Supabase يصدر JWT تلقائياً عبر Auth. **لم يُستخدَم فع
 
 لا API خارجية مكشوفة بعد (راجع `API_CONTRACTS.md`).
 
-## 12. Rate Limiting — Evidence: `OPEN_QUESTION`
+## 12. Rate Limiting — Evidence: `IMPLEMENTED` (اليوم 12، `ADR-014` — نطاق محدود بموافقة صريحة)
 
-مذكور كمبدأ في `SALSABIL_CONSTITUTION.md §26` بلا تفاصيل (لا رقم، لا آلية). **لا يُخترع هنا — يبقى `OPEN_QUESTION` حتى قرار صريح.**
+النطاق: مسارَي الدخول فقط (`loginMerchantAction`/`loginAdminAction`) — أعلى قيمة هجومية فعلية اليوم (دخول بلا كلمة
+مرور، `ADR-012`/`ADR-013`). **الرقم المعتمد (موافقة صريحة على خطة اليوم 12):** 5 محاولات فاشلة لكل رقم هاتف خلال
+15 دقيقة، ثم رفض مؤقت. الآلية: عدّاد في-الذاكرة (`src/core/kernel/security/rate-limit.ts`، مفتاحه `merchant:<phone>`/
+`admin:<phone>` منفصلَين).
+
+**قيد موثَّق صراحة (لا تجاهل صامت):** لا ينجو من إعادة تشغيل الخادم أو تعدد النسخ (Serverless/عدة خوادم) — مقبول
+مؤقتاً لمرحلة تجربة تاجر واحد على خادم واحد. **يجب** إعادة تقييمه (Redis/DB) قبل إنتاج حقيقي متعدد الخوادم — بند
+صريح في `docs/ROADMAP.md`. لا نطاق آخر (السلة، الطلبات، الكتالوج) محمي بتحديد معدل بعد — خارج نطاق اليوم.
 
 ## 13. عدم الثقة في بيانات العميل — Evidence: `CONSTITUTION`, `IMPLEMENTED` جزئياً
 
@@ -71,13 +91,24 @@ Supabase يصدر JWT تلقائياً عبر Auth. **لم يُستخدَم فع
 
 حكيم (Hakim) بحق نقض بشري كامل في كل قرار مالي أو حرج — `ACTIVE` كمبدأ، `NOT_YET_APPLICABLE` تقنياً (حكيم غير مبني بعد).
 
+## 15. تحقق مدخلات Server Actions — Evidence: `IMPLEMENTED` (اليوم 12، `ADR-014`)
+
+مكتبة `zod` (جديدة اليوم — لا مكتبة تحقق كانت مثبَّتة قبله). أنماط مشتركة في
+`src/core/kernel/validation/schemas.ts` (`egyptianPhoneSchema`, `uuidSchema`)، ومخططات مخصَّصة بجانب كل Server
+Action لبياناته (`checkout/actions.ts`, `merchant/orders/actions.ts`, `admin/dashboard/actions.ts`). **قاعدة
+عامة:** كل Server Action يستقبل معرّفاً (`orderId`/`merchantId`/`itemId`) من العميل يمر بـ`uuidSchema` قبل الوصول
+لأي طبقة خدمة. **دفاع إضافي (Defense-in-depth) في `transitionOrderAction`:** تأكيد صريح أن دور الجلسة ضمن أدوار
+التاجر المعروفة، لا الاعتماد الضمني وحده على "فقط أدوار التاجر تملك `tenantId`".
+
 ---
 
 ## قائمة OPEN_QUESTIONS الأمنية المجمَّعة
 
-1. سياسات RLS للكتابة على `users`/`categories`/`products`/`inventory` (النمط 1، قراءة عامة) — لا تزال غير موجودة. **محسومة بالفعل لـ`merchants`/`carts`/`cart_items` (النمط 2، قفل كامل + service_role) منذ اليوم 7.**
+1. سياسات RLS للكتابة على `users`/`categories`/`products`/`inventory` (النمط 1، قراءة عامة) — لا تزال غير موجودة. **محسومة بالفعل لـ`merchants`/`carts`/`cart_items`/`orders`/`order_items`/`order_status_history`/`sessions`/`audit_log` (النمط 2، قفل كامل + service_role) منذ اليوم 7. مراجعة اليوم 12 (`ADR-014`) أكَّدت حياً: لا كود كتابة إطلاقاً على `categories`/`products`/`inventory` حتى الآن — لا خطر فعلي، القرار يُحسَم عند بناء أول ميزة كتابة عليها.**
 2. من يملك حق إنشاء `users` جديد (Auth مباشرة أم service مخصص؟) — لا يزال `OPEN_QUESTION` عاماً؛ **مُطبَّق فعلياً لسياق Checkout تحديداً منذ اليوم 8** (`KhalilService.findOrCreateCustomerByPhone()` عبر `service_role`، راجع `ADR-009`)، لا حلاً شاملاً لبقية المسارات (تسجيل تاجر، دخول حقيقي)
-3. Rate limiting — لا رقم ولا آلية محددة
+3. ~~Rate limiting — لا رقم ولا آلية محددة~~ **محسومة اليوم 12 (`ADR-014`) — راجع §12 أعلاه، نطاق محدود (الدخول فقط) بعدّاد في-الذاكرة.**
 4. Soft Delete مقابل Hard Delete — غير محسوم (`DATABASE.md §7`)
 5. BR-016 (الحد الأدنى لقيمة الطلب) — لا رقم معتمد (`docs/BUSINESS_RULES.md`)
 6. متى تُبنى `sessions`/تسجيل الدخول الحقيقي — يبقى شرطاً لتفعيل §3 أعلاه فعلياً لا منطقياً فقط
+7. **جديد (اليوم 12):** استبدال الدخول بلا كلمة مرور (تاجر وإدارة) بكلمة مرور/OTP/Supabase Auth كاملة — خارج نطاق اليوم صراحة (نطاق أكبر بكثير من يوم أمان واحد)، تخفيف الضرر المؤقت الوحيد المُطبَّق اليوم هو تحديد المعدل + سجل تدقيق لكل محاولة (§9/§12). يبقى قراراً مؤسس منفصل مطلوب قبل أي عميل حقيقي ثانٍ.
+8. **جديد (اليوم 12):** تأسيس نظام Migrations رسمي (`docs/DATABASE.md §8`) — لا يزال كل SQL يُنفَّذ يدوياً، بما فيها `audit_log` الجديد. مرشَّح طبيعي لليوم 13 (التجهيز للإنتاج).

@@ -49,16 +49,23 @@ vi.mock('./merchant.repository', () => ({
   },
 }));
 
+vi.mock('../audit/audit.service', () => ({
+  auditService: {
+    log: vi.fn(),
+  },
+}));
+
 const { merchantService } = await import('./merchant.service');
 const { khalilService } = await import('../../kernel/khalil/service');
 const { merchantRepository } = await import('./merchant.repository');
+const { auditService } = await import('../audit/audit.service');
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 describe('MerchantService.loginOwnerByPhone', () => {
-  it('ينجح: هاتف صاحب تاجر نشط → token وجلسة صحيحة', async () => {
+  it('ينجح: هاتف صاحب تاجر نشط → token وجلسة صحيحة، ويُسجَّل auth.login_success', async () => {
     vi.mocked(khalilService.findUserByPhone).mockResolvedValue(owner);
     vi.mocked(merchantRepository.findByOwnerId).mockResolvedValue(activeMerchant);
 
@@ -72,15 +79,21 @@ describe('MerchantService.loginOwnerByPhone', () => {
       role: 'merchant_owner',
       ttlSeconds: expect.any(Number),
     });
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'auth.login_success', actorId: owner.id, actorRole: 'merchant_owner' })
+    );
   });
 
-  it('يرفض (null) رقماً غير مسجَّل إطلاقاً', async () => {
+  it('يرفض (null) رقماً غير مسجَّل إطلاقاً، ويُسجَّل auth.login_failed بفاعل anonymous', async () => {
     vi.mocked(khalilService.findUserByPhone).mockResolvedValue(null);
 
     const result = await merchantService.loginOwnerByPhone('01099999999');
 
     expect(result).toBeNull();
     expect(khalilService.createSession).not.toHaveBeenCalled();
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'auth.login_failed', actorId: null, actorRole: 'anonymous' })
+    );
   });
 
   it('يرفض (null) مستخدماً مسجَّلاً لكن ليس merchant_owner (عميل عادي)', async () => {
@@ -90,6 +103,9 @@ describe('MerchantService.loginOwnerByPhone', () => {
 
     expect(result).toBeNull();
     expect(merchantRepository.findByOwnerId).not.toHaveBeenCalled();
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'auth.login_failed', actorId: customer.id, actorRole: 'customer' })
+    );
   });
 
   it('يرفض (null) مالك تاجر بلا سجل merchant مرتبط (بيانات ناقصة)', async () => {
@@ -100,6 +116,9 @@ describe('MerchantService.loginOwnerByPhone', () => {
 
     expect(result).toBeNull();
     expect(khalilService.createSession).not.toHaveBeenCalled();
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'auth.login_failed', actorId: owner.id, metadata: expect.objectContaining({ reason: 'no_merchant_linked' }) })
+    );
   });
 
   it('يرفض (null) تاجراً معطَّلاً (isActive: false)', async () => {
@@ -110,6 +129,9 @@ describe('MerchantService.loginOwnerByPhone', () => {
 
     expect(result).toBeNull();
     expect(khalilService.createSession).not.toHaveBeenCalled();
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'auth.login_failed', metadata: expect.objectContaining({ reason: 'merchant_inactive' }) })
+    );
   });
 });
 

@@ -69,3 +69,37 @@ describe('Cart integration (Supabase حقيقي)', () => {
     ).rejects.toThrow(/غير متوفرة/);
   });
 });
+
+describe('Cart IDOR (اليوم 12، ADR-014، Supabase حقيقي)', () => {
+  let productId: string;
+  let cartAId: string;
+  let cartBId: string;
+  let itemInCartBId: string;
+
+  beforeAll(async () => {
+    const product = await catalogRepository.findProductByName('دجاجة كاملة طازجة');
+    if (!product) throw new Error('منتج الاختبار "دجاجة كاملة طازجة" غير موجود في قاعدة البيانات الحقيقية');
+    productId = product.id;
+    await supabaseAdmin.from('inventory').update({ quantity_available: 10 }).eq('product_id', productId);
+
+    const cartA = await cartService.getOrCreateCart({ sessionToken: randomUUID() });
+    cartAId = cartA.id;
+    const cartB = await cartService.getOrCreateCart({ sessionToken: randomUUID() });
+    cartBId = cartB.id;
+
+    const summaryB = await cartService.addItem(cartBId, { productId, quantity: 1, selection: { sizeId: 'small' } });
+    itemInCartBId = summaryB.lines[0].item.id;
+  });
+
+  afterAll(async () => {
+    await supabaseAdmin.from('carts').delete().eq('id', cartAId);
+    await supabaseAdmin.from('carts').delete().eq('id', cartBId);
+  });
+
+  it('اختبار أمني حاسم: ترفض حياً حذف بند ينتمي لسلة أخرى عبر cartId مختلف، بلا حذف صامت', async () => {
+    await expect(cartService.removeItem(cartAId, itemInCartBId)).rejects.toThrow(/غير موجود/);
+
+    const itemsStillInCartB = await cartService.getSummary(cartBId);
+    expect(itemsStillInCartB.lines.some((l) => l.item.id === itemInCartBId)).toBe(true);
+  });
+});

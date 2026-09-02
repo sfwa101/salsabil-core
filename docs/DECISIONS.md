@@ -1,7 +1,7 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.8
+version: 1.9
 last_updated: 2026-09-02
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف
@@ -206,6 +206,103 @@ Alternatives: (أ) audit_log عام كامل اليوم بدل الاكتفاء 
 Why: قرار المؤسس المباشر — عرض الخطة الكاملة (الهوية، العمليات، الاختبارات) وحصل على موافقة صريحة على كل بند مع محددات هندسية دقيقة (حظر التوسع خارج تفعيل/تعطيل التاجر، ترحيل audit_log العام لليوم 12).
 Consequences: إجراء تفعيل/تعطيل التاجر نفسه **لا يُسجَّل** في أي سجل تدقيق اليوم (لا audit_log عام بعد) — فجوة معروفة، موثَّقة صراحة، مؤجَّلة لليوم 12 بقرار مباشر لا سهواً. لا manager/employee في لوحة الإدارة (تطابق نفس فجوة الأدوار في specs/merchant/SPEC.md). تسجيل دخول الإدارة بلا كلمة مرور — نفس خطر ADR-012 بالضبط، أشد حساسية هنا (صلاحيات platform_admin أوسع من merchant_owner)، يُحدَّث Open Questions في specs/admin/SPEC.md.
 Related Documents: docs/DATABASE.md، docs/DOMAIN_MAP.md → Admin/Merchant/Orders، specs/admin/SPEC.md (جديد)، specs/merchant/SPEC.md، specs/orders/README.md، ADR-009، ADR-010، ADR-012
+```
+
+---
+
+## ADR-014
+```
+Title: يوم الأمان الكامل والرقابة — audit_log عام، إصلاح IDOR في السلة، تحقق مدخلات (zod)، Rate Limiting على الدخول
+Status: ACCEPTED
+Date: 2026-09-02 (اليوم 12 من خطة الـ14 يوماً، §23/§26 — "غير قابل للحذف")
+Decision: (أ) جدول audit_log عام جديد (id, actor_id, actor_role, action, entity_type, entity_id, metadata jsonb,
+          created_at) — نفس عائلة order_status_history لكن خارج نطاق طلب واحد. RLS مقفول بالكامل بلا أي policy،
+          نفس نمط merchants/orders/sessions (service_role حصراً). نطاق التطبيق الفعلي اليوم فقط (لا أكثر): تفعيل/
+          تعطيل التاجر (AdminService.setMerchantActiveStatus، الفجوة المذكورة حرفياً في ADR-013) ومحاولات دخول
+          التاجر/الإدارة نجاحاً وفشلاً (MerchantService.loginOwnerByPhone/AdminService.loginByPhone).
+          (ب) مراجعة RLS شاملة على الجداول الـ11 القائمة — النتيجة: لا إعادة بناء معمارية، الأنماط الحالية (قفل
+          service_role الكامل / قراءة عامة / قراءة الذات) صحيحة ومقصودة. إصلاحان فقط: توثيق أن سياسة users
+          (auth.uid()=id) معطَّلة عملياً (لا Supabase Auth حقيقية بعد، auth.uid() لا يُطابِق شيئاً — فشل آمن لا
+          خطر)، وتأكيد أن "سياسات كتابة مفقودة" على categories/products/inventory ليست خطراً فعلياً لأن لا كود
+          كتابة عليها إطلاقاً اليوم.
+          (ج) إصلاح IDOR فعلي وحيد: cartService.removeItem (src/core/modules/cart/cart.service.ts) كان يحذف
+          itemId بلا تحقق انتمائه لـcartId — أُصلِح بنفس نمط updateItemQuantity المجاور (فحص ملكية عبر findItems
+          قبل الحذف).
+          (د) zod مكتبة تحقق جديدة (لا مكتبة كانت مثبَّتة) — schemas مشتركة (هاتف مصري، uuid) في
+          src/core/kernel/validation/schemas.ts، ومخططات مخصَّصة بجانب كل Server Action حساس (checkout, merchant/
+          orders, admin/dashboard, login×2). دفاع إضافي (Defense-in-depth) في transitionOrderAction: تأكيد صريح
+          أن دور الجلسة ضمن أدوار التاجر، لا الاعتماد الضمني وحده على "فقط أدوار التاجر تملك tenantId".
+          (ه) Rate Limiting بعدّاد في-الذاكرة (src/core/kernel/security/rate-limit.ts) — نطاق محدود صراحة لمساري
+          الدخول فقط (loginMerchantAction/loginAdminAction)، 5 محاولات فاشلة/15 دقيقة لكل رقم هاتف، مفاتيح منفصلة
+          merchant:<phone>/admin:<phone>.
+Context: اليوم 11 (ADR-013) ترك ثلاث فجوات موثَّقة صراحة كمؤجَّلة عمداً لهذا اليوم بالذات: audit_log عام (لا كود
+          كتابة على categories/products/inventory بعد)، تفعيل/تعطيل تاجر بلا سجل، ودخول بلا كلمة مرور لكل من
+          التاجر والإدارة (خطر أعلى للإدارة). استكشاف حي شامل قبل التخطيط (لا افتراضات) أكَّد أن كل حماية IDOR/عزل
+          مستأجرين في المشروع تعيش 100% في كود TypeScript (service.ts) لا في RLS — service_role يتجاوز RLS دائماً
+          على الجداول الخاصة، فأي إصلاح أمني حقيقي هنا كود تطبيق لا SQL.
+Alternatives: (أ) استبدال الدخول بلا كلمة مرور بكلمة مرور/OTP/Supabase Auth كاملة اليوم — رُفض صراحة: نطاق أكبر
+          بكثير من يوم أمان واحد، قرار مؤسس منفصل موثَّق مسبقاً في specs/merchant/SPEC.md و specs/admin/SPEC.md
+          كـOpen Question مستقل. (ب) دمج audit_log مع order_status_history في جدول واحد — رُفض: order_status_history
+          مبني وموثَّق ويعمل حياً منذ اليوم 9، لا حاجة فعلية لدمجه، الفصل يطابق تصنيف docs/DATABASE.md §4 الأصلي
+          (تدقيق طلب مقابل تدقيق عام). (ج) Redis/بنية تحتية خارجية لـRate Limiting بدل عدّاد في-الذاكرة — رُفض:
+          نطاق أكبر من Vertical Slice حالي (خادم واحد، تاجر تجريبي واحد)، القيد (لا ينجو من إعادة تشغيل الخادم)
+          موثَّق صراحة كمقبول مؤقتاً لا مخفياً. (د) تأسيس أداة Migrations رسمية اليوم بدل SQL يدوي عبر
+          Supabase SQL Editor — رُفض: نطاق أوسع من يوم أمان، مرشَّح صريح لليوم 13 بدلاً من ذلك (docs/SECURITY.md
+          OPEN_QUESTIONS بند 8 الجديد).
+Why: قرار المؤسس المباشر — عرض مواصفة اليوم الكاملة (audit_log، مراجعة RLS، تأمين Server Actions، اختبارات أمنية
+          سلبية) قبل أي تعديل كود أو قاعدة بيانات، ووافق صراحة على الخطة المعمارية بالكامل بما فيها رقم Rate
+          Limiting المقترح (5 محاولات/15 دقيقة) قبل التنفيذ.
+Consequences: audit_log جديد بلا نظام Migrations رسمي — SQL يُضاف إلى docs/DATABASE.md وينتظر تنفيذاً يدوياً عبر
+          Supabase SQL Editor من المؤسس قبل أن تنجح اختبارات التكامل الجديدة التي تعتمد عليه (نفس عُرف كل الجداول
+          العشرة السابقة، لا استثناء). عدّاد Rate Limiting في-الذاكرة لا يصمد أمام إعادة تشغيل الخادم أو نسخ
+          Serverless متعددة — يجب إعادة تقييمه (Redis/DB) قبل إنتاج حقيقي متعدد الخوادم. getOrderWithItems/
+          getStatusHistory في orders.service.ts تبقيان بلا فحص تاجر داخلي (فخ كامن موثَّق بتعليق تحذيري في الكود
+          نفسه، لا مستهلك فعلي لهما اليوم). استبدال الدخول بلا كلمة مرور يبقى قراراً مؤسس منفصل غير محسوم.
+Related Documents: docs/DATABASE.md §3 (audit_log)، §6 (RLS)، docs/SECURITY.md §5/§9/§12/§15،
+          src/core/modules/audit/، src/core/kernel/validation/schemas.ts، src/core/kernel/security/rate-limit.ts،
+          ADR-008، ADR-009، ADR-010، ADR-012، ADR-013، specs/admin/SPEC.md، specs/merchant/SPEC.md
+```
+
+---
+
+## ADR-015
+```
+Title: نموذج الهوية المرحلي (Phased Identity Model) — زائر بلا توثيق أولاً، هوية وطنية موحَّدة عند الخدمات المتقدمة
+Status: ACCEPTED (Phase 1: يعكس الواقع الحالي فعلياً — لا كود جديد. Phase 2: PROPOSED/CONCEPTUAL — لم يُبنَ)
+Date: 2026-09-02 (اليوم 12، قرار تكميلي بعد ADR-014)
+Decision: (أ) Phase 1 (الحالية): زائر يتصفّح ويشتري كعميل عادي بلا أي توثيق هوية — مطابق تماماً لما هو IMPLEMENTED
+          فعلياً اليوم: هوية سلة الزائر عبر carts.session_token (عمود مستقل تماماً عن جدول users، ADR-008)، ولا
+          صف users يُنشَأ إطلاقاً حتى لحظة Checkout (khalilService.findOrCreateCustomerByPhone، ADR-009) — عندها
+          فقط يُطلَب رقم الهاتف. **تصحيح على النص المقترح أصلاً:** users.phone يبقى كما هو IMPLEMENTED منذ اليوم 2
+          — `not null unique` لا nullable — لأن "الزائر بلا توثيق" مُحقَّق فعلياً اليوم عبر عدم إنشاء صف users من
+          الأساس، لا عبر السماح بصف users بلا هاتف. لا حاجة لتخفيف القيد الحالي لتحقيق نفس الهدف.
+          (ب) Phase 2 (مستقبلية، PROPOSED): عمودان جديدان على users — `national_id text unique` و
+          `is_verified boolean not null default false` — كلاهما CONCEPTUAL، **لا يوجدان في الجدول اليوم إطلاقاً**
+          (تحقَّق منه حياً: لا أثر لهما في المخطط الفعلي ولا في أي كود). يُطلَب توثيقهما إجبارياً (`national_id`
+          فريد + `is_verified = true`) فقط عند طلب المستخدم الانضمام كتاجر، أو برنامج شركاء النجاح، أو استخدام
+          محفظة تيسير — لا لأي تصفح/شراء عادي. البناء الفعلي (ALTER TABLE + منطق تحقق) مؤجَّل لبدء تلك الميزة
+          تحديداً، لا اليوم.
+Context: طلب المؤسس توثيق التسلسل الزمني للهوية قبل commit اليوم 12 النهائي، لضمان أن قرار "متى تُطلَب الهوية
+          الوطنية" مسجَّل بوضوح كإطار حاكم لأي عمل مستقبلي على التاجر/شركاء النجاح/تيسير، بدل تركه ضمنياً. المراجعة
+          الحية لجدول users الفعلي (docs/DATABASE.md §3) قبل الكتابة كشفت أن الصياغة المقترحة أصلاً تصف phone
+          كـnullable بينما هو NOT NULL فعلياً، وتفترض وجود national_id/is_verified بقيم افتراضية بينما العمودان
+          غير موجودين إطلاقاً — صُحِّحت الصياغة لتطابق الواقع الحي، نفس انضباط كل ADR سابق في هذا الملف (لا توثيق
+          لحالة غير مُتحقَّق منها حياً).
+Alternatives: (أ) تعديل users.phone إلى nullable فعلياً اليوم لدعم "صف زائر" صريح بلا هاتف — رُفض: يغيّر قيداً
+          حياً يعتمد عليه تسجيل الدخول (merchant/admin) وCheckout بلا أي حاجة فعلية، بينما الهدف نفسه (زائر بلا
+          توثيق) محقَّق بالفعل عبر التصميم القائم (لا صف users للزائر أصلاً). (ب) بناء national_id/is_verified
+          كأعمدة فعلية اليوم تحسّباً للمستقبل — رُفض: يخالف "لا نبني أكثر من الميزة القادمة المخطط لها بدقة"، لا
+          مستهلك فعلي لهما قبل بدء نطاق تاجر/شركاء النجاح/تيسير تحديداً.
+Why: قرار المؤسس المباشر بتوثيق التسلسل المرحلي كإطار حاكم. تصحيح الصياغة (phone/الأعمدة غير الموجودة) قرار
+          توثيقي بحت بناءً على أدلة حية من المخطط الفعلي، لا تغييراً في نية المؤسس — الهدف المعلَن (زائر بلا
+          توثيق أولاً، هوية موحَّدة عند الخدمات المتقدمة) محفوظ بالكامل، فقط الوصف التقني صُحِّح ليطابق التنفيذ
+          القائم.
+Consequences: لا تغيير SQL أو كود اليوم — Phase 1 توثيق لواقع قائم، Phase 2 التزام مستقبلي بلا تنفيذ. أي بناء
+          مستقبلي لنطاق تاجر جديد/شركاء النجاح/تيسير يجب أن يراجع هذا الـADR أولاً لتحديد نقطة إجبار توثيق الهوية
+          الوطنية بدل ارتجالها حينها. `docs/DATABASE.md` §4 يضيف `national_id`/`is_verified` كأعمدة CONCEPTUAL على
+          `users` — لا جدول منفصل.
+Related Documents: docs/DATABASE.md §3 (users)، §4 (CONCEPTUAL)، ADR-008 (carts.session_token)، ADR-009
+          (findOrCreateCustomerByPhone)، ADR-012/ADR-013 (تسجيل دخول بالهاتف)، ADR-014
 ```
 
 ---
