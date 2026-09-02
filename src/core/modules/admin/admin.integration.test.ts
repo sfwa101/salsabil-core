@@ -141,11 +141,15 @@ describe('Admin/Merchant login audit trail integration (اليوم 12، ADR-014�
     const result = await adminService.loginByPhone(TEST_ADMIN_PHONE);
     tokensToClean.push(result!.token);
 
+    // مفلترة بـ actor_id أيضاً لا الفعل فقط — بلا هذا الفلتر، تسجيل دخول ناجح آخر من ملف اختبار
+    // متوازٍ (نفس الحساب أو حساب آخر) قد يسبق هذا الصف في created_at ويجعل limit(1) يلتقط الصف
+    // الخطأ (اكتُشف حياً: E2E-DAY13-001 يزيد عدد عمليات الدخول الناجحة المتزامنة على audit_log)
     const { data: rows, error } = await supabaseAdmin
       .from('audit_log')
       .select('*')
       .eq('action', 'auth.login_success')
       .eq('entity_type', 'user')
+      .eq('actor_id', result!.session.userId)
       .order('created_at', { ascending: false })
       .limit(1);
     if (error) throw error;
