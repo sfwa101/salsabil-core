@@ -8,26 +8,35 @@
 // order_status_history حصرياً، لا audit_log — الدمج بينهما رُفض صراحة في ADR-014. هذا الملف يتحقق
 // من كليهما: التسلسل الكامل في order_status_history، وأن audit_log يبقى خالياً من أي entity_type
 // 'order' (حارس انحدار موثَّق، لا افتراض غير مُتحقَّق منه).
+//
+// ملاحظة عزل الاختبارات: التاجر أ هنا حساب مُنشأ حياً خصيصاً لهذا الملف (وكذا منتجه)، لا الحساب
+// التجريبي المشترك "01000000000"/"دجاجة كاملة طازجة" — اكتُشف فعلياً أن ملفات تكامل أخرى
+// (admin.integration.test.ts) تُبدِّل is_active لذلك التاجر المشترك أثناء تشغيلها، وVitest يشغّل
+// ملفات الاختبار بالتوازي افتراضياً؛ اعتماد هذا الملف على نفس الحساب المشترك سبَّب فشلاً متقطعاً
+// حقيقياً (loginOwnerByPhone يعيد null إن صادف التاجر معطَّلاً مؤقتاً من ملف آخر). الحل هنا هو
+// عزل بيانات هذا الملف بالكامل (تاجر أ + منتج مخصَّص + تاجر ب) بدل تعديل ملفات أخرى أو إعدادات
+// Vitest العامة — لا علاقة له بأي ثغرة في كود Core/Services.
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { supabase } from '../kernel/database/supabase-client';
 import { supabaseAdmin } from '../kernel/database/supabase-admin-client';
 import { khalilService } from '../kernel/khalil/service';
-import { catalogRepository } from '../modules/catalog/catalog.repository';
 import { cartService } from '../modules/cart/cart.service';
 import { ordersService } from '../modules/orders/orders.service';
 import { merchantService } from '../modules/merchant/merchant.service';
 import { adminService } from '../modules/admin/admin.service';
 import type { AddItemInput } from '../modules/cart/types';
 
-const TEST_MERCHANT_A_PHONE = '01000000000';
 const TEST_ADMIN_PHONE = '01000000001';
+const TEST_PRODUCT_BASE_PRICE = 120;
 
 describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabase حقيقي)', () => {
-  // بيانات المنتج/التاجر أ (حية، موجودة مسبقاً في القاعدة)
+  // تاجر أ ومنتجه — يُنشآن حياً خصيصاً لهذا الملف (راجع ملاحظة عزل الاختبارات أعلاه)
+  let merchantAUserId: string | undefined;
+  let merchantAId: string | undefined;
+  const merchantAPhone = `0107${Math.floor(1000000 + Math.random() * 8999999)}`;
   let productId: string;
-  let tenantAId: string;
 
   // تاجر ب — يُنشأ حياً لهذا الاختبار لإثبات عزل مستأجرين حقيقي بين تاجرَين فعليَّين
   let merchantBUserId: string | undefined;
@@ -38,22 +47,61 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
   let visitorCartId: string | undefined;
   let orderId: string | undefined;
   let customerUserId: string | undefined;
-  let merchantAUserId: string;
+  let merchantALoginUserId: string;
   let merchantBLoginUserId: string;
   let adminUserId: string;
   const tokensToClean: string[] = [];
 
   beforeAll(async () => {
-    const product = await catalogRepository.findProductByName('دجاجة كاملة طازجة');
-    if (!product) throw new Error('منتج الاختبار "دجاجة كاملة طازجة" غير موجود في قاعدة البيانات الحقيقية');
-    productId = product.id;
-    if (!product.tenantId) throw new Error('المنتج التجريبي غير مرتبط بتاجر — لا يمكن اختبار الرحلة الكاملة');
-    tenantAId = product.tenantId;
+    const { data: category, error: categoryError } = await supabaseAdmin.from('categories').select('id').limit(1).single();
+    if (categoryError) throw categoryError;
 
-    await supabaseAdmin.from('inventory').upsert({ product_id: productId, quantity_available: 10 }, { onConflict: 'product_id' });
+    // تاجر أ حقيقي (مالك + صف merchants) — إدراج مباشر عبر service_role، نفس نمط إنشاء
+    // حساب platform_admin التجريبي الأول يدوياً (راجع docs/DATABASE.md §3 sessions)
+    const { data: userARow, error: userAError } = await supabaseAdmin
+      .from('users')
+      .insert({ full_name: 'مالك تاجر أ — اختبار E2E', phone: merchantAPhone, role: 'merchant_owner' })
+      .select('*')
+      .single();
+    if (userAError) throw userAError;
+    merchantAUserId = userARow.id as string;
 
-    // تاجر ب حقيقي — إدراج مباشر عبر service_role (لا واجهة تسجيل تاجر تلقائية بعد، نفس نمط
-    // إنشاء حساب platform_admin التجريبي الأول، راجع docs/DATABASE.md §3 sessions)
+    const { data: merchantARow, error: merchantAError } = await supabaseAdmin
+      .from('merchants')
+      .insert({
+        owner_id: merchantAUserId,
+        business_name: 'تاجر أ — اختبار E2E',
+        phone: merchantAPhone,
+        slug: `merchant-a-e2e-${randomUUID().slice(0, 8)}`,
+        commission_rate: 10,
+        is_active: true,
+      })
+      .select('*')
+      .single();
+    if (merchantAError) throw merchantAError;
+    merchantAId = merchantARow.id as string;
+
+    // منتج مخصَّص لهذا الملف — بلا خيارات (سعر أساسي مباشر)، لعزل كامل عن أي منتج/مخزون تستهلكه
+    // ملفات اختبار أخرى بالتوازي
+    const { data: productRow, error: productError } = await supabaseAdmin
+      .from('products')
+      .insert({
+        category_id: category.id,
+        tenant_id: merchantAId,
+        name: 'منتج اختبار رحلة ريف E2E',
+        base_price: TEST_PRODUCT_BASE_PRICE,
+        unit: 'piece',
+        options: [],
+        is_active: true,
+      })
+      .select('*')
+      .single();
+    if (productError) throw productError;
+    productId = productRow.id as string;
+
+    await supabaseAdmin.from('inventory').insert({ product_id: productId, quantity_available: 10 });
+
+    // تاجر ب حقيقي — نفس نمط تاجر أ أعلاه
     const { data: userBRow, error: userBError } = await supabaseAdmin
       .from('users')
       .insert({ full_name: 'مالك تاجر ب — اختبار E2E', phone: merchantBPhone, role: 'merchant_owner' })
@@ -91,13 +139,22 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
     for (const token of tokensToClean) {
       await khalilService.destroySession(token);
     }
+    if (productId) {
+      await supabaseAdmin.from('inventory').delete().eq('product_id', productId);
+      await supabaseAdmin.from('products').delete().eq('id', productId);
+    }
     if (merchantBId) {
       await supabaseAdmin.from('merchants').delete().eq('id', merchantBId);
     }
     if (merchantBUserId) {
       await supabaseAdmin.from('users').delete().eq('id', merchantBUserId);
     }
-    await supabaseAdmin.from('inventory').update({ quantity_available: 10 }).eq('product_id', productId);
+    if (merchantAId) {
+      await supabaseAdmin.from('merchants').delete().eq('id', merchantAId);
+    }
+    if (merchantAUserId) {
+      await supabaseAdmin.from('users').delete().eq('id', merchantAUserId);
+    }
   });
 
   it('السيناريو 1 — زائر يتصفح الكتالوج العام (anon)، وRLS تمنعه تماماً من رؤية جداول مقفولة (carts/orders/merchants)', async () => {
@@ -128,15 +185,14 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
     const tamperedInput = {
       productId,
       quantity: 1,
-      selection: { sizeId: 'small' },
       unitPrice: 1,
       price: 1,
     } as unknown as AddItemInput;
 
     const summary = await cartService.addItem(cart.id, tamperedInput);
     expect(summary.lines).toHaveLength(1);
-    expect(summary.lines[0].unitPrice).toBe(100); // لا 1 — السعر المزوَّر رُفض صامتاً
-    expect(summary.total).toBe(100);
+    expect(summary.lines[0].unitPrice).toBe(TEST_PRODUCT_BASE_PRICE); // لا 1 — السعر المزوَّر رُفض صامتاً
+    expect(summary.total).toBe(TEST_PRODUCT_BASE_PRICE);
   });
 
   it('السيناريو 3 — Checkout يحوّل السلة إلى طلب PENDING حقيقي، بسعر مجمَّد صحيح وسجل تدقيق ابتدائي', async () => {
@@ -154,8 +210,8 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
     orderId = order.id;
     customerUserId = order.userId;
 
-    expect(order.total).toBe(100);
-    expect(order.tenantId).toBe(tenantAId);
+    expect(order.total).toBe(TEST_PRODUCT_BASE_PRICE);
+    expect(order.tenantId).toBe(merchantAId);
     expect(order.status).toBe('pending');
     expect(order.paymentMethod).toBe('cash_on_delivery');
 
@@ -170,21 +226,21 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
   it('السيناريو 4 — جلسة التاجر أ الحقيقية ترى الطلب وتؤكّده', async () => {
     if (!orderId) throw new Error('الطلب من السيناريو السابق غير موجود');
 
-    const loginA = await merchantService.loginOwnerByPhone(TEST_MERCHANT_A_PHONE);
+    const loginA = await merchantService.loginOwnerByPhone(merchantAPhone);
     expect(loginA).not.toBeNull();
     tokensToClean.push(loginA!.token);
-    merchantAUserId = loginA!.session.userId;
-    expect(loginA!.session.tenantId).toBe(tenantAId);
+    merchantALoginUserId = loginA!.session.userId;
+    expect(loginA!.session.tenantId).toBe(merchantAId);
 
-    const ordersForA = await ordersService.getOrdersForTenant(tenantAId);
+    const ordersForA = await ordersService.getOrdersForTenant(merchantAId!);
     expect(ordersForA.some((o) => o.id === orderId)).toBe(true);
 
     const updated = await ordersService.transitionStatus({
       orderId,
       toStatus: 'confirmed',
       actorRole: 'merchant_owner',
-      tenantId: tenantAId,
-      actorId: merchantAUserId,
+      tenantId: merchantAId,
+      actorId: merchantALoginUserId,
     });
     expect(updated.status).toBe('confirmed');
   });
@@ -250,8 +306,8 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
           orderId,
           toStatus,
           actorRole: 'merchant_owner',
-          tenantId: tenantAId,
-          actorId: merchantAUserId,
+          tenantId: merchantAId,
+          actorId: merchantALoginUserId,
         });
         expect(updated.status).toBe(toStatus);
       }
@@ -302,11 +358,11 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
       'merchant_owner',
       'platform_admin',
     ]);
-    expect(fullHistory[1].actorId).toBe(merchantAUserId); // "confirmed" فعله التاجر أ
+    expect(fullHistory[1].actorId).toBe(merchantALoginUserId); // "confirmed" فعله التاجر أ
     expect(fullHistory[5].actorId).toBe(adminUserId); // "delivered" فعلته الإدارة
 
     // audit_log: كل عمليات الدخول الثلاث الحقيقية سُجِّلت
-    for (const actorId of [merchantAUserId, merchantBLoginUserId, adminUserId]) {
+    for (const actorId of [merchantALoginUserId, merchantBLoginUserId, adminUserId]) {
       const { data: loginRows, error } = await supabaseAdmin
         .from('audit_log')
         .select('*')
