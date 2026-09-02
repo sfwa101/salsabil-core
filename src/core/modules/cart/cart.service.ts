@@ -102,6 +102,16 @@ export class CartService {
     await cartRepository.deleteItem(itemId);
     return this.getSummary(cartId);
   }
+
+  /**
+   * تُفرَغ السلة بالكامل بعد تحويلها لطلب ناجح (Orders، اليوم 8) — لا تبقى بنود
+   * "شبح" طُلبت بالفعل. يُستدعى عبر طبقة الخدمة من نطاق آخر، لا المستودع مباشرة
+   * (docs/ARCHITECTURE.md §7).
+   */
+  async clearCart(cartId: string): Promise<void> {
+    const items = await cartRepository.findItems(cartId);
+    await Promise.all(items.map((item) => cartRepository.deleteItem(item.id)));
+  }
 }
 
 export const cartService = new CartService();

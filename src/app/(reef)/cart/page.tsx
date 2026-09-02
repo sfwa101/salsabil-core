@@ -62,6 +62,13 @@ export default async function CartPage() {
           <div className="rounded-xl bg-muted p-4 text-center text-lg font-semibold text-foreground">
             الإجمالي: {summary.total} جنيه
           </div>
+
+          <Link
+            href="/checkout"
+            className="rounded-xl bg-primary px-4 py-3 text-center font-medium text-primary-foreground transition hover:opacity-90"
+          >
+            إتمام الطلب
+          </Link>
         </div>
       )}
     </main>

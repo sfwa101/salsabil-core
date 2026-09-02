@@ -1,8 +1,8 @@
 ---
 title: خارطة الطريق
 status: ACTIVE
-version: 1.2
-last_updated: 2026-09-01
+version: 1.3
+last_updated: 2026-09-02
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTION.md §23 (الخطة الأصلية)
 ---
@@ -31,8 +31,8 @@ source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTI
 | 5 | واجهة العميل (Storefront) — Next.js 16، Reef City Storefront | `DONE` — commit `2de9345`، راجع `docs/DECISIONS.md → ADR-006` |
 | 6 | معمارية الثيمات متعددة العوالم (Multi-World Theming) | `DONE` — راجع `docs/DECISIONS.md → ADR-007` (الآلية IMPLEMENTED، حالة ADR-007 نفسها لا تزال PROPOSED بانتظار اعتماد المؤسس) |
 | 7 | السلة (Cart) | `DONE` — راجع `docs/DECISIONS.md → ADR-008`، `docs/DATABASE.md §3` |
-| 8 | Checkout (سلة → طلب PENDING) | `NEXT` — `CHECKOUT-001`، راجع الملاحظة أدناه |
-| 9 | دورة حياة الطلب الكاملة (Orders) | `PLANNED` — إزاحة يوم واحد إضافية، راجع الملاحظة أدناه |
+| 8 | Checkout (سلة → طلب PENDING) | `DONE` — `CHECKOUT-001`، راجع `docs/DECISIONS.md → ADR-009` |
+| 9 | دورة حياة الطلب الكاملة (Orders) | `NEXT` |
 | 10 | طلبات التاجر | `PLANNED` |
 | 11 | لوحة الإدارة الأساسية | `PLANNED` |
 | 12 | يوم الأمان الكامل | `PLANNED` |

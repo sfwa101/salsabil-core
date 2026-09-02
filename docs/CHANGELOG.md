@@ -1,8 +1,8 @@
 ---
 title: سجل التغييرات
 status: ACTIVE
-version: 1.0
-last_updated: 2026-09-01
+version: 1.1
+last_updated: 2026-09-02
 owner: Claude (تلقائي مع كل مهمة كبيرة)
 source_of_truth: هذا الملف + Git log
 ---
@@ -12,6 +12,25 @@ source_of_truth: هذا الملف + Git log
 > يُسجَّل هنا فقط التغييرات المهمة (معمارية، قواعد أعمال، قاعدة بيانات، أمان، UX، قرارات، خارطة طريق) — لا كل commit صغير.
 
 ---
+
+## 2026-09-02 — تحديث docs/ لمطابقة CART-001 قبل بدء اليوم 8
+- ARCHITECTURE.md: شجرة src/ محدَّثة (cart/, inventory/, supabase-admin-client.ts)، توضيح متى يُستخدَم كل عميل Supabase
+- DATABASE.md §1: أُصلح تعارض داخلي (كان يقول "لا tenant_id في أي جدول" رغم أن §2-3 يوثّقانه منذ اليوم 4)
+- SECURITY.md: كان الأكثر تأخراً — §3 كان يقول multi-tenancy "لا ينطبق بعد"، و§5 لم يذكر نمط service_role إطلاقاً رغم أن ADR-008 يعتمد عليه بالكامل. وثِّق النمطان الآن (قراءة عامة مقابل قفل كامل + service_role)
+- ROADMAP.md: أُضيف يوم Checkout مستقل (كان الجدول يقفز من السلة مباشرة لدورة حياة الطلب الكاملة) — هذا يُزيح الخطة لتتجاوز يوم 14 (الإطلاق يصبح يوم 15)، سُجِّل صراحة كسؤال يحتاج تأكيد المؤسس
+
+## 2026-09-02 (اليوم 8) — Checkout: تحويل السلة إلى طلب PENDING (CHECKOUT-001)
+- خطة Specification+Plan صريحة قبل أي كود، بعد تحقق مباشر من Supabase الحي (لا التوثيق فقط): منتج واحد فقط، من تاجر واحد فقط — القرار: طلب واحد بلا تقسيم تجار، مع رفض صريح لأي سلة متعددة التجار مستقبلاً (موثَّق في ADR-009)
+- اكتشاف أثناء التخطيط: khalil.repository.ts (findUserByPhone/findUserById) يستخدم مفتاح anon، وRLS على users (auth.uid()=id) لا تنطبق أبداً بلا مصادقة حقيقية — الدالتان لا تعملان فعلياً (غير مستخدَمتين في أي مسار، فلا انحدار). أُضيفت دوال جديدة (findUserByPhoneAdmin, createUser) عبر service_role بدل تعديل القديمة
+- إنشاء جدولي orders, order_items (بلا أي policy، وصول حصري عبر service_role — نفس نمط ADR-008)
+- إضافة src/core/modules/payments/ (PaymentProvider + CashOnDeliveryProvider — التطبيق الوحيد الفعلي، باقي المزوّدين لا تزال PROPOSED)
+- إضافة src/core/modules/orders/ (types, orders.service.ts, orders.repository.ts) — order_items.unit_price_snapshot يُحسَب من CatalogService.calculatePrice() مرة واحدة عند الإنشاء ثم يُجمَّد، عكس تصميم cart_items تماماً
+- تعديلات مبرَّرة لنطاقين قائمين: khalil (+ findOrCreateCustomerByPhone) وcart (+ clearCart، + استخراج cart-session.ts لإعادة استخدام منطق cookie الجلسة بين cart وcheckout)
+- إضافة src/app/(reef)/checkout/ (actions.ts, page.tsx) وCheckoutForm.tsx — رابط "إتمام الطلب" من صفحة السلة
+- BR-016 لا يزال بلا رقم مخترَع — TODO صريح في orders.service.ts أيضاً
+- 8 اختبارات وحدة جديدة (orders.service.test.ts) + اختبارا تكامل (orders.integration.test.ts، Supabase حقيقي، تنظيف ذاتي) — المجموع الآن 19 اختباراً، كلها خضراء
+- تحقق فعلي عبر متصفح حقيقي (Playwright): منتج → سلة → checkout → نموذج → تأكيد طلب حقيقي (100 جنيه، الدفع عند الاستلام)، بلا أخطاء console؛ نُظِّفت بيانات الاختبار يدوياً بعد التحقق (لم يكن سكربتاً ذاتي التنظيف)
+- تحديث docs/DATABASE.md (orders/order_items)، docs/DOMAIN_MAP.md (Orders, Payments, Inventory, Khalil)، docs/BUSINESS_RULES.md (BR-016)، docs/SECURITY.md (§5, §7, §8)، docs/DECISIONS.md (ADR-009)
 
 ## 2026-09-01 (اليوم 7) — نطاق السلة (Cart Domain, CART-001)
 - خطة Specification+Plan صريحة قبل أي كود (دورة §24 السبعية) — قرارا المؤسس المعتمدان قبل التنفيذ: (أ) سلة زائر عبر session_token nullable، (ب) حماية الكتابة عبر service_role خادم فقط لا RLS مفتوح لـanon — موثَّقان في ADR-008

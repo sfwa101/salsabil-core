@@ -1,7 +1,7 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.3
+version: 1.4
 last_updated: 2026-09-01
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف
@@ -116,6 +116,23 @@ Alternatives: (أ) تأجيل السلة حتى بناء تسجيل الدخول
 Why: قرار المؤسس المباشر في هذه المحادثة (سؤالان صريحان، راجع سجل المحادثة) بعد عرض كلا الخيارين مع تبعاتهما الأمنية.
 Consequences: يتطلب SUPABASE_SERVICE_ROLE_KEY في .env.local (سر خادم فقط، أضافه المؤسس). أي نطاق مستقبلي يكتب بيانات بلا مصادقة حقيقية (مثل Orders قبل بناء تسجيل الدخول) يجب أن يتبع نفس النمط، لا نمط RLS-مفتوح-لـanon.
 Related Documents: docs/DATABASE.md §3 (carts, cart_items)، docs/SECURITY.md قاعدة 3، specs/identity/SPEC.md (فجوة تسجيل الدخول الأصلية)
+```
+
+---
+
+## ADR-009
+```
+Title: Checkout — طلب واحد بلا تقسيم تجار، وإنشاء/بحث مستخدم بالهاتف عبر service_role
+Status: ACCEPTED
+Date: 2026-09-02 (اليوم 8 من خطة الـ14 يوماً، CHECKOUT-001)
+Decision: (أ) تحويل السلة إلى طلب واحد بعمود tenant_id واحد إلزامي على orders، بلا منطق تقسيم لكل تاجر — مع رفض صريح (لا صامت) لأي سلة تحتوي أكثر من tenant_id مميّز.
+          (ب) عند Checkout، البحث عن مستخدم بالهاتف أو إنشاؤه (دور customer دائماً) عبر service_role، إضافة إلى khalil.repository.ts/khalil.service.ts، لا نطاق منفصل.
+          (ج) order_items.unit_price_snapshot يُحسَب من CatalogService.calculatePrice() في لحظة إنشاء الطلب فقط، ثم يُجمَّد للأبد — عكس تصميم cart_items تماماً (الذي لا يخزّن سعراً إطلاقاً).
+Context: بناء أول جسر بين Cart (اليوم 7) وOrders. تحقَّقت مباشرة من Supabase الحي (لا من التوثيق) وقت التخطيط: جدول products يحتوي منتجاً واحداً من تاجر واحد فقط — رياضياً يستحيل اليوم وجود سلة متعددة التجار. كما اكتُشف أن khalil.repository.ts الحالي (findUserByPhone/findUserById) يستخدم العميل العام (مفتاح anon)، وسياسة RLS الوحيدة على users (auth.uid() = id) لا تنطبق أبداً بلا مصادقة حقيقية — أي أن هاتين الدالتين لا تعملان فعلياً، وإن كانتا غير مستخدَمتين في أي مسار فلا انحدار وقع.
+Alternatives: (أ) بناء منطق تقسيم الطلب لعدة تجار الآن استباقياً — رُفض: لا بيانات حقيقية تبرره اليوم، ويضيف تعقيداً غير قابل للاختبار الفعلي. (ب) نطاق Users/Customers منفصل عن Khalil لإنشاء المستخدم — رُفض: يكرر ملكية جدول users الموجودة أصلاً في Khalil، يخالف "لا تكرار نطاق قائم" (AGENTS.md بند 3). (ج) تخزين سعر ثابت في cart_items بدل حسابه حياً في orders فقط — رُفض: يخالف القيد الصريح غير القابل للتفاوض في موجّه CHECKOUT-001 نفسه.
+Why: الحل الأبسط والمتحقَّق من صحته ببيانات حقيقية دائماً أفضل من بناء تعميم لا دليل عليه بعد (فلسفة Vertical Slice، ADR-002). الرفض الصريح لتعدد التجار (بدل تجاهله) يمنع طلباً خاطئاً صامتاً لاحقاً عند إضافة تاجر ثانٍ فعلياً.
+Consequences: تقسيم الطلب لكل تاجر PROPOSED ومؤجَّل — يُبنى فقط عند وجود تاجر ثانٍ حقيقي (راجع docs/DOMAIN_MAP.md → Orders). findOrCreateCustomerByPhone حل جزئي فقط لسؤال "من يملك حق إنشاء users" (docs/SECURITY.md) — لا يحل تسجيل الدخول الحقيقي أو تسجيل التاجر. لا معاملة قاعدة بيانات ذرية حقيقية بين orders وorder_items — تعويض بحذف الطلب عند فشل إدراج البنود، لا RPC حقيقي (تحسين مستقبلي موثَّق).
+Related Documents: docs/DATABASE.md §3 (orders, order_items)، docs/DOMAIN_MAP.md → Orders/Payments، docs/SECURITY.md §5/§7/§8، docs/BUSINESS_RULES.md BR-016
 ```
 
 ---

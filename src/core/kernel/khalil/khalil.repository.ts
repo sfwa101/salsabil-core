@@ -2,7 +2,8 @@
 // الاتصال بقاعدة البيانات الخاص بخليل — لا منطق أعمال هنا، فقط قراءة/كتابة
 
 import { supabase } from '../database/supabase-client';
-import type { User, Tenant } from './types';
+import { supabaseAdmin } from '../database/supabase-admin-client';
+import type { User, Tenant, UserRole } from './types';
 
 interface UserRow {
   id: string;
@@ -59,6 +60,26 @@ export class KhalilRepository {
     const { data, error } = await supabase.from('tenants').select('*').eq('id', id).maybeSingle();
     if (error) throw error;
     return data ? toTenant(data as TenantRow) : null;
+  }
+
+  /**
+   * بحث بالهاتف عبر service_role — ضروري لأن سياسة RLS الوحيدة على users
+   * (auth.uid() = id) لا تنطبق أبداً بلا مصادقة حقيقية (راجع خطة CHECKOUT-001)
+   */
+  async findUserByPhoneAdmin(phone: string): Promise<User | null> {
+    const { data, error } = await supabaseAdmin.from('users').select('*').eq('phone', phone).maybeSingle();
+    if (error) throw error;
+    return data ? toUser(data as UserRow) : null;
+  }
+
+  async createUser(input: { fullName: string; phone: string; role: UserRole }): Promise<User> {
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .insert({ full_name: input.fullName, phone: input.phone, role: input.role })
+      .select('*')
+      .single();
+    if (error) throw error;
+    return toUser(data as UserRow);
   }
 }
 

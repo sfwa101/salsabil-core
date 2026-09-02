@@ -1,7 +1,7 @@
 ---
 title: خريطة النطاقات
 status: ACTIVE (يحتوي OPEN_QUESTION واحد جوهري)
-version: 1.2
+version: 1.3
 last_updated: 2026-09-01
 owner: المؤسس (أبوحتاب) + Claude (معماري)
 source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md §6-§8 (المصدر الأصلي)
@@ -51,7 +51,7 @@ source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md �
 | العلاقات | كل نطاق آخر يعتمد عليه لمعرفة "من المستخدم؟" |
 | لا يحق له | حساب الأسعار، إدارة المخزون، تنفيذ عمليات دفع |
 | يستخدمه | كل التطبيقات الثلاثة (Customer, Merchant, Admin) |
-| الحالة | `PARTIALLY_IMPLEMENTED` — types.ts + service.ts + repository.ts موجودة، لا واجهة تسجيل دخول فعلية بعد، Session/Tenant من types.ts غير مربوطين بجداول فعلية بعد |
+| الحالة | `PARTIALLY_IMPLEMENTED` — types.ts + service.ts + repository.ts موجودة، لا واجهة تسجيل دخول فعلية بعد، Session/Tenant من types.ts غير مربوطين بجداول فعلية بعد. **إضافة اليوم 8:** `findOrCreateCustomerByPhone()` — إنشاء/بحث مستخدم بالهاتف عبر `service_role` لسياق Checkout تحديداً (لا حل عام لتسجيل الدخول)، لأن سياسة RLS الوحيدة على `users` (`auth.uid() = id`) لا تنطبق بلا مصادقة حقيقية — راجع `ADR-009` |
 
 ### تيسير (Taysir) — المحرك المالي
 
@@ -154,15 +154,19 @@ source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md �
 | يستخدمه | ريف (الآن)، مستقبلاً كل عالم فيه منتجات |
 | الحالة | `IMPLEMENTED` — types.ts, catalog.service.ts (حساب السعر), catalog.repository.ts، جدول بيانات تجريبي (دجاجة بخيارات أحجام) |
 
-### Orders
+### Orders — Evidence: `PARTIALLY_IMPLEMENTED` (إنشاء فقط، اليوم 8، `CHECKOUT-001`)
 
 | | |
 |---|---|
-| المسؤولية | دورة حياة الطلب الكاملة |
-| يملك | (مخطَّط) `orders`, `order_items`, `order_status_history` |
-| العلاقات | يستدعي Catalog للتحقق من السعر/التوفر، Khalil لمعرفة العميل، برق للتوصيل، تيسير للدفع |
-| لا يحق له | تعديل سعر منتج، تعديل مخزون مباشرة (يطلب من Catalog/Inventory) |
-| الحالة | `PROPOSED` — مخطَّط في الدستور واليوم 8 (راجع `docs/ROADMAP.md`)، لم يُبنَ بعد |
+| المسؤولية | تحويل سلة إلى طلب (اليوم 8: إنشاء بحالة `pending` فقط) ← دورة حياة كاملة (اليوم 9، مؤجَّلة) |
+| يملك | جدولا `orders`, `order_items` (`IMPLEMENTED`)؛ `order_status_history` لا يزال `CONCEPTUAL` (يوم 9) |
+| البيانات | راجع `docs/DATABASE.md §3` (قسم `orders`, `order_items`) |
+| العلاقات | يستدعي `CatalogService.calculatePrice`/`validateSelection` حياً لتجميد `unit_price_snapshot` (لا يُعيد كتابة منطق التسعير)، `InventoryService.isAvailable` لفحص حي قبل الإنشاء، `CartService.getSummary`/`clearCart`، `KhalilService.findOrCreateCustomerByPhone`، `CashOnDeliveryProvider.charge` |
+| لا يحق له | تعديل سعر منتج، تعديل مخزون مباشرة (فحص فقط، لا حجز — ذلك يوم 9)، **تقسيم طلب واحد لعدة تجار (`PROPOSED` ومؤجَّل — راجع الملاحظة أدناه)** |
+| يستخدمه | ريف (الآن) |
+| الحالة | `PARTIALLY_IMPLEMENTED` — `types.ts`, `orders.service.ts`, `orders.repository.ts` (`src/core/modules/orders/`)، مُختبَر (وحدة + تكامل ضد Supabase حقيقي + متصفح فعلي). موثَّق في `ADR-009` (`docs/DECISIONS.md`) |
+
+> **ملاحظة صريحة — تقسيم الطلب لكل تاجر (Multi-Vendor Order Splitting):** `PROPOSED`، مؤجَّل عمداً. تحقَّقت مباشرة من Supabase الحي وقت تخطيط اليوم 8: `products` يحتوي **صفاً واحداً فقط**، من تاجر واحد فقط — رياضياً يستحيل اليوم أن تحتوي أي سلة حقيقية أكثر من تاجر. لذا نُفِّذ طلب واحد بعمود `tenant_id` واحد إلزامي، بلا منطق تقسيم. `orders.service.ts` يرفض صراحة (خطأ واضح، لا طلب خاطئ صامت) أي محاولة Checkout لسلة تحتوي منتجات من أكثر من `tenant_id` — **هذا التحقق الدفاعي موجود فعلاً، لكن منطق التقسيم الفعلي (طلب مستقل لكل تاجر من نفس السلة) غير مبني**، ويُبنى فقط عند وجود تاجر ثانٍ فعلياً.
 
 ### Cart (السلة) — Evidence: `IMPLEMENTED` (اليوم 7، `CART-001`)
 
@@ -182,18 +186,20 @@ source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md �
 |---|---|
 | المسؤولية | فحص توفر الكمية المطلوبة فقط — لا حجز ولا تجميد |
 | يملك | جدول `inventory` |
-| العلاقات | يستخدمه Cart (فحص قبل الإضافة)، سيستخدمه Orders لاحقاً (نقص فعلي عند تأكيد الطلب) |
+| العلاقات | يستخدمه Cart (فحص عند الإضافة) وOrders (فحص حي قبل إنشاء الطلب مباشرة، اليوم 8) |
 | لا يحق له | حجز/تجميد كمية، تعديل سعر |
-| يستخدمه | Cart (الآن)، مستقبلاً Orders |
-| الحالة | `IMPLEMENTED` — `types.ts`, `inventory.service.ts` (`isAvailable`), `inventory.repository.ts` (`src/core/modules/inventory/`). منطق نقص المخزون الفعلي عند تأكيد الطلب لا يزال غير منفَّذ (Orders غير موجود بعد) |
+| يستخدمه | Cart, Orders (الآن) |
+| الحالة | `IMPLEMENTED` — `types.ts`, `inventory.service.ts` (`isAvailable`), `inventory.repository.ts` (`src/core/modules/inventory/`). منطق **نقص** المخزون الفعلي عند تأكيد الطلب لا يزال غير منفَّذ (فحص فقط حتى الآن — الحجز/النقص الفعلي جزء من دورة حياة الطلب الكاملة، اليوم 9) |
 
-### Payments
+### Payments — Evidence: `PARTIALLY_IMPLEMENTED` (اليوم 8 — COD فقط)
 
 | | |
 |---|---|
 | المسؤولية | تجريد طرق الدفع خلف `PaymentProvider` |
-| يملك | لا شيء بعد (واجهة مفهومية فقط) |
-| الحالة | `PROPOSED` |
+| يملك | لا جداول (لا حاجة اليوم — COD لا يُخزِّن شيئاً غير `orders.payment_method`) |
+| العلاقات | `OrdersService` يستدعي `PaymentProvider.charge()` قبل إنشاء الطلب |
+| يستخدمه | Orders (الآن) |
+| الحالة | `PARTIALLY_IMPLEMENTED` — `PaymentProvider` (واجهة) + `CashOnDeliveryProvider` (التطبيق الوحيد الفعلي) في `src/core/modules/payments/`. باقي المزوّدين (VodafoneCash, Instapay, Card, DiwanWallet) لا تزال `PROPOSED` كما في `docs/ARCHITECTURE.md §4` — لم تُلمَس |
 
 ### Tenant / Authorization (نطاق Merchant) — Evidence: `PARTIALLY_IMPLEMENTED`
 

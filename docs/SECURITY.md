@@ -1,7 +1,7 @@
 ---
 title: مرجع الأمن
 status: ACTIVE
-version: 1.1
+version: 1.2
 last_updated: 2026-09-01
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md §4, §26 (المبدأ)
@@ -33,7 +33,7 @@ Supabase يصدر JWT تلقائياً عبر Auth. **لم يُستخدَم فع
 
 **النمط 1 — قراءة عامة، مفتاح `anon`:** `categories`, `products`, `inventory`. RLS يسمح بالقراءة للجميع (بيانات كتالوج عامة بطبيعتها). **سياسات الكتابة (Insert/Update/Delete) على هذه الجداول لا تزال غير موجودة/موثَّقة — `OPEN_QUESTION`.**
 
-**النمط 2 — قفل كامل، مفتاح `service_role` (اليوم 7، `ADR-008`):** `merchants`, `carts`, `cart_items`. RLS مفعَّل **بلا أي policy إطلاقاً** — هذا يمنع `anon`/`authenticated` تماماً، بما في ذلك القراءة. كل وصول (قراءة وكتابة) يمر حصرياً عبر `src/core/kernel/database/supabase-admin-client.ts` (مفتاح `service_role`، خادم فقط، محمي بحزمة `server-only` لمنع تسرّبه لأي Client Component). **متى يُستخدَم هذا النمط:** عندما يكتب بيانات مستخدم غير مُصادَق عليه حقيقياً (سلة الزائر عبر `session_token`) — RLS مسموح لـ`anon` في هذه الحالة لا يوفر حماية فعلية أصلاً، لأن مفتاح `anon` نفسه علني ولا يميّز بين طالب شرعي وآخر يخمّن معرّفات (كان سيخالف §2 أدناه). **قاعدة القرار لأي جدول جديد:** بيانات قراءتها عامة وآمنة للجميع ← النمط 1. بيانات خاصة بصاحبها ولا مصادقة حقيقية تحميها ← النمط 2، لا نمط وسط "RLS مفتوح لـanon باعتماد على صعوبة تخمين معرّف" (غير آمن، راجع `DECISIONS.md → ADR-008` للنقاش الكامل).
+**النمط 2 — قفل كامل، مفتاح `service_role` (اليوم 7، `ADR-008`؛ توسَّع لليوم 8، `ADR-009`):** `merchants`, `carts`, `cart_items`, `orders`, `order_items`. RLS مفعَّل **بلا أي policy إطلاقاً** — هذا يمنع `anon`/`authenticated` تماماً، بما في ذلك القراءة. كل وصول (قراءة وكتابة) يمر حصرياً عبر `src/core/kernel/database/supabase-admin-client.ts` (مفتاح `service_role`، خادم فقط، محمي بحزمة `server-only` لمنع تسرّبه لأي Client Component). **متى يُستخدَم هذا النمط:** عندما يكتب بيانات مستخدم غير مُصادَق عليه حقيقياً (سلة الزائر عبر `session_token`) — RLS مسموح لـ`anon` في هذه الحالة لا يوفر حماية فعلية أصلاً، لأن مفتاح `anon` نفسه علني ولا يميّز بين طالب شرعي وآخر يخمّن معرّفات (كان سيخالف §2 أدناه). **قاعدة القرار لأي جدول جديد:** بيانات قراءتها عامة وآمنة للجميع ← النمط 1. بيانات خاصة بصاحبها ولا مصادقة حقيقية تحميها ← النمط 2، لا نمط وسط "RLS مفتوح لـanon باعتماد على صعوبة تخمين معرّف" (غير آمن، راجع `DECISIONS.md → ADR-008` للنقاش الكامل).
 
 ## 6. Server-Side Validation — Evidence: `IMPLEMENTED` (في Catalog)
 
@@ -41,11 +41,11 @@ Supabase يصدر JWT تلقائياً عبر Auth. **لم يُستخدَم فع
 
 ## 7. الأسعار والحسابات — Evidence: `CONSTITUTION`, `IMPLEMENTED` جزئياً
 
-قاعدة صارمة: كل حساب سعر يحدث في `service.ts` فقط، مرة واحدة لكل منطق، لا يُكرَّر (`SALSABIL_CONSTITUTION.md §4` بند 2). حالياً محقَّقة في `CatalogService` فقط — لا يوجد بعد منطق سعر في Orders (لأنه غير موجود).
+قاعدة صارمة: كل حساب سعر يحدث في `service.ts` فقط، مرة واحدة لكل منطق، لا يُكرَّر (`SALSABIL_CONSTITUTION.md §4` بند 2). المصدر الوحيد لحساب السعر هو `CatalogService.calculatePrice()` — لا `CartService` ولا `OrdersService` (اليوم 8) يعيدان كتابته، كلاهما يستدعيانه حياً. الفرق الجوهري بينهما: `cart_items` **لا** تُخزِّن سعراً إطلاقاً (يُحسَب عند كل قراءة)، بينما `order_items.unit_price_snapshot` **يُحسَب مرة واحدة عند إنشاء الطلب ثم يُجمَّد للأبد** — عكس تماماً، ومقصود (راجع `ADR-009`).
 
-## 8. الدفع — Evidence: `PROPOSED`
+## 8. الدفع — Evidence: `PARTIALLY_IMPLEMENTED` (اليوم 8 — COD فقط)
 
-لا تنفيذ فعلي — واجهة `PaymentProvider` مفهومية فقط (`ARCHITECTURE.md §4`).
+`PaymentProvider` (واجهة) + `CashOnDeliveryProvider` (التطبيق الوحيد الفعلي) في `src/core/modules/payments/`. لا معالجة دفع فعلية — COD ينجح فوراً دائماً (`charge()` يُعيد `success:true`)، لا اتصال بمزوّد خارجي. باقي المزوّدين (VodafoneCash, Instapay, Card, DiwanWallet) لا تزال `PROPOSED` (`ARCHITECTURE.md §4`) — لم تُلمَس.
 
 ## 9. Audit Logs — Evidence: `CONCEPTUAL`
 
@@ -76,7 +76,7 @@ Supabase يصدر JWT تلقائياً عبر Auth. **لم يُستخدَم فع
 ## قائمة OPEN_QUESTIONS الأمنية المجمَّعة
 
 1. سياسات RLS للكتابة على `users`/`categories`/`products`/`inventory` (النمط 1، قراءة عامة) — لا تزال غير موجودة. **محسومة بالفعل لـ`merchants`/`carts`/`cart_items` (النمط 2، قفل كامل + service_role) منذ اليوم 7.**
-2. من يملك حق إنشاء `users` جديد (Auth مباشرة أم service مخصص؟) — لا يزال `OPEN_QUESTION` عاماً؛ نمط "ابحث أو أنشئ بالهاتف عبر service_role" مقترح تحديداً لسياق Checkout (`CHECKOUT-001`، غير مُنفَّذ بعد وقت كتابة هذا السطر)، لا حلاً شاملاً لبقية المسارات (تسجيل تاجر، دخول حقيقي)
+2. من يملك حق إنشاء `users` جديد (Auth مباشرة أم service مخصص؟) — لا يزال `OPEN_QUESTION` عاماً؛ **مُطبَّق فعلياً لسياق Checkout تحديداً منذ اليوم 8** (`KhalilService.findOrCreateCustomerByPhone()` عبر `service_role`، راجع `ADR-009`)، لا حلاً شاملاً لبقية المسارات (تسجيل تاجر، دخول حقيقي)
 3. Rate limiting — لا رقم ولا آلية محددة
 4. Soft Delete مقابل Hard Delete — غير محسوم (`DATABASE.md §7`)
 5. BR-016 (الحد الأدنى لقيمة الطلب) — لا رقم معتمد (`docs/BUSINESS_RULES.md`)
