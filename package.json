@@ -8,7 +8,11 @@
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:unit": "vitest run --exclude \"**/*.integration.test.ts\"",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "arch:check": "depcruise src --config .dependency-cruiser.cjs",
+    "prepare": "husky"
   },
   "keywords": [],
   "author": "",
@@ -27,11 +31,13 @@
     "@types/node": "^26.4.0",
     "@types/react": "^19.2.18",
     "autoprefixer": "^10.5.4",
+    "dependency-cruiser": "^18.2.0",
+    "husky": "^9.1.7",
     "playwright": "^1.62.1",
     "postcss": "^8.5.26",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.13",
-    "typescript": "^7.0.2",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.11"
   }
 }

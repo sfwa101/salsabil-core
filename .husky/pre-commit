@@ -1,0 +1,3 @@
+# pre-commit — بوابة سريعة بلا شبكة (لا اختبارات تكامل ضد Supabase الحي هنا، راجع .husky/pre-push)
+# ١) فحص الأنواع  ٢) فحص الحدود المعمارية (dependency-cruiser)  ٣) اختبارات الوحدة السريعة
+npm run typecheck && npm run arch:check && npm run test:unit

@@ -119,7 +119,35 @@ core/kernel/database/supabase-client.ts         (قراءة عامة، مفتا�
 core/kernel/database/supabase-admin-client.ts   (نطاقات مقفولة بالكامل بـRLS، مفتاح service_role — اليوم 7)
 ```
 
-**ممنوع:** أي اتجاه معاكس (repository يستدعي service، أو component يستدعي repository مباشرة). هذه القاعدة **مُستنتجة من الكود الفعلي المكتوب في الأيام 1-3**، وليست منصوصاً عليها حرفياً بهذا الشكل في الدستور — لذا وسمها `INFERRED`. **مقترح: تُرفع لتصبح `DOCUMENTED_DECISION` صريحة في DECISIONS.md (انظر ADR-005 المقترح).**
+**ممنوع:** أي اتجاه معاكس (repository يستدعي service، أو component يستدعي repository مباشرة). هذه القاعدة **`DOCUMENTED_DECISION` معتمدة الآن (`ADR-005`، `ACCEPTED`)**، ومفروضة آلياً منذ اليوم 9 — راجع §3.1 أدناه.
+
+### 3.1 الفرض الآلي (Deterministic Guardrails) — Evidence: `IMPLEMENTED` (اليوم 9، `ADR-011`)
+
+القاعدة أعلاه (§3) لم تعد تعتمد على انتباه المطوّر/الأداة فقط — `dependency-cruiser` يفحصها آلياً على كل commit:
+
+```
+npm run arch:check   → depcruise src --config .dependency-cruiser.cjs
+```
+
+القواعد الست المفروضة (`.dependency-cruiser.cjs`، كل قاعدة مُتحقَّق منها فعلياً بحقن مخالفة مؤقتة والتأكد من رفضها قبل اعتمادها):
+
+| القاعدة | تمنع |
+|---|---|
+| `no-repository-cross-import` | أي `repository.ts` يستورد `repository.ts` نطاق آخر (عزل الشرائح الرأسية — كل نطاق يملك جداوله حصرياً) |
+| `no-repository-importing-service` | `repository.ts` يستدعي `service.ts` (عكس اتجاه الاعتماد) |
+| `only-repository-touches-db-client` | أي شيء غير `repository.ts` يستورد `supabase-client.ts`/`supabase-admin-client.ts` مباشرة (ملفات `*.test.ts` مُستثناة عمداً — تصل مباشرة للتنظيف الذاتي) |
+| `no-direct-khalil-repository-access` | أي نطاق خارج `kernel/khalil/` يستورد `khalil.repository.ts` مباشرة (يجب المرور عبر `khalilService`، نفس نمط `ADR-009`) |
+| `no-ui-importing-repository` | `src/app/`, `src/components/` تستورد أي `repository.ts` مباشرة |
+| `no-circular` | حلقات استيراد دائرية |
+
+**قيد معروف وموثَّق (لا تجاهل صامت):** لا قاعدة تمنع `service.ts` نطاق ما من استيراد `repository.ts` نطاق **آخر** مباشرة (تجاوز طبقة خدمة ذلك النطاق) — يتطلب مطابقة بين مجلدَي from/to لا تدعمها `dependency-cruiser` بمطابقة regex بسيطة بلا تعداد صريح لكل نطاق. الحماية الفعلية القائمة (`no-repository-cross-import`) تمنع فعلياً أي `repository.ts` من لمس جداول نطاق آخر — وهي الحدّ الفاصل الحقيقي الذي يحمي عزل البيانات؛ الفجوة المتبقية أضعف (تجاوز طبقة منطق أعمال نطاق آخر، لا طبقة بياناته).
+
+**Husky (Git Hooks):**
+```
+.husky/pre-commit  → typecheck && arch:check && test:unit   (سريع، بلا شبكة)
+.husky/pre-push    → test (كامل، يشمل اختبارات التكامل ضد Supabase حقيقي)
+```
+لا يُتجاوَز `--no-verify` إلا بطلب صريح من المؤسس — راجع `AGENTS.md` بند 9.
 
 **قاعدة إضافية (اليوم 7، `ADR-008`):** أي `repository.ts` لنطاق تُقفَل جداوله بالكامل عبر RLS (بلا أي policy لـ`anon`/`authenticated`) **يجب** أن يستخدم `supabase-admin-client.ts`، لا `supabase-client.ts` العام. هذا ليس اختياراً أسلوبياً — استخدام العميل الخطأ يعني فشل كل استعلام صامتاً (RLS يمنع anon) أو ثغرة أمنية (لو أُزيلت RLS بالخطأ). القرار بين العميلين يُحسَم عند تصميم RLS للجدول، لا بعده.
 

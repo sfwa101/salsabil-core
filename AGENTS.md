@@ -8,6 +8,7 @@
 6. أي مهمة تمر بالدورة: Specification → Plan → Review → Implementation → Tests → Review → Commit.
 7. لا تنشئ ملفات لا لزوم لها. الحد الأدنى من الكود لتحقيق المطلوب فقط.
 8. عند الشك في القرار المعماري، توقف واسأل، لا تخمّن.
+9. القواعد 3-5 أعلاه مفروضة الآن آلياً عبر خطافات Git (Husky) وdependency-cruiser — راجع `.husky/pre-commit`، `.husky/pre-push`، `.dependency-cruiser.cjs`، و`docs/ARCHITECTURE.md §3.1`. **لا تتجاوز هذه الخطافات بـ`git commit --no-verify` أو `git push --no-verify` إلا بطلب صريح من المؤسس في نفس المحادثة** — فشل خطاف يعني وجود مشكلة حقيقية يجب حلها، لا تجاوزها.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

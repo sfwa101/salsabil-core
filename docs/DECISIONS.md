@@ -1,7 +1,7 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.5
+version: 1.6
 last_updated: 2026-09-02
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف
@@ -63,17 +63,17 @@ Consequences: يتطلب انضباطاً صارماً في TypeScript لمنع 
 Related Documents: docs/PRODUCT_ENGINE.md §2, docs/DATABASE.md §3
 ```
 
-## ADR-005 (PROPOSED — يحتاج موافقة المؤسس)
+## ADR-005
 ```
 Title: توثيق قاعدة اتجاه الاعتماد (Dependency Direction) صراحة
-Status: PROPOSED
-Date: 2026-09-01
-Decision المقترح: توثيق رسمي لقاعدة: components → service → repository → supabase-client (اتجاه واحد فقط، لا عكس).
+Status: ACCEPTED (كانت PROPOSED منذ 2026-09-01 — اعتُمدت فعلياً عند طلب المؤسس فرضها آلياً، اليوم 9، راجع ADR-011)
+Date: 2026-09-01 (اقتراح) → 2026-09-02 (اعتماد فعلي)
+Decision: توثيق رسمي لقاعدة: components → service → repository → supabase-client (اتجاه واحد فقط، لا عكس).
 Context: هذه القاعدة مُطبَّقة فعلياً في الكود (khalil، catalog) لكنها لم تُكتب كقاعدة صريحة في أي مكان قبل الآن — استُنتجت من النمط الفعلي (INFERRED) أثناء بناء docs/ARCHITECTURE.md.
 Alternatives: تركها ضمنية (خطر: قد ينتهكها Claude Code مستقبلاً دون قاعدة مكتوبة يستشهد بها)
-Why: توضيح صريح يمنع أي انحراف مستقبلي، ويتوافق مع طلب المؤسس بعدم ترك أي قاعدة "مفهومة ضمنياً" فقط.
-Consequences: لا شيء سلبي متوقَّع — توثيق لواقع قائم فعلاً.
-Related Documents: docs/ARCHITECTURE.md §3
+Why: توضيح صريح يمنع أي انحراف مستقبلي، ويتوافق مع طلب المؤسس بعدم ترك أي قاعدة "مفهومة ضمنياً" فقط. اعتُمدت رسمياً حين طلب المؤسس بناء فاحص آلي (dependency-cruiser) يفرضها — طلب الفرض الآلي هو اعتماد ضمني للقاعدة نفسها.
+Consequences: لا شيء سلبي متوقَّع — توثيق لواقع قائم فعلاً. أصبحت الآن مفروضة آلياً لا توثيقية فقط — راجع ADR-011.
+Related Documents: docs/ARCHITECTURE.md §3, §3.1، ADR-011
 ```
 
 ## ADR-006 (⚠️ مُعاد بناؤه — يحتاج تحقق المؤسس، راجع الملاحظة أدناه)
@@ -151,6 +151,23 @@ Alternatives: (أ) الاقتصار حرفياً على المسار الستة 
 Why: قرار المؤسس المباشر في هذه المحادثة — عرض التصميم وآلة الحالات ومصفوفة الفاعلين قبل التنفيذ، ووافق عليها صراحة ("التصميم ومصفوفة الانتقالات ممتازة ومتوافقة تماماً") قبل تطبيق الهجرة يدوياً عبر Supabase SQL Editor.
 Consequences: ready→out_for_delivery وout_for_delivery→delivered مُخوَّلتان مؤقتاً لأدوار التاجر/الإدارة فقط (لا نطاق برق/مندوب توصيل مبني بعد) — يحتاج actorRole جديداً أو نطاقاً منفصلاً عند بناء التوصيل الفعلي. customer مستبعد من كل الانتقالات حالياً (بما فيها cancelled) لعدم وجود مصادقة حقيقية تُثبت ملكية الطلب — راجع specs/orders/README.md → Open Questions.
 Related Documents: docs/DATABASE.md §3 (order_status_history)، docs/DOMAIN_MAP.md → Orders، docs/BUSINESS_RULES.md → BR-009، specs/orders/README.md، ADR-008، ADR-009
+```
+
+---
+
+## ADR-011
+```
+Title: حماية معمارية حتمية (Deterministic Guardrails) — Husky + dependency-cruiser، وخفض typescript إلى ^6.x
+Status: ACCEPTED
+Date: 2026-09-02 (اليوم 9، قبل بدء اليوم 10 مباشرة)
+Decision: (أ) Husky لخطافات Git: pre-commit يشغّل typecheck + arch:check + test:unit (سريع، بلا شبكة)؛ pre-push يشغّل مجموعة الاختبارات الكاملة (يشمل تكامل حي ضد Supabase).
+          (ب) dependency-cruiser (`.dependency-cruiser.cjs`) يفرض 6 قواعد تُترجم آلياً قاعدة اتجاه الاعتماد في ADR-005 وقاعدة الوصول الحصري لـkhalil.repository.ts في ADR-009 — راجع docs/ARCHITECTURE.md §3.1 للقائمة الكاملة. كل قاعدة مُتحقَّق منها فعلياً بحقن مخالفة مؤقتة (استيراد متقاطع، وصول مباشر لعميل قاعدة البيانات من واجهة، إلخ) والتأكد من رفضها، ثم التراجع عنها، قبل اعتماد الإعداد.
+          (ج) خفض typescript من ^7.0.2 إلى ^6.0.3 — قرار تقني منفصل اضطراري، ليس هدفاً بذاته.
+Context: طلب المؤسس صراحة إضافة "شريحة حماية معمارية حتمية" قبل بدء اليوم 10، لمنع أي هلوسة أو تآكل معماري مستقبلاً — لا تعتمد على انتباه أداة الذكاء الاصطناعي وحدها. أثناء التنفيذ: dependency-cruiser 18.2.0 (أحدث إصدار متاح وقت الكتابة) يعلن صراحة عن مدى توافق typescript >=2.0.0 <7.0.0؛ التحقق العملي (`depcruise src`) أكّد فشلاً كاملاً وصامتاً (0 ملفات مفحوصة، لا رسالة خطأ توقف التنفيذ) مع typescript@^7.0.2 المثبَّت في المشروع منذ اليوم 0 (كان "الأحدث" وقت `npm install typescript`، لا قراراً معمارياً مقصوداً — لا ADR سابق يذكر TS7 تحديداً).
+Alternatives: (أ) الإبقاء على typescript@7 وقبول أداة معطَّلة فعلياً (فشل صامت بلا اكتشاف مخالفات) — رُفض: يناقض الهدف من الطلب نفسه (حماية حتمية لا وهمية). (ب) التحول لـESLint + eslint-plugin-boundaries بدل dependency-cruiser لتفادي مس نسخة TypeScript — خيار مطروح على المؤسس صراحة، لم يُختر (يتطلب تأسيس منظومة ESLint كاملة غير موجودة إطلاقاً في المشروع، نطاق أكبر من المطلوب). (ج) تثبيت نسخة TypeScript ثانية منعزلة لِـdependency-cruiser فقط (عبر workspace/nested node_modules) — رُفض: تعقيد بنيوي غير مبرَّر لمشروع بحجم Vertical Slice حالي، يخالف "الحد الأدنى من الكود لتحقيق المطلوب" (AGENTS.md بند 7).
+Why: قرار المؤسس المباشر — عُرضت الخيارات الثلاثة صراحة (خفض TS، التحول لـESLint، الإبقاء على TS7 وتأجيل الفحص) عبر سؤال مباشر، واختار المؤسس خفض typescript كأبسط حل يحل المشكلة من جذرها.
+Consequences: `npx tsc --noEmit` ومجموعة الاختبارات الـ30 بالكامل أُعيد التحقق منهما بعد الخفض — بلا أي خطأ جديد أو تغيّر سلوك. Next.js لا يعلن peerDependency صريحاً على typescript (تحقَّق منه بالبحث في package.json الخاص به) — لا تعارض متوقَّع. أي رفع مستقبلي لـtypescript إلى 7+ يجب أن يعيد فحص توافق dependency-cruiser أولاً (أو الانتقال لبديل) قبل الترقية، وإلا يعود الفاحص للفشل الصامت.
+Related Documents: docs/ARCHITECTURE.md §3.1, ADR-005, ADR-009, .dependency-cruiser.cjs, .husky/pre-commit, .husky/pre-push, AGENTS.md بند 9
 ```
 
 ---
