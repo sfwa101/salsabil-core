@@ -62,6 +62,18 @@ export class MerchantRepository {
     if (error) throw error;
     return toMerchant(data as MerchantRow);
   }
+
+  async findAll(): Promise<Merchant[]> {
+    const { data, error } = await supabaseAdmin.from('merchants').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data as MerchantRow[]).map(toMerchant);
+  }
+
+  async setActiveStatus(id: string, isActive: boolean): Promise<Merchant> {
+    const { data, error } = await supabaseAdmin.from('merchants').update({ is_active: isActive }).eq('id', id).select('*').single();
+    if (error) throw error;
+    return toMerchant(data as MerchantRow);
+  }
 }
 
 export const merchantRepository = new MerchantRepository();

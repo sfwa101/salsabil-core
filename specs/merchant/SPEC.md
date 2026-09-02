@@ -1,7 +1,7 @@
 ---
 title: Spec — Merchant (نطاق التاجر وتعدد المستأجرين)
 status: PARTIALLY_IMPLEMENTED
-version: 2.0 (اليوم 10 — تسجيل دخول + بوابة طلبات فعلية)
+version: 2.1 (اليوم 11 — findAll/setActiveStatus للوحة الإدارة)
 last_updated: 2026-09-02
 owner: Claude (تنفيذ) + المؤسس (اعتماد)
 source_of_truth: هذا الملف يوثّق التطابق/الفجوة بين النية والتنفيذ — الكود الفعلي هو الحقيقة النهائية لما يعمل الآن
@@ -51,7 +51,7 @@ source_of_truth: هذا الملف يوثّق التطابق/الفجوة بين
 | جدول merchants | `IMPLEMENTED` — RLS مقفول بالكامل منذ اليوم 10 (كانت قراءة عامة، `ADR-012`) |
 | products.tenant_id | `IMPLEMENTED` |
 | MerchantRepository (findById/findBySlug/findByOwnerId/create) | `IMPLEMENTED` — `service_role` منذ اليوم 10 (كان `anon`، `create()` كان معطَّلاً صامتاً) |
-| MerchantService (validateRegistration, loginOwnerByPhone, isOwner, toAgreement) | `IMPLEMENTED` — `canAccessTenant` المكرَّرة حُذفت لصالح `khalilService.canAccessTenant` (`ADR-012`) |
+| MerchantService (validateRegistration, loginOwnerByPhone, isOwner, toAgreement, listAll، setActiveStatus) | `IMPLEMENTED` — `canAccessTenant` المكرَّرة حُذفت لصالح `khalilService.canAccessTenant` (`ADR-012`). `listAll`/`setActiveStatus` جديدان اليوم 11 — للوحة الإدارة حصراً، راجع `specs/admin/SPEC.md` |
 | CatalogRepository.findProductsByTenant | `IMPLEMENTED` + **مُختبَر فعلياً** (عزل تاجر وهمي = صفر منتجات) |
 | جدول sessions + KhalilService (createSession/validateSessionToken/destroySession) | `IMPLEMENTED` (اليوم 10) |
 | بوابة تاجر (`/merchant/login`, `/merchant/orders`) | `IMPLEMENTED` (اليوم 10) — مُتحقَّق منها في متصفح حقيقي |

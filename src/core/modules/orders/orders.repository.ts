@@ -155,6 +155,13 @@ export class OrdersRepository {
     return (data as OrderRow[]).map(toOrder);
   }
 
+  // بلا تصفية تاجر — للوحة الإدارة فقط (اليوم 11). عكس findOrdersByTenantId تماماً.
+  async findAll(): Promise<Order[]> {
+    const { data, error } = await supabaseAdmin.from('orders').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data as OrderRow[]).map(toOrder);
+  }
+
   async updateOrderStatus(orderId: string, status: OrderStatus): Promise<Order> {
     const { data, error } = await supabaseAdmin
       .from('orders')
@@ -196,6 +203,18 @@ export class OrdersRepository {
       .select('*')
       .eq('order_id', orderId)
       .order('created_at', { ascending: true });
+    if (error) throw error;
+    return (data as OrderStatusHistoryRow[]).map(toOrderStatusHistoryEntry);
+  }
+
+  // سجل تدقيق عام عبر كل الطلبات — للوحة الإدارة فقط (اليوم 11). الأحدث أولاً، بحد أقصى
+  // اختياري (لا Pagination حقيقي بعد — حجم البيانات تجريبي الآن).
+  async findAllStatusHistory(limit: number): Promise<OrderStatusHistoryEntry[]> {
+    const { data, error } = await supabaseAdmin
+      .from('order_status_history')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
     if (error) throw error;
     return (data as OrderStatusHistoryRow[]).map(toOrderStatusHistoryEntry);
   }

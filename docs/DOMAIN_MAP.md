@@ -1,7 +1,7 @@
 ---
 title: خريطة النطاقات
 status: ACTIVE (يحتوي OPEN_QUESTION واحد جوهري)
-version: 1.4
+version: 1.5
 last_updated: 2026-09-02
 owner: المؤسس (أبوحتاب) + Claude (معماري)
 source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md §6-§8 (المصدر الأصلي)
@@ -154,17 +154,17 @@ source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md �
 | يستخدمه | ريف (الآن)، مستقبلاً كل عالم فيه منتجات |
 | الحالة | `IMPLEMENTED` — types.ts, catalog.service.ts (حساب السعر), catalog.repository.ts، جدول بيانات تجريبي (دجاجة بخيارات أحجام) |
 
-### Orders — Evidence: `PARTIALLY_IMPLEMENTED` (إنشاء + دورة حياة كاملة + عزل مستأجرين + واجهة تاجر، اليوم 8-10)
+### Orders — Evidence: `PARTIALLY_IMPLEMENTED` (إنشاء + دورة حياة كاملة + عزل مستأجرين + واجهات تاجر/إدارة، اليوم 8-11)
 
 | | |
 |---|---|
-| المسؤولية | تحويل سلة إلى طلب (اليوم 8) ← دورة حياة كاملة بسجل تدقيق (اليوم 9) ← عزل مستأجرين + واجهة تاجر (اليوم 10): `pending → confirmed → preparing → ready → out_for_delivery → delivered`، مع `cancelled` من أي حالة غير نهائية |
+| المسؤولية | تحويل سلة إلى طلب (اليوم 8) ← دورة حياة كاملة بسجل تدقيق (اليوم 9) ← عزل مستأجرين + واجهة تاجر (اليوم 10) ← رؤية/تحكم شامل لكل الطلبات + سجل تدقيق عام (اليوم 11): `pending → confirmed → preparing → ready → out_for_delivery → delivered`، مع `cancelled` من أي حالة غير نهائية |
 | يملك | جداول `orders`, `order_items`, `order_status_history` — **الثلاثة `IMPLEMENTED`** |
 | البيانات | راجع `docs/DATABASE.md §3` (قسم `orders`, `order_items`, `order_status_history`) |
-| العلاقات | يستدعي `CatalogService.calculatePrice`/`validateSelection` حياً لتجميد `unit_price_snapshot`، `InventoryService.isAvailable` لفحص حي قبل الإنشاء، `CartService.getSummary`/`clearCart`، `KhalilService.findOrCreateCustomerByPhone`، `CashOnDeliveryProvider.charge` — **اليوم 10:** بوابة التاجر (`src/app/merchant/orders/`) تستدعي `getOrdersForTenant`/`transitionStatus` بـ`tenantId` من جلسة `MerchantService`/`KhalilService` |
-| لا يحق له | تعديل سعر منتج، تعديل مخزون مباشرة (فحص فقط، لا حجز)، **تقسيم طلب واحد لعدة تجار (`PROPOSED` ومؤجَّل — راجع الملاحظة أدناه)**، السماح لـ`customer` بتغيير أي حالة، **السماح لتاجر بتغيير حالة طلب لا يخص `tenantId` جلسته (اليوم 10، `ADR-012`)** |
-| يستخدمه | ريف (الآن)، بوابة التاجر (اليوم 10) |
-| الحالة | `PARTIALLY_IMPLEMENTED` — `types.ts` (`ORDER_TRANSITIONS`, `ORDER_TRANSITION_ACTORS` كمصدر حقيقة وحيد لآلة الحالات)، `orders.service.ts` (`checkout`, `transitionStatus` بعزل مستأجرين، `getStatusHistory`, `getOrdersForTenant` جديد اليوم 10)، `orders.repository.ts`، مُختبَر (55 اختباراً إجمالياً في المشروع: وحدة + تكامل ضد Supabase حقيقي، يغطي دورة الحياة الكاملة + رفض القفز/الفاعل غير المخوَّل/الحالة النهائية/عزل المستأجرين). **واجهة مستخدم لتغيير الحالة `IMPLEMENTED` الآن (اليوم 10)** — `src/app/merchant/orders/`، مُتحقَّق منها فعلياً في متصفح حقيقي (دخول → عرض طلب → تأكيد → تحديث حي للحالة). موثَّق في `ADR-009`/`ADR-010`/`ADR-012` (`docs/DECISIONS.md`) وSpec في `specs/orders/README.md` |
+| العلاقات | يستدعي `CatalogService.calculatePrice`/`validateSelection`، `InventoryService.isAvailable`، `CartService.getSummary`/`clearCart`، `KhalilService.findOrCreateCustomerByPhone`، `CashOnDeliveryProvider.charge` — بوابة التاجر (`src/app/merchant/orders/`، اليوم 10) تستدعي `getOrdersForTenant`/`transitionStatus`؛ **اليوم 11:** لوحة الإدارة (`src/app/admin/dashboard/`) تستدعي `getAllOrders`/`getRecentStatusHistory`/`transitionStatus` (بلا `tenantId`) عبر جلسة `AdminService`/`KhalilService` |
+| لا يحق له | تعديل سعر منتج، تعديل مخزون مباشرة، **تقسيم طلب واحد لعدة تجار (`PROPOSED` ومؤجَّل)**، السماح لـ`customer` بتغيير أي حالة، السماح لتاجر بتغيير حالة طلب لا يخص `tenantId` جلسته (`ADR-012`) |
+| يستخدمه | ريف (الآن)، بوابة التاجر (اليوم 10)، لوحة الإدارة (اليوم 11) |
+| الحالة | `PARTIALLY_IMPLEMENTED` — `orders.service.ts` (`checkout`, `transitionStatus`, `getStatusHistory`, `getOrdersForTenant`, **`getAllOrders`/`getRecentStatusHistory` جديدان اليوم 11**)، `orders.repository.ts` (+ `findAll`/`findAllStatusHistory`)، مُختبَر (72 اختباراً إجمالياً في المشروع: وحدة + تكامل حي). واجهتا تاجر وإدارة كلتاهما `IMPLEMENTED` ومُتحقَّق منهما في متصفح حقيقي. موثَّق في `ADR-009`/`ADR-010`/`ADR-012`/`ADR-013` وSpec في `specs/orders/README.md` |
 
 > **ملاحظة صريحة — تقسيم الطلب لكل تاجر (Multi-Vendor Order Splitting):** `PROPOSED`، مؤجَّل عمداً. تحقَّقت مباشرة من Supabase الحي وقت تخطيط اليوم 8: `products` يحتوي **صفاً واحداً فقط**، من تاجر واحد فقط — رياضياً يستحيل اليوم أن تحتوي أي سلة حقيقية أكثر من تاجر. لذا نُفِّذ طلب واحد بعمود `tenant_id` واحد إلزامي، بلا منطق تقسيم. `orders.service.ts` يرفض صراحة (خطأ واضح، لا طلب خاطئ صامت) أي محاولة Checkout لسلة تحتوي منتجات من أكثر من `tenant_id` — **هذا التحقق الدفاعي موجود فعلاً، لكن منطق التقسيم الفعلي (طلب مستقل لكل تاجر من نفس السلة) غير مبني**، ويُبنى فقط عند وجود تاجر ثانٍ فعلياً.
 
@@ -212,8 +212,20 @@ source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md �
 | البيانات | راجع `docs/DATABASE.md §3` (`merchants`) و`specs/merchant/SPEC.md` |
 | العلاقات | `Catalog.products.tenant_id` يُشير إلى `merchants.id`؛ `Orders` يتحقق من تطابق `tenantId` قبل أي انتقال حالة (`ADR-012`)؛ يستدعي `KhalilService` (`findUserByPhone`, `createSession`) لتسجيل الدخول — لا يكرر منطق الجلسات في نطاقه الخاص |
 | لا يحق له | حساب الأسعار (يبقى في Catalog)، تعديل صلاحيات مستخدم مباشرة، الوصول المباشر لـ`khalil.repository.ts` (يمر عبر `khalilService` فقط — مفروض آلياً عبر `dependency-cruiser`، راجع `docs/ARCHITECTURE.md §3.1`) |
-| يستخدمه | ريف (الآن)، بوابة التاجر (`src/app/merchant/`، اليوم 10) |
-| الحالة | `PARTIALLY_IMPLEMENTED` — جدول `merchants` + `MerchantService`/`MerchantRepository` (الآن `service_role`، كان `anon` بلا استخدام فعلي حتى اليوم 10) موجودة، عزل مُختبَر فعلياً (اليوم 4). **اليوم 10:** بوابة تاجر فعلية (`src/app/merchant/login`, `src/app/merchant/orders`) تعمل حياً — دخول بالهاتف، قائمة طلبات معزولة بالتاجر، أزرار تغيير حالة تستدعي `OrdersService.transitionStatus()` بـ`tenantId` الجلسة. **لا يزال:** بلا كلمة مرور/تحقق ثانٍ (`ADR-012`)، بلا `manager`/`employee` (مالك واحد فقط لكل تاجر) |
+| يستخدمه | ريف (الآن)، بوابة التاجر (`src/app/merchant/`، اليوم 10)، لوحة الإدارة (`src/app/admin/`، اليوم 11) |
+| الحالة | `PARTIALLY_IMPLEMENTED` — جدول `merchants` + `MerchantService`/`MerchantRepository` (`service_role` منذ اليوم 10) موجودة، عزل مُختبَر فعلياً (اليوم 4). **اليوم 10:** بوابة تاجر فعلية تعمل حياً. **اليوم 11:** `findAll`/`setActiveStatus` جديدان (`merchant.repository.ts` + تغليف رقيق في `merchant.service.ts`) — تُستدعيان حصرياً من `AdminService`، لا تحقق صلاحية داخل `merchantService` نفسها (مسؤولية المستدعي). **لا يزال:** بلا كلمة مرور/تحقق ثانٍ (`ADR-012`)، بلا `manager`/`employee` |
+
+### Admin — Evidence: `PARTIALLY_IMPLEMENTED` (اليوم 11، `ADR-013`)
+
+| | |
+|---|---|
+| المسؤولية | لوحة الإدارة الأساسية — تسجيل دخول `platform_admin`، رؤية/إدارة كل التجار، رؤية/تحكم كل الطلبات بلا قيد تاجر، سجل تدقيق عام |
+| يملك | لا جدول خاص به — نطاق تجميع (Aggregation) فقط، يستهلك `merchants`/`orders`/`order_status_history`/`sessions` الموجودة (نفس دور `orders.service.ts` في تنسيق نطاقات أخرى) |
+| البيانات | لا شيء جديد بنيوياً — راجع `docs/DATABASE.md §sessions` (نفس الجدول من اليوم 10) |
+| العلاقات | يستدعي `KhalilService` (`findUserByPhone`, `createSession`, `validateSessionToken`, `destroySession`) للجلسة، `MerchantService` (`listAll`, `setActiveStatus`) للتجار، `OrdersService` (`getAllOrders`, `getRecentStatusHistory`, `transitionStatus`) للطلبات — كل الوصول عبر `service.ts` نطاقات أخرى، أبداً `repository.ts` مباشرة |
+| لا يحق له | تعديل عمولة تاجر أو حذفه، تسجيل تاجر جديد، إدارة عملاء، أي عملية خارج (تفعيل/تعطيل تاجر + رؤية/تحكم طلبات + سجل تدقيق) — محدَّدات هندسية صريحة من المؤسس |
+| يستخدمه | لوحة الإدارة (`src/app/admin/`، اليوم 11) حصراً |
+| الحالة | `PARTIALLY_IMPLEMENTED` — `admin.service.ts` (`loginByPhone`, `listMerchants`, `setMerchantActiveStatus`)، `admin-session.ts` (كوكي `sb_admin_session` مستقل + فحص `role === 'platform_admin'` صريح — ضروري لأن `tenantId` جلسات الإدارة `null` دائماً فلا يحميها فحص "tenantId موجود؟" الضمني الذي يحمي جلسات التاجر). مُختبَر (وحدة + تكامل حي بما فيه اختبارات أمنية سلبية: رفض هاتف تاجر، رفض جلسة تاجر حقيقية كجلسة إدارة) ومتصفح حقيقي (بما فيه تأكيد أن جلسة تاجر نشطة لا تفتح `/admin/dashboard`). موثَّق في `ADR-013` وSpec كامل في `specs/admin/SPEC.md`. **لا يزال:** بلا كلمة مرور/تحقق ثانٍ (نفس فئة `ADR-012`، أشد حساسية) |
 
 ---
 

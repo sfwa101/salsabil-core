@@ -114,6 +114,18 @@ export class OrdersService {
     return ordersRepository.findOrdersByTenantId(tenantId);
   }
 
+  // كل الطلبات من كل التجار — للوحة الإدارة فقط (اليوم 11). لا تحقق صلاحية هنا — مسؤولية
+  // المستدعي (Server Action) التأكد أن الفاعل platform_admin قبل الوصول لهذه الدالة.
+  async getAllOrders(): Promise<Order[]> {
+    return ordersRepository.findAll();
+  }
+
+  // سجل تدقيق عام (كل الطلبات) — للوحة الإدارة فقط (اليوم 11). يعرض ما هو مسجَّل فعلياً في
+  // order_status_history فقط — لا audit_log عام جديد اليوم (مؤجَّل لليوم 12، يوم الأمان).
+  async getRecentStatusHistory(limit: number = 50): Promise<OrderStatusHistoryEntry[]> {
+    return ordersRepository.findAllStatusHistory(limit);
+  }
+
   // ينفّذ انتقال حالة واحداً وفق آلة الحالات في types.ts (ORDER_TRANSITIONS)، ويرفض أي انتقال
   // غير مسموح أو فاعل غير مخوَّل بدل تنفيذه صامتاً — نفس منطق الرفض الصريح في checkout()
   async transitionStatus(input: TransitionOrderStatusInput): Promise<Order> {

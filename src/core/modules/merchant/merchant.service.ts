@@ -48,6 +48,16 @@ export class MerchantService {
     return merchant.ownerId === userId;
   }
 
+  // اليوم 11 — قراءة/تفعيل شاملان لكل التجار، للوحة الإدارة (AdminService) حصراً. لا تحقق
+  // صلاحية هنا — مسؤولية المستدعي التأكد أن الفاعل platform_admin قبل الوصول لهاتين الدالتين.
+  async listAll(): Promise<Merchant[]> {
+    return merchantRepository.findAll();
+  }
+
+  async setActiveStatus(id: string, isActive: boolean): Promise<Merchant> {
+    return merchantRepository.setActiveStatus(id, isActive);
+  }
+
   toAgreement(merchant: Merchant): MerchantAgreement {
     return {
       merchantId: merchant.id,

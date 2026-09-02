@@ -44,6 +44,8 @@ vi.mock('../../kernel/khalil/service', () => ({
 vi.mock('./merchant.repository', () => ({
   merchantRepository: {
     findByOwnerId: vi.fn(),
+    findAll: vi.fn(async () => [activeMerchant]),
+    setActiveStatus: vi.fn(async (id: string, isActive: boolean) => ({ ...activeMerchant, id, isActive })),
   },
 }));
 
@@ -108,5 +110,21 @@ describe('MerchantService.loginOwnerByPhone', () => {
 
     expect(result).toBeNull();
     expect(khalilService.createSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('MerchantService — عمليات الإدارة (اليوم 11)', () => {
+  it('listAll يفوّض لـ merchantRepository.findAll', async () => {
+    const result = await merchantService.listAll();
+
+    expect(merchantRepository.findAll).toHaveBeenCalled();
+    expect(result).toEqual([activeMerchant]);
+  });
+
+  it('setActiveStatus يفوّض لـ merchantRepository.setActiveStatus بنفس id وisActive، بلا تعديل أي حقل آخر', async () => {
+    const result = await merchantService.setActiveStatus('merchant-1', false);
+
+    expect(merchantRepository.setActiveStatus).toHaveBeenCalledWith('merchant-1', false);
+    expect(result).toEqual({ ...activeMerchant, id: 'merchant-1', isActive: false });
   });
 });

@@ -1,7 +1,7 @@
 ---
 title: Spec — Orders (دورة حياة الطلب)
 status: PARTIALLY_IMPLEMENTED
-version: 1.1
+version: 1.2
 last_updated: 2026-09-02
 owner: Claude (تنفيذ) + المؤسس (اعتماد)
 source_of_truth: هذا الملف يوثّق التطابق/الفجوة — الكود الفعلي (`src/core/modules/orders/`) هو الحقيقة النهائية
@@ -73,6 +73,7 @@ PENDING ──→ CONFIRMED ──→ PREPARING ──→ READY ──→ OUT_FO
 | قيد أول تلقائي (`null → pending`, `actorRole: 'system'`) عند Checkout | `IMPLEMENTED` — جزء من `OrdersService.checkout()` |
 | `OrdersService.getStatusHistory()` | `IMPLEMENTED` |
 | `OrdersService.getOrdersForTenant()` | `IMPLEMENTED` (اليوم 10) |
+| `OrdersService.getAllOrders()`/`getRecentStatusHistory()` | `IMPLEMENTED` (اليوم 11، للوحة الإدارة — راجع `specs/admin/SPEC.md`) |
 | عزل مستأجرين في `transitionStatus()` (`tenantId`) | `IMPLEMENTED` (اليوم 10، `ADR-012`) — كانت فجوة حقيقية غير مكتشفة منذ اليوم 9 |
 | واجهة تاجر لتغيير الحالة | `IMPLEMENTED` (اليوم 10) — `src/app/merchant/orders/`، مُتحقَّق منها في متصفح حقيقي |
 | ربط فعلي بمندوب توصيل (برق) | `CONCEPTUAL` — نطاق برق غير مبني |

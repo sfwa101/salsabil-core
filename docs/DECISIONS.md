@@ -1,7 +1,7 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.7
+version: 1.8
 last_updated: 2026-09-02
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف
@@ -186,6 +186,26 @@ Alternatives: (أ) تاجر واحد مُثبَّت بلا تسجيل دخول �
 Why: قرار المؤسس المباشر (اختيار صريح من 3 خيارات معروضة). القفل الكامل لـmerchants وإضافة عزل المستأجرين كلاهما لم يُطلَب صراحة بالتفصيل لكنهما امتداد مباشر ضروري لنفس القرار — أي جلسة تاجر حقيقية بلا هذين الإصلاحين تبقى شكلية فقط (تسجيل دخول حقيقي فوق ثغرتين حقيقيتين).
 Consequences: تسجيل الدخول بلا كلمة مرور يبقى ثغرة معروفة — أي طرف يعرف هاتف تاجر نشط يستطيع انتحاله بالكامل (لا OTP، لا تحقق ثانٍ). مقبول مؤقتاً لتاجر تجريبي واحد فقط، **يجب** إغلاقه قبل تسجيل تاجر ثانٍ حقيقي (راجع specs/merchant/SPEC.md → Open Questions). مدة الجلسة (7 أيام) وTTL بلا قرار مؤسس رسمي — TODO صريح، نفس نمط BR-016. ready→out_for_delivery وout_for_delivery→delivered لا تزالان مُخوَّلتين لأدوار التاجر/الإدارة مؤقتاً (لا نطاق برق/مندوب — قرار ADR-010 لم يتغيّر).
 Related Documents: docs/DATABASE.md §3 (sessions)، §6 (RLS)، docs/DOMAIN_MAP.md → Merchant/Orders/Khalil، specs/merchant/SPEC.md، ADR-005 (اتجاه الاعتماد)، ADR-009، ADR-010
+```
+
+---
+
+## ADR-013
+```
+Title: لوحة الإدارة الأساسية — نطاق admin جديد (تجميع لا جدول)، جلسة platform_admin مصغّرة بكوكي مستقل، تفعيل/تعطيل تاجر، سجل تدقيق عام من order_status_history
+Status: ACCEPTED
+Date: 2026-09-02 (اليوم 11 من خطة الـ14 يوماً)
+Decision: (أ) نطاق جديد src/core/modules/admin/ — لا جدول خاص به، يجمّع قراءات/عمليات عبر Merchant وOrders تماماً كما orders.service.ts ينسّق cart/catalog/inventory/khalil. AdminService.loginByPhone(phone) — نفس نمط MerchantService.loginOwnerByPhone حرفياً: khalilService.findUserByPhone → تحقق role === 'platform_admin' → khalilService.createSession(tenantId: null).
+          (ب) admin-session.ts — كوكي httpOnly مستقل تماماً (sb_admin_session لا sb_merchant_session)، مع فحص إضافي غير موجود في merchant-session.ts: getAdminSession() يتحقق صراحة أن session.role === 'platform_admin' بعد validateSessionToken. هذا الفحص ضروري تحديداً للإدارة لأن tenantId فيها null دائماً بتصميم — فحص "tenantId موجود؟" الذي يحمي merchant-session.ts ضمنياً (جلسات غير التاجر لها tenantId: null أيضاً فتُرفض تلقائياً) لا ينطبق هنا؛ الفحص الصريح هو البديل المكافئ الوحيد.
+          (ج) merchantRepository.findAll()/setActiveStatus() (+ تغليف رقيق في merchantService)، ordersRepository.findAll()/findAllStatusHistory() (+ تغليف رقيق في ordersService: getAllOrders()، getRecentStatusHistory()) — كلها تُستدعى من AdminService/Server Actions مباشرة عبر service.ts الأخرى، لا عبر الوصول لـrepository.ts نطاق آخر (يحترم القاعدة المفروضة آلياً في .dependency-cruiser.cjs).
+          (د) src/app/admin/dashboard/ — صفحة واحدة (لا مسارات متعددة) تجمع ثلاثة أقسام: التجار (قائمة + زر تفعيل/تعطيل)، كل الطلبات (قائمة + أزرار انتقال حالة عبر مكوّن OrderRow المُعمَّم من اليوم 10)، سجل التدقيق (آخر 50 قيداً من order_status_history، بلا جدول جديد).
+          (ه) OrderRow.tsx (كان MerchantOrderRow.tsx) — عُمِّم بقبول onTransition كـ prop بدل استيراد Server Action محدَّد، يُعاد استخدامه من بوابتي التاجر والإدارة بنفس المكوّن حرفياً.
+          (و) مستخدم platform_admin تجريبي أول (هاتف 01000000001) أُنشئ يدوياً عبر service_role — لا واجهة "Bootstrap Admin" تلقائية (نفس نمط تسجيل التاجر اليدوي، خارج نطاق اليوم).
+Context: اليوم 10 بنى بوابة تاجر تعمل حياً لكن بلا أي رؤية مركزية عبر كل التجار/الطلبات — لوحة الإدارة الأساسية هي الخطوة الطبيعية الأخيرة لإكمال "البوابات الثلاث" (CONSTITUTION §5/§8). تحقُّق حي قبل التنفيذ: لا مستخدم platform_admin موجود، لا طلبات في القاعدة (نُظِّفت بعد اختبارات سابقة).
+Alternatives: (أ) audit_log عام كامل اليوم بدل الاكتفاء بـorder_status_history — رُفض صراحة من المؤسس: يخالف "لا نبني أكثر من الميزة القادمة المخطط لها بدقة"، audit_log العام مخطَّط دستورياً لليوم 12 (يوم الأمان) تحديداً. (ب) عرض طلبات فقط بلا تحكم بالحالة للإدارة — رُفض: platform_admin مخوَّل فعلياً بكل انتقال منذ اليوم 9 (ORDER_TRANSITION_ACTORS)، منع الواجهة من استخدام صلاحية موجودة أصلاً تعقيد بلا فائدة أمنية حقيقية. (ج) صفحات منفصلة لكل قسم إداري (/admin/merchants، /admin/orders) — رُفض لصالح صفحة "لوحة" واحدة: الحجم الحالي (تاجر واحد، طلبات قليلة) لا يبرر تعدد المسارات، "لوحة إدارة أساسية" تعني حرفياً شاشة واحدة عند هذا الحجم.
+Why: قرار المؤسس المباشر — عرض الخطة الكاملة (الهوية، العمليات، الاختبارات) وحصل على موافقة صريحة على كل بند مع محددات هندسية دقيقة (حظر التوسع خارج تفعيل/تعطيل التاجر، ترحيل audit_log العام لليوم 12).
+Consequences: إجراء تفعيل/تعطيل التاجر نفسه **لا يُسجَّل** في أي سجل تدقيق اليوم (لا audit_log عام بعد) — فجوة معروفة، موثَّقة صراحة، مؤجَّلة لليوم 12 بقرار مباشر لا سهواً. لا manager/employee في لوحة الإدارة (تطابق نفس فجوة الأدوار في specs/merchant/SPEC.md). تسجيل دخول الإدارة بلا كلمة مرور — نفس خطر ADR-012 بالضبط، أشد حساسية هنا (صلاحيات platform_admin أوسع من merchant_owner)، يُحدَّث Open Questions في specs/admin/SPEC.md.
+Related Documents: docs/DATABASE.md، docs/DOMAIN_MAP.md → Admin/Merchant/Orders، specs/admin/SPEC.md (جديد)، specs/merchant/SPEC.md، specs/orders/README.md، ADR-009، ADR-010، ADR-012
 ```
 
 ---

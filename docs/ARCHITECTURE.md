@@ -1,7 +1,7 @@
 ---
 title: المعمارية التقنية
 status: ACTIVE
-version: 1.4
+version: 1.5
 last_updated: 2026-09-02
 owner: المؤسس (أبوحتاب) + Claude (معماري)
 source_of_truth: هذا الملف (تفصيل)، SALSABIL_CONSTITUTION.md §4-§5 (المبدأ)
@@ -51,12 +51,17 @@ src/
 │   ├── globals.css        → طبقتا التوكنز الدلالية لكل عالم — راجع §2.1 أدناه
 │   ├── (reef)/            → Route Group لعالم ريف — layout.tsx يضع data-world="reef"
 │   │                         على عنصر جذر (لا على <html>)، لا يغيّر مسارات URL — تطبيق العميل
-│   └── merchant/          → IMPLEMENTED (اليوم 10) — بوابة التاجر (البوابة الثانية من ثلاث،
-│                             CONSTITUTION §8). data-world="reef" أيضاً. login/ (دخول بالهاتف)
-│                             وorders/ (قائمة طلبات التاجر + أزرار انتقال حالة) — بادئة URL
-│                             حقيقية (لا Route Group مقنَّع) لأنها بوابة مستقلة، لا امتداد لريف
+│   ├── merchant/          → IMPLEMENTED (اليوم 10) — بوابة التاجر (البوابة الثانية من ثلاث،
+│   │                         CONSTITUTION §8). data-world="reef" أيضاً. login/ (دخول بالهاتف)
+│   │                         وorders/ (قائمة طلبات التاجر + أزرار انتقال حالة)
+│   └── admin/             → IMPLEMENTED (اليوم 11) — لوحة الإدارة (البوابة الثالثة). data-world=
+│                             "diwan" (تشرف على المنظومة كلها، لا عالماً واحداً). login/ وdashboard/
+│                             (صفحة واحدة: تجار + كل الطلبات + سجل تدقيق — لا مسارات متعددة عند
+│                             هذا الحجم). كلتا البوابتين بادئة URL حقيقية، لا Route Group مقنَّع
 ├── components/          → مكونات واجهة قابلة لإعادة الاستخدام، محايدة لونياً بالكامل
 │   │                       (تستهلك فقط bg-primary/text-foreground/border-border...)
+│   │                       OrderRow.tsx (كان MerchantOrderRow.tsx) مُعمَّم اليوم 11 — يُستخدَم من
+│   │                       بوابتي التاجر والإدارة معاً عبر onTransition كـ prop قابل للحقن
 │   └── ui/               → فارغ حالياً — shadcn/ui **غير مثبّتة** (تحقَّق منه فعلياً
 │                             اليوم 6: لا components.json، لا cva/clsx/cn — راجع
 │                             docs/DECISIONS.md → CONFLICT-005)
@@ -78,18 +83,24 @@ src/
 │   │                                         merchants منذ اليوم 10/sessions)
 │   ├── modules/          → النطاقات (Catalog, Orders, Inventory...)
 │   │   ├── catalog/      → IMPLEMENTED (types.ts, catalog.service.ts, catalog.repository.ts)
-│   │   ├── merchant/     → IMPLEMENTED — types.ts, merchant.service.ts (+ loginOwnerByPhone،
-│   │   │                     اليوم 10)، merchant.repository.ts (service_role منذ اليوم 10،
-│   │   │                     كان anon بلا استخدام فعلي)، merchant-session.ts (كوكي الجلسة)
+│   │   ├── merchant/     → IMPLEMENTED — types.ts, merchant.service.ts (+ loginOwnerByPhone
+│   │   │                     اليوم 10، + listAll/setActiveStatus اليوم 11)، merchant.repository.ts
+│   │   │                     (service_role منذ اليوم 10؛ + findAll/setActiveStatus اليوم 11)،
+│   │   │                     merchant-session.ts (كوكي sb_merchant_session)
+│   │   ├── admin/        → IMPLEMENTED (اليوم 11) — admin.service.ts (loginByPhone, listMerchants,
+│   │   │                     setMerchantActiveStatus)، admin-session.ts (كوكي sb_admin_session
+│   │   │                     مستقل + فحص role === 'platform_admin' صريح). لا types.ts ولا
+│   │   │                     repository.ts — نطاق تجميع فقط عبر service.ts نطاقات أخرى
 │   │   ├── inventory/    → IMPLEMENTED (اليوم 7) — types.ts, inventory.service.ts (isAvailable
 │   │   │                     فقط، بلا حجز), inventory.repository.ts
 │   │   ├── cart/         → IMPLEMENTED (اليوم 7) — types.ts, cart.service.ts, cart.repository.ts
 │   │   │                     (يستخدم supabase-admin-client، لا supabase-client العام)
 │   │   ├── payments/     → IMPLEMENTED جزئياً (اليوم 8) — PaymentProvider (واجهة) +
 │   │   │                     CashOnDeliveryProvider (التطبيق الوحيد الفعلي)
-│   │   └── orders/       → IMPLEMENTED (اليوم 8-9) — types.ts (ORDER_TRANSITIONS/
+│   │   └── orders/       → IMPLEMENTED (اليوم 8-11) — types.ts (ORDER_TRANSITIONS/
 │   │                         ORDER_TRANSITION_ACTORS كمصدر حقيقة لآلة الحالات)، orders.service.ts
-│   │                         (checkout, transitionStatus, getStatusHistory), orders.repository.ts
+│   │                         (checkout, transitionStatus, getStatusHistory, getOrdersForTenant،
+│   │                         + getAllOrders/getRecentStatusHistory اليوم 11), orders.repository.ts
 │   ├── offline/          → دعم العمل بلا إنترنت — PROPOSED، لم يُبنَ بعد
 │   └── telemetry/        → سجل الأحداث والتدقيق — PROPOSED، لم يُبنَ بعد
 └── types/                → أنواع TypeScript مشتركة عبر النطاقات
@@ -193,7 +204,7 @@ ImportProvider (واجهة عامة، مقترحة من محادثة الاست�
 | منطق الخادم | Edge Functions / Node.js | `ACTIVE` |
 | قاعدة البيانات | Supabase (Postgres + Auth + Realtime + Storage) | `ACTIVE`, `IMPLEMENTED` (اتصال حقيقي، 11 جدولاً: users, categories, products, merchants, inventory, carts, cart_items, orders, order_items, order_status_history, sessions) |
 | الصلاحيات (RLS) | Postgres RLS | `IMPLEMENTED` — نمطان: قراءة عامة (categories/products/inventory) وقفل كامل عبر service_role (merchants/carts/cart_items/orders/order_items/order_status_history/sessions، اليوم 7-10) |
-| اختبارات آلية | Vitest (وحدة + تكامل ضد Supabase حقيقي) | `IMPLEMENTED` (اليوم 7-10) — راجع `src/core/modules/cart/*.test.ts`, `src/core/modules/orders/*.test.ts`, `src/core/modules/merchant/*.test.ts` |
+| اختبارات آلية | Vitest (وحدة + تكامل ضد Supabase حقيقي) | `IMPLEMENTED` (اليوم 7-11) — 72 اختباراً إجمالياً. راجع `src/core/modules/{cart,orders,merchant,admin}/*.test.ts` |
 | البحث | Meilisearch | `PROPOSED` (§9 دستور) — لم يُبنَ |
 | الدردشة | Supabase Realtime (المرحلة 1) | `PROPOSED` — لم يُبنَ بعد، مخطط §25 دستور |
 

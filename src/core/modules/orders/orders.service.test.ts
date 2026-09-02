@@ -88,6 +88,8 @@ vi.mock('./orders.repository', () => ({
     findOrderById: vi.fn(),
     findOrderItems: vi.fn(),
     findOrdersByTenantId: vi.fn(async () => []),
+    findAll: vi.fn(async () => []),
+    findAllStatusHistory: vi.fn(async () => []),
     updateOrderStatus: vi.fn(),
     insertStatusHistory: vi.fn(async () => ({})),
     findStatusHistory: vi.fn(async () => []),
@@ -320,5 +322,31 @@ describe('OrdersService.getOrdersForTenant', () => {
 
     expect(ordersRepository.findOrdersByTenantId).toHaveBeenCalledWith('tenant-a');
     expect(result).toEqual(tenantOrders);
+  });
+});
+
+describe('OrdersService.getAllOrders', () => {
+  it('يعيد كل الطلبات بلا أي تصفية تاجر عبر findAll (اليوم 11، لوحة الإدارة)', async () => {
+    const allOrders = [makeOrder({ status: 'pending' }), makeOrder({ status: 'delivered' })];
+    vi.mocked(ordersRepository.findAll).mockResolvedValue(allOrders as never);
+
+    const result = await ordersService.getAllOrders();
+
+    expect(ordersRepository.findAll).toHaveBeenCalled();
+    expect(result).toEqual(allOrders);
+  });
+});
+
+describe('OrdersService.getRecentStatusHistory', () => {
+  it('يعيد سجل التدقيق العام عبر findAllStatusHistory بحد افتراضي 50', async () => {
+    await ordersService.getRecentStatusHistory();
+
+    expect(ordersRepository.findAllStatusHistory).toHaveBeenCalledWith(50);
+  });
+
+  it('يحترم حداً مخصَّصاً عند تمريره', async () => {
+    await ordersService.getRecentStatusHistory(10);
+
+    expect(ordersRepository.findAllStatusHistory).toHaveBeenCalledWith(10);
   });
 });

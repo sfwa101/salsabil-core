@@ -1,7 +1,7 @@
 ---
 title: سجل التغييرات
 status: ACTIVE
-version: 1.4
+version: 1.5
 last_updated: 2026-09-02
 owner: Claude (تلقائي مع كل مهمة كبيرة)
 source_of_truth: هذا الملف + Git log
@@ -12,6 +12,18 @@ source_of_truth: هذا الملف + Git log
 > يُسجَّل هنا فقط التغييرات المهمة (معمارية، قواعد أعمال، قاعدة بيانات، أمان، UX، قرارات، خارطة طريق) — لا كل commit صغير.
 
 ---
+
+## 2026-09-02 (اليوم 11) — لوحة الإدارة الأساسية (ADR-013)
+- خطة صريحة (هوية `platform_admin`، نطاق العمليات، سيناريوهات الاختبار) عُرضت واعتُمدت من المؤسس بمحددات هندسية دقيقة قبل أي كود — حظر التوسع خارج تفعيل/تعطيل التاجر، ترحيل `audit_log` العام لليوم 12 صراحة
+- أول مستخدم `platform_admin` (هاتف `01000000001`) أُنشئ يدوياً عبر `service_role` — لا يوجد أي حساب إدارة قبله في المشروع
+- نطاق جديد `src/core/modules/admin/` — لا جدول خاص به، تجميع قراءات/عمليات عبر `Merchant` وOrders (نفس دور `orders.service.ts` في تنسيق نطاقات أخرى). `AdminService.loginByPhone()` — نفس نمط `MerchantService.loginOwnerByPhone` حرفياً
+- `admin-session.ts`: كوكي `sb_admin_session` مستقل تماماً عن `sb_merchant_session`، **+ فحص `role === 'platform_admin'` صريح** غير موجود في نظير التاجر — ضروري لأن جلسات الإدارة `tenantId` فيها `null` دائماً بتصميم، فلا يحميها فحص "tenantId موجود؟" الضمني الذي يحمي جلسات التاجر
+- `merchantRepository.findAll()`/`setActiveStatus()` (+ تغليف رقيق في `merchantService`)، `ordersRepository.findAll()`/`findAllStatusHistory()` (+ تغليف رقيق `ordersService.getAllOrders()`/`getRecentStatusHistory()`) — كلها تُستدعى عبر `service.ts` نطاقات أخرى حصراً، لا وصول مباشر لـ`repository.ts` أجنبي
+- **إعادة استخدام حقيقية:** `MerchantOrderRow.tsx` عُمِّم إلى `OrderRow.tsx` (يقبل `onTransition` كـ prop بدل استيراد Server Action ثابت) — نفس المكوّن يُستخدَم الآن من بوابتي التاجر والإدارة بلا تكرار كود
+- `src/app/admin/dashboard/` — صفحة واحدة (لا مسارات متعددة، الحجم الحالي لا يبرر ذلك) بثلاثة أقسام: التجار (تفعيل/تعطيل)، كل الطلبات (بلا تصفية تاجر، تحكم كامل بالحالة)، سجل التدقيق (آخر 50 قيداً من `order_status_history` الموجود فعلياً — **بلا جدول `audit_log` جديد**، مؤجَّل صراحة لليوم 12)
+- 24 اختباراً جديداً (وحدة + تكامل حي، بما فيها اختبارات أمنية سلبية صريحة: هاتف تاجر يُرفض من دخول الإدارة، جلسة تاجر حقيقية لا تُقرَأ كجلسة `platform_admin`) — المجموع الآن 72 اختباراً، كلها خضراء تحت `npm test` الكامل
+- تحقق فعلي عبر متصفح حقيقي (Playwright): دخول بهاتف تاجر يُرفض من `/admin/login` بالرسالة الصحيحة → دخول بهاتف إدارة حقيقي ينجح → تبديل حالة تاجر ينعكس حياً → تأكيد طلب حقيقي ينعكس في سجل التدقيق حياً → تسجيل خروج → **جلسة تاجر نشطة لا تفتح `/admin/dashboard` إطلاقاً** (كوكيان منفصلان تماماً) — صفر أخطاء console حقيقية
+- تحديث `docs/DATABASE.md` (استخدام `sessions` من الإدارة، جدول حسابات اختبار حية جديد)، `docs/DOMAIN_MAP.md` (قسم Admin جديد، تحديث Orders/Merchant)، `docs/ARCHITECTURE.md` (شجرة `src/`)، `docs/DECISIONS.md` (`ADR-013`)، `docs/ROADMAP.md` (اليوم 11 → DONE)، `specs/admin/SPEC.md` (جديد)، `specs/orders/README.md`، `specs/merchant/SPEC.md`
 
 ## 2026-09-02 (اليوم 10) — طلبات التاجر: تسجيل دخول حقيقي + بوابة طلبات (ADR-012)
 - خطة صريحة عُرضت واعتُمدت قبل أي كود — سؤال مباشر للمؤسس بين 3 خيارات لهوية التاجر (جلسة حقيقية مصغّرة / بلا تسجيل دخول إطلاقاً / تأجيل ليوم Supabase Auth كاملة)، اختار المؤسس الخيار الأول

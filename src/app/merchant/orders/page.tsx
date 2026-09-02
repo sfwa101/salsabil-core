@@ -2,8 +2,8 @@ import { redirect } from 'next/navigation';
 import { getMerchantSession } from '@/core/modules/merchant/merchant-session';
 import { ordersService } from '@/core/modules/orders/orders.service';
 import { ORDER_TRANSITIONS, ORDER_TRANSITION_ACTORS } from '@/core/modules/orders/types';
-import { MerchantOrderRow } from '@/components/MerchantOrderRow';
-import { logoutMerchantAction } from './actions';
+import { OrderRow } from '@/components/OrderRow';
+import { logoutMerchantAction, transitionOrderAction } from './actions';
 
 export default async function MerchantOrdersPage() {
   const session = await getMerchantSession();
@@ -33,13 +33,14 @@ export default async function MerchantOrdersPage() {
               ORDER_TRANSITION_ACTORS[next].includes(session.role)
             );
             return (
-              <MerchantOrderRow
+              <OrderRow
                 key={order.id}
                 orderId={order.id}
                 status={order.status}
                 total={order.total}
                 createdAt={order.createdAt}
                 nextStatuses={nextStatuses}
+                onTransition={transitionOrderAction}
               />
             );
           })}

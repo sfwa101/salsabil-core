@@ -1,19 +1,24 @@
 'use client';
+// مكوّن مشترك بين بوابة التاجر (اليوم 10) ولوحة الإدارة (اليوم 11) — عرض طلب واحد بأزرار
+// انتقال حالة. onTransition يُمرَّر من كل بوابة بصلاحيتها الخاصة (Server Action مختلف لكل
+// جلسة/كوكي) — المكوّن نفسه لا يعرف شيئاً عن هوية الفاعل أو نوع الجلسة.
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { transitionOrderAction } from '@/app/merchant/orders/actions';
 import { ORDER_STATUS_LABELS_AR, ORDER_TRANSITION_ACTION_LABELS_AR, type OrderStatus } from '@/core/modules/orders/types';
 
-interface MerchantOrderRowProps {
+type TransitionResult = { success: true } | { error: string };
+
+interface OrderRowProps {
   orderId: string;
   status: OrderStatus;
   total: number;
   createdAt: string;
   nextStatuses: OrderStatus[];
+  onTransition: (orderId: string, toStatus: OrderStatus) => Promise<TransitionResult>;
 }
 
-export function MerchantOrderRow({ orderId, status, total, createdAt, nextStatuses }: MerchantOrderRowProps) {
+export function OrderRow({ orderId, status, total, createdAt, nextStatuses, onTransition }: OrderRowProps) {
   const router = useRouter();
   const [pending, setPending] = useState<OrderStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +26,7 @@ export function MerchantOrderRow({ orderId, status, total, createdAt, nextStatus
   async function handleTransition(toStatus: OrderStatus) {
     setPending(toStatus);
     setError(null);
-    const result = await transitionOrderAction(orderId, toStatus);
+    const result = await onTransition(orderId, toStatus);
     setPending(null);
     if ('error' in result) {
       setError(result.error);
