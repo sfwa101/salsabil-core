@@ -16,8 +16,9 @@ source_of_truth: Supabase Project الفعلي (للجداول المنفَّذ�
 ## 1. فلسفة البيانات — Evidence: `CONSTITUTION` §4, §5
 
 - لا استدعاء مباشر لقاعدة البيانات من الواجهة — فقط عبر `[domain].repository.ts`.
-- `tenant_id` يأتي من الجلسة/JWT فقط، أبداً من طلب العميل. **`IMPLEMENTED` جزئياً منذ اليوم 4** — `products.tenant_id` موجود ويُشير إلى `merchants.id`؛ التحقق الفعلي عبر `Session.tenantId` لا يزال منطقياً فقط (لا مصادقة حقيقية بعد — راجع `specs/identity/SPEC.md`)، لا `stores` بعد.
-- RLS مفعَّل على كل جدول يحوي بيانات — `IMPLEMENTED` على العشرة جداول الموجودة حالياً (`users`, `categories`, `products`, `merchants`, `inventory`, `carts`, `cart_items`, `orders`, `order_items`, `order_status_history`). نمطان مختلفان: قراءة عامة (`categories`/`products`/`inventory`) مقابل قفل كامل بلا أي policy، وصول حصري عبر `service_role` (`merchants`, `carts`, `cart_items`, `orders`, `order_items`, `order_status_history` — راجع §6 وADR-008/ADR-009/ADR-010).
+- `tenant_id` يأتي من الجلسة/JWT فقط، أبداً من طلب العميل. **`IMPLEMENTED` منذ اليوم 10** — `products.tenant_id` يُشير إلى `merchants.id`؛ `Session.tenantId` أصبح حقيقياً الآن (جدول `sessions`، تسجيل دخول تاجر بالهاتف، اليوم 10، `ADR-012`) — لا يزال بلا كلمة مرور حقيقية ولا Supabase Auth كاملة (`specs/identity/SPEC.md` لا يزال الفجوة الأشمل)، لكن `tenant_id` نفسه صار يُقرأ فعلياً من جلسة server-side لا من مدخل عميل. لا `stores` بعد.
+- RLS مفعَّل على كل جدول يحوي بيانات — `IMPLEMENTED` على الأحد عشر جدولاً الموجودة حالياً (`users`, `categories`, `products`, `merchants`, `inventory`, `carts`, `cart_items`, `orders`, `order_items`, `order_status_history`, `sessions`). ثلاثة أنماط: (أ) قراءة عامة + كتابة ممنوعة لـ`anon` (`categories`/`products`/`inventory` فقط — **`merchants` أُزيلت من هذه المجموعة اليوم 10**، راجع الملاحظة أدناه)، (ب) قفل كامل بلا أي policy، وصول حصري عبر `service_role` (`carts`, `cart_items`, `orders`, `order_items`, `order_status_history`, **`merchants`**, `sessions` — راجع ADR-008/ADR-009/ADR-010/ADR-012)، (ج) قراءة الذات فقط (`users`).
+- **تصحيح تاريخي (اليوم 9.5، تحقُّق حي):** إلى اليوم 9، `merchants` كانت مصنَّفة خطأً هنا كجزء من النمط (ب)، بينما كانت فعلياً في النمط (أ) — قابلة للقراءة العامة بالكامل عبر `anon` (`phone`/`owner_id` مكشوفان). اليوم 10 (`ADR-012`) نقلها فعلياً وحقيقياً للنمط (ب) — حُذفت سياسة القراءة العامة (`"Merchants are viewable by everyone"`) بعد تأكيد عدم وجود أي مستهلك فعلي لها في الكود.
 - كل سعر يُعاد حسابه من الخادم دائماً، لا يُصدَّق من العميل.
 
 ---
@@ -89,8 +90,11 @@ create table merchants (
   created_at timestamptz not null default now()
 );
 alter table merchants enable row level security;
+-- اليوم 10 (ADR-012): حُذفت سياسة القراءة العامة "Merchants are viewable by everyone" —
+-- كانت تكشف phone/owner_id لأي anon بلا مستهلك فعلي واحد في الكود. merchants الآن مقفول
+-- بالكامل بلا أي policy، نفس نمط carts/orders — وصول حصري عبر service_role.
 ```
-**الحالة:** `IMPLEMENTED` — الجدول موجود، `tenant_id` في `products` يُشير إليه. **إعادة بناء تعريف SQL هنا استنتاجية (`INFERRED`)** من فحص الأعمدة الفعلية عبر الاستعلامات (لا نص SQL أصلي محفوظ في المستودع بعد — راجع §8 Migrations). RLS مفعَّل ويمنع الإدراج بمفتاح `anon` فعلياً (تحقَّق منه مباشرة)، لكن **نص سياسة RLS الدقيق `OPEN_QUESTION`** — نُفِّذ عبر SQL Editor مباشرة دون توثيق النص هنا.
+**الحالة:** `IMPLEMENTED` — الجدول موجود، `tenant_id` في `products` يُشير إليه. **إعادة بناء تعريف SQL هنا استنتاجية (`INFERRED`)** من فحص الأعمدة الفعلية عبر الاستعلامات (لا نص SQL أصلي محفوظ في المستودع بعد — راجع §8 Migrations). **RLS مقفول بالكامل منذ اليوم 10** (`ADR-012`) — إلى اليوم 9 كانت قراءة عامة عبر `anon` (سياسة `"Merchants are viewable by everyone"`، تكشف `phone`/`owner_id`)، حُذفت بعد التأكد من عدم وجود أي مستهلك فعلي لها. `merchant.repository.ts` يستخدم `service_role` الآن (كان يستخدم مفتاح `anon` قبل اليوم 10 — أي استدعاء `create()` عبره كان يفشل صامتاً بلا استخدام فعلي، نفس نمط اكتشاف `ADR-009` مع `khalil`).
 
 **`commissionRate` (Evidence: `FOUNDER_DECISION`, راجع `docs/BUSINESS_RULES.md` BR-007):** قيمة قابلة للتهيئة لكل تاجر على حدة، **لا نسبة ثابتة مبرمجة للمنصة كلها** — لا يوجد بعد مصدر رسمي لشرائح عمولة نهائية (`SALSABIL_CONSTITUTION.md` §8 يصف الشرائح كـ"هيكل مقترح وليس نهائياً"). نطاق `MerchantAgreement` الكامل (عقد إلكتروني صريح، شفافية تامة) الذي تتطلبه BR-007 **لم يُبنَ بعد** — الموجود حالياً إسقاط بسيط (`MerchantAgreement` type) من بيانات التاجر، وليس تنفيذاً كاملاً لتلك القاعدة.
 
@@ -208,6 +212,34 @@ create index order_status_history_order_id_idx on order_status_history (order_id
 - **`order_status_history.from_status` قابل لـ`NULL`** — القيد الأول عند إنشاء الطلب (`null → pending`) لا حالة سابقة له فعلياً.
 - **`order_status_history.actor_id` قابل لـ`NULL`** — عندما `actor_role = 'system'` (القيد الأول عند Checkout)، لا مستخدم بشري فعلي وراء الانتقال.
 - **`updated_at` على `orders` يُحدَّث يدوياً في الكود** (`orders.repository.ts` → `updateOrderStatus`) عند كل انتقال حالة — **لا trigger على مستوى قاعدة البيانات** (لا جدول حالي في المشروع يستخدم trigger، القرار الحالي إبقاء الاتساق مع هذا النمط، راجع ADR-010).
+- **عزل المستأجرين في `transitionStatus()` (اليوم 10، `ADR-012`):** `TransitionOrderStatusInput.tenantId` جديد — إلزامي فعلياً (بالتحقق البرمجي لا النوع) لأي فاعل بدور تاجر (`merchant_owner`/`merchant_manager`/`employee`)، يُقارَن بـ`order.tenantId` قبل السماح بأي انتقال. **هذه فجوة كانت موجودة منذ اليوم 9 ولم تُكتشَف حينها** — لا خطر فعلي طالما تاجر واحد فقط في قاعدة البيانات، لكن بلا هذا التحقق كان أي تاجر يستطيع نظرياً تغيير حالة طلب تاجر آخر بمجرد معرفة `orderId`.
+
+### `sessions` — Evidence: `IMPLEMENTED` (اليوم 10، `ADR-012`)
+
+```sql
+create table sessions (
+  token uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id),
+  tenant_id uuid references merchants(id),
+  role text not null,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+alter table sessions
+  add constraint sessions_role_check
+  check (role in ('platform_admin','merchant_owner','merchant_manager','employee','customer'));
+alter table sessions enable row level security;
+create index sessions_user_id_idx on sessions (user_id);
+```
+
+**الحالة:** `IMPLEMENTED` — كان `CONCEPTUAL` منذ اليوم 2 ("مع تسجيل الدخول")، بُني الآن فعلياً عند أول تدفق دخول حقيقي (تسجيل دخول تاجر بالهاتف بلا كلمة مرور). يُفعِّل لأول مرة `Session`/`canAccessTenant` الموجودين في `src/core/kernel/khalil/` منذ اليوم 4 بلا أي مستهلك فعلي حتى الآن. مُتحقَّق منه حياً: دخول حقيقي بهاتف تاجر تجريبي موجود مسبقاً في القاعدة، قراءة الجلسة عبر `token`، إبطالها (`destroySession`)، ومحاولة إدراج `role` غير صحيحة (رُفضت فعلياً بـ`sessions_role_check`).
+
+**قرارات تصميم (راجع `ADR-012` في `docs/DECISIONS.md` للتفصيل الكامل):**
+- **بلا كلمة مرور عمداً** — الهاتف وحده يكفي لتسجيل الدخول (`merchantService.loginOwnerByPhone`)، بشرط أن يطابق مستخدماً بدور `merchant_owner` مرتبطاً فعلياً بتاجر نشط. هذا **ليس** Supabase Auth حقيقياً — لا تحقق هوية حقيقي (OTP/كلمة مرور)، فقط معرفة رقم الهاتف كافية. مقبول مؤقتاً لأن التاجر التجريبي الوحيد الحالي معروف، **يجب** إغلاقه قبل تسجيل تاجر ثانٍ حقيقي.
+- **بلا أي policy** — قفل كامل، نفس نمط `carts`/`orders`، وصول حصري عبر `service_role` (`khalil.repository.ts`).
+- **`tenant_id` قابل لـ`NULL`** — يبقى `null` لجلسات غير مرتبطة بتاجر (عملاء، `platform_admin`) — لم يُستخدَم فعلياً بعد إلا لجلسات التاجر.
+- **`expires_at` بدل `is_revoked`** — انتهاء صلاحية زمني ثابت (7 أيام، `TODO` غير معتمد رسمياً — نفس نمط `BR-016`) لا آلية تجديد. الإبطال الفعلي (`destroySession`، تسجيل الخروج) يحذف الصف مباشرة بدل وضع علم.
+- **لا فحص جلسات منتهية دورياً (Cron/Cleanup)** — صفوف الجلسات المنتهية تبقى في الجدول إلى الأبد ما لم تُحذَف يدوياً عبر تسجيل خروج فعلي. تحسين مستقبلي غير مبنيّ.
 
 ---
 
@@ -218,7 +250,6 @@ create index order_status_history_order_id_idx on order_status_history (order_id
 | الجدول | ينتمي لِـ | مخطَّط لليوم | الحالة |
 |---|---|---|---|
 | `stores` | Tenant (طبقة فرعية تحت `merchants`) | غير مجدوَل بعد | `CONCEPTUAL` |
-| `sessions` | Khalil | مع تسجيل الدخول | `CONCEPTUAL` — لم يُبنَ بعد رغم إنشاء `merchants`, `carts`, `orders` |
 | `audit_log` | Audit (عام، خارج نطاق طلب واحد) | اليوم 12 (يوم الأمان، بعد الإزاحة) | `CONCEPTUAL` — `order_status_history` (تدقيق خاص بالطلبات فقط) `IMPLEMENTED` منذ اليوم 9، راجع §3 |
 | `product_variant`, `sku`, `barcode`, `packaging` | Catalog (العمق الكامل) | غير مجدوَل بعد — أُجِّل لصالح Vertical Slice أولاً | `CONCEPTUAL` |
 
@@ -241,11 +272,14 @@ create index order_status_history_order_id_idx on order_status_history (order_id
 | `categories` | قراءة عامة للأقسام النشطة | `IMPLEMENTED` |
 | `products` | قراءة عامة للمنتجات النشطة | `IMPLEMENTED` |
 | `inventory` | قراءة عامة | `IMPLEMENTED` |
-| `merchants` | تمنع إدراج/كتابة بمفتاح `anon` (تحقَّق منه فعلياً) — نص السياسة الدقيق `OPEN_QUESTION` | `IMPLEMENTED` (جزئياً موثَّق) |
+| `merchants` | بلا أي policy — قفل كامل، وصول حصري عبر `service_role` (اليوم 10، `ADR-012` — كانت قراءة عامة إلى اليوم 9، راجع الملاحظة الأمنية أدناه) | `IMPLEMENTED` |
 | `carts`, `cart_items` | بلا أي policy — قفل كامل لـ`anon`/`authenticated`، وصول حصري عبر `service_role` (اليوم 7، `ADR-008`) | `IMPLEMENTED` |
 | `orders`, `order_items`, `order_status_history` | بلا أي policy — نفس نمط القفل الكامل (اليوم 8، `ADR-009`؛ الثالث اليوم 9، `ADR-010`) | `IMPLEMENTED` (دورة حياة كاملة) |
+| `sessions` | بلا أي policy — قفل كامل، وصول حصري عبر `service_role` (اليوم 10، `ADR-012`) | `IMPLEMENTED` |
 
 **سياسات الكتابة (Insert/Update/Delete) لا تزال غير موجودة/موثَّقة على `users`/`categories`/`products`/`inventory` — `OPEN_QUESTION` صريح يحتاج حسماً قبل بناء بوابة التاجر الكاملة (اليوم 5+).**
+
+**✅ ملاحظة أمنية محلولة (اكتُشفت أثناء تخطيط اليوم 10، حُسمت في تنفيذه):** إلى اليوم 9، `merchants` كانت قابلة للقراءة العامة بالكامل عبر `anon` — `phone` و`owner_id` لكل تاجر مقروءان من أي طرف يملك مفتاح `anon` العام. تحقَّقنا فعلياً أن لا مستهلك واحد لهذه القراءة العامة في كامل الكود (النطاق دُفن منذ اليوم 4 بلا استخدام)، فحُذفت السياسة بالكامل (`ADR-012`) بدل تقييدها لأعمدة علنية فقط — الحل الأبسط الممكن لأن لا حاجة فعلية للقراءة العامة أصلاً حتى الآن.
 
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.6
+version: 1.7
 last_updated: 2026-09-02
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف
@@ -168,6 +168,24 @@ Alternatives: (أ) الإبقاء على typescript@7 وقبول أداة معط
 Why: قرار المؤسس المباشر — عُرضت الخيارات الثلاثة صراحة (خفض TS، التحول لـESLint، الإبقاء على TS7 وتأجيل الفحص) عبر سؤال مباشر، واختار المؤسس خفض typescript كأبسط حل يحل المشكلة من جذرها.
 Consequences: `npx tsc --noEmit` ومجموعة الاختبارات الـ30 بالكامل أُعيد التحقق منهما بعد الخفض — بلا أي خطأ جديد أو تغيّر سلوك. Next.js لا يعلن peerDependency صريحاً على typescript (تحقَّق منه بالبحث في package.json الخاص به) — لا تعارض متوقَّع. أي رفع مستقبلي لـtypescript إلى 7+ يجب أن يعيد فحص توافق dependency-cruiser أولاً (أو الانتقال لبديل) قبل الترقية، وإلا يعود الفاحص للفشل الصامت.
 Related Documents: docs/ARCHITECTURE.md §3.1, ADR-005, ADR-009, .dependency-cruiser.cjs, .husky/pre-commit, .husky/pre-push, AGENTS.md بند 9
+```
+
+---
+
+## ADR-012
+```
+Title: طلبات التاجر — جلسة حقيقية مصغّرة بالهاتف بلا كلمة مرور (sessions)، قفل merchants بالكامل، وعزل مستأجرين في transitionStatus
+Status: ACCEPTED
+Date: 2026-09-02 (اليوم 10 من خطة الـ14 يوماً)
+Decision: (أ) جدول sessions جديد (token, user_id, tenant_id nullable, role, expires_at) — كان CONCEPTUAL منذ اليوم 2. تسجيل دخول تاجر عبر MerchantService.loginOwnerByPhone(phone): بحث بالهاتف الشخصي لمالك التاجر (role=merchant_owner في users، لا merchants.phone) عبر KhalilService.findUserByPhone (جديد، بلا إنشاء تلقائي — عكس findOrCreateCustomerByPhone)، ثم التحقق من وجود merchants.owner_id مطابق ونشط، ثم KhalilService.createSession — يُفعِّل لأول مرة Session/canAccessTenant الموجودين في khalil منذ اليوم 4 بلا أي مستهلك فعلي حتى الآن. الرمز (token) عشوائي فقط في cookie httpOnly (نفس نمط cart-session.ts، ADR-008) — tenantId/role لا يصلان العميل أبداً، يُقرآن من قاعدة البيانات في كل طلب عبر MerchantService.validateSessionToken.
+          (ب) حذف سياسة القراءة العامة على merchants ("Merchants are viewable by everyone") — اكتُشفت أثناء تخطيط اليوم 10 أنها تكشف phone/owner_id لأي anon بلا أي مستهلك فعلي واحد في الكود (النطاق دُفن منذ اليوم 4). merchants الآن مقفول بالكامل، نفس نمط carts/orders، وصول حصري عبر service_role — merchant.repository.ts تحوَّل من anon إلى service_role (كان create() تحديداً معطَّلاً صامتاً من الأساس، نفس نمط اكتشاف ADR-009 مع khalil).
+          (ج) TransitionOrderStatusInput.tenantId جديد (اختياري في النوع، إلزامي فعلياً بالتحقق البرمجي لأدوار merchant_owner/merchant_manager/employee) — orders.service.ts.transitionStatus() يرفض أي تاجر يحاول تغيير حالة طلب لا يخص tenantId جلسته، قبل حتى فحص صحة الانتقال نفسه.
+          (د) دمج canAccessTenant المكرَّرة — كانت موجودة بنسختين مختلفتين (khalilService بمعامل tenantId مباشر، merchantService بمعامل Merchant كامل)، كلتاهما بلا أي مستدعٍ فعلياً. أُبقي على نسخة khalilService (Session نطاق خليل)، حُذفت نسخة merchantService.
+Context: اليوم 9 بنى دورة حياة الطلب الكاملة لكن بلا أي واجهة تاجر فعلية تستخدمها. طلب المؤسس صراحة "جلسة حقيقية مصغّرة" بدل تاجر واحد مُثبَّت في الكود (خيار أضعف) أو Supabase Auth كاملة (نطاق أكبر بكثير من "الميزة القادمة المخطط لها بدقة"، CONSTITUTION §1). تحقُّق حي أثناء التخطيط (لا من التوثيق) كشف مشكلتين حقيقيتين غير موثَّقتين سابقاً: قراءة merchants العامة، وغياب فحص عزل المستأجرين في transitionStatus من اليوم 9.
+Alternatives: (أ) تاجر واحد مُثبَّت بلا تسجيل دخول إطلاقاً — رُفض صراحة من المؤسس: يفتح مساحة أكبر لتغيير حالة طلبات حقيقية بلا أي حماية هوية، عكس فلسفة الحماية الحتمية المبنية اليوم 9.5 مباشرة. (ب) Supabase Auth كاملة أولاً — رُفض: نطاق أكبر بكثير من طلبات التاجر تحديداً، يخالف مبدأ Vertical Slice. (ج) تقييد قراءة merchants لأعمدة علنية عبر view بدل حذف السياسة بالكامل — رُفض: لا حاجة فعلية للقراءة العامة أصلاً (صفر مستهلكين)، القفل الكامل أبسط وأكثر أماناً بلا تضحية بميزة فعلية.
+Why: قرار المؤسس المباشر (اختيار صريح من 3 خيارات معروضة). القفل الكامل لـmerchants وإضافة عزل المستأجرين كلاهما لم يُطلَب صراحة بالتفصيل لكنهما امتداد مباشر ضروري لنفس القرار — أي جلسة تاجر حقيقية بلا هذين الإصلاحين تبقى شكلية فقط (تسجيل دخول حقيقي فوق ثغرتين حقيقيتين).
+Consequences: تسجيل الدخول بلا كلمة مرور يبقى ثغرة معروفة — أي طرف يعرف هاتف تاجر نشط يستطيع انتحاله بالكامل (لا OTP، لا تحقق ثانٍ). مقبول مؤقتاً لتاجر تجريبي واحد فقط، **يجب** إغلاقه قبل تسجيل تاجر ثانٍ حقيقي (راجع specs/merchant/SPEC.md → Open Questions). مدة الجلسة (7 أيام) وTTL بلا قرار مؤسس رسمي — TODO صريح، نفس نمط BR-016. ready→out_for_delivery وout_for_delivery→delivered لا تزالان مُخوَّلتين لأدوار التاجر/الإدارة مؤقتاً (لا نطاق برق/مندوب — قرار ADR-010 لم يتغيّر).
+Related Documents: docs/DATABASE.md §3 (sessions)، §6 (RLS)، docs/DOMAIN_MAP.md → Merchant/Orders/Khalil، specs/merchant/SPEC.md، ADR-005 (اتجاه الاعتماد)، ADR-009، ADR-010
 ```
 
 ---

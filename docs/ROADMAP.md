@@ -1,7 +1,7 @@
 ---
 title: خارطة الطريق
 status: ACTIVE
-version: 1.4
+version: 1.5
 last_updated: 2026-09-02
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTION.md §23 (الخطة الأصلية)
@@ -33,8 +33,8 @@ source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTI
 | 7 | السلة (Cart) | `DONE` — راجع `docs/DECISIONS.md → ADR-008`، `docs/DATABASE.md §3` |
 | 8 | Checkout (سلة → طلب PENDING) | `DONE` — `CHECKOUT-001`، راجع `docs/DECISIONS.md → ADR-009` |
 | 9 | دورة حياة الطلب الكاملة (Orders) | `DONE` — `ORDERS-002`، راجع `docs/DECISIONS.md → ADR-010`، `specs/orders/README.md` |
-| 10 | طلبات التاجر | `NEXT` |
-| 11 | لوحة الإدارة الأساسية | `PLANNED` |
+| 10 | طلبات التاجر | `DONE` — بوابة تاجر فعلية (دخول بالهاتف + جلسة حقيقية + قائمة طلبات + تغيير حالة)، راجع `docs/DECISIONS.md → ADR-012`، `specs/merchant/SPEC.md` |
+| 11 | لوحة الإدارة الأساسية | `NEXT` |
 | 12 | يوم الأمان الكامل | `PLANNED` |
 | 13 | الاختبار الشامل | `PLANNED` |
 | 14 | التجهيز للإنتاج | `PLANNED` |

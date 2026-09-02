@@ -1,7 +1,7 @@
 // src/core/modules/merchant/merchant.repository.ts
 // الاتصال بقاعدة البيانات الخاص بالتاجر — لا منطق أعمال هنا، فقط قراءة/كتابة
 
-import { supabase } from '../../kernel/database/supabase-client';
+import { supabaseAdmin } from '../../kernel/database/supabase-admin-client';
 import type { Merchant, MerchantRegistrationInput } from './types';
 
 interface MerchantRow {
@@ -30,25 +30,25 @@ function toMerchant(row: MerchantRow): Merchant {
 
 export class MerchantRepository {
   async findById(id: string): Promise<Merchant | null> {
-    const { data, error } = await supabase.from('merchants').select('*').eq('id', id).maybeSingle();
+    const { data, error } = await supabaseAdmin.from('merchants').select('*').eq('id', id).maybeSingle();
     if (error) throw error;
     return data ? toMerchant(data as MerchantRow) : null;
   }
 
   async findBySlug(slug: string): Promise<Merchant | null> {
-    const { data, error } = await supabase.from('merchants').select('*').eq('slug', slug).maybeSingle();
+    const { data, error } = await supabaseAdmin.from('merchants').select('*').eq('slug', slug).maybeSingle();
     if (error) throw error;
     return data ? toMerchant(data as MerchantRow) : null;
   }
 
   async findByOwnerId(ownerId: string): Promise<Merchant | null> {
-    const { data, error } = await supabase.from('merchants').select('*').eq('owner_id', ownerId).maybeSingle();
+    const { data, error } = await supabaseAdmin.from('merchants').select('*').eq('owner_id', ownerId).maybeSingle();
     if (error) throw error;
     return data ? toMerchant(data as MerchantRow) : null;
   }
 
   async create(input: MerchantRegistrationInput): Promise<Merchant> {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('merchants')
       .insert({
         owner_id: input.ownerId,

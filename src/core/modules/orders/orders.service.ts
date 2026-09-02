@@ -13,10 +13,15 @@ import {
   ORDER_TRANSITION_ACTORS,
   type CheckoutInput,
   type Order,
+  type OrderActorRole,
   type OrderStatusHistoryEntry,
   type OrderWithItems,
   type TransitionOrderStatusInput,
 } from './types';
+
+// أدوار مرتبطة بتاجر محدد — يجب أن يطابق tenantId المُرسَل tenant_id الطلب نفسه (اليوم 10).
+// platform_admin يرى/يُغيّر كل شيء بلا قيد تاجر، system لا يُستخدَم فعلياً بعد الإنشاء الأولي.
+const TENANT_SCOPED_ACTOR_ROLES: readonly OrderActorRole[] = ['merchant_owner', 'merchant_manager', 'employee'];
 
 export class OrdersService {
   // TODO(BR-016): لا حد أدنى لقيمة الطلب مطبَّق بعد — القيمة غير معتمدة رسمياً.
@@ -103,12 +108,27 @@ export class OrdersService {
     return ordersRepository.findStatusHistory(orderId);
   }
 
+  // طلبات تاجر واحد فقط — للوحة التاجر (اليوم 10). tenantId يجب أن يأتي من الجلسة، أبداً من
+  // مدخل يتحكم به العميل (CONSTITUTION §4 بند 3) — هذا الالتزام مسؤولية المستدعي (Server Action).
+  async getOrdersForTenant(tenantId: string): Promise<Order[]> {
+    return ordersRepository.findOrdersByTenantId(tenantId);
+  }
+
   // ينفّذ انتقال حالة واحداً وفق آلة الحالات في types.ts (ORDER_TRANSITIONS)، ويرفض أي انتقال
   // غير مسموح أو فاعل غير مخوَّل بدل تنفيذه صامتاً — نفس منطق الرفض الصريح في checkout()
   async transitionStatus(input: TransitionOrderStatusInput): Promise<Order> {
     const order = await ordersRepository.findOrderById(input.orderId);
     if (!order) {
       throw new Error('الطلب غير موجود');
+    }
+
+    // عزل المستأجرين (اليوم 10): فاعل تابع لتاجر لا يستطيع لمس طلب تاجر آخر، حتى لو كان
+    // الانتقال والدور نفسهما صحيحين لولا هذا القيد — يُفحَص أولاً، قبل حتى صحة الانتقال،
+    // لتفادي تسريب أي معلومة عن حالة طلب لا يملك الفاعل حق رؤيته أصلاً.
+    if (TENANT_SCOPED_ACTOR_ROLES.includes(input.actorRole)) {
+      if (input.tenantId !== order.tenantId) {
+        throw new Error('هذا الطلب لا يخص تاجرك — لا يمكنك تغيير حالته');
+      }
     }
 
     const allowedNextStatuses = ORDER_TRANSITIONS[order.status];

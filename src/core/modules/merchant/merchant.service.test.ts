@@ -1,0 +1,112 @@
+// src/core/modules/merchant/merchant.service.test.ts
+// اختبارات وحدة — تُموّه khalilService وmerchantRepository؛ منطق merchant.service.ts نفسه حقيقي
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { User, Session } from '../../kernel/khalil/types';
+import type { Merchant } from './types';
+
+const owner: User = {
+  id: 'user-owner-1',
+  fullName: 'صاحب المحل',
+  phone: '01000000000',
+  role: 'merchant_owner',
+  createdAt: new Date().toISOString(),
+};
+
+const customer: User = {
+  id: 'user-customer-1',
+  fullName: 'زبون',
+  phone: '01011111111',
+  role: 'customer',
+  createdAt: new Date().toISOString(),
+};
+
+const activeMerchant: Merchant = {
+  id: 'merchant-1',
+  ownerId: owner.id,
+  businessName: 'محل تجريبي',
+  phone: '01022222222',
+  slug: 'test-merchant',
+  commissionRate: 5,
+  isActive: true,
+  createdAt: new Date().toISOString(),
+};
+
+const session: Session = { userId: owner.id, tenantId: activeMerchant.id, role: 'merchant_owner', expiresAt: new Date(Date.now() + 1000).toISOString() };
+
+vi.mock('../../kernel/khalil/service', () => ({
+  khalilService: {
+    findUserByPhone: vi.fn(),
+    createSession: vi.fn(async () => ({ token: 'session-token-1', session })),
+  },
+}));
+
+vi.mock('./merchant.repository', () => ({
+  merchantRepository: {
+    findByOwnerId: vi.fn(),
+  },
+}));
+
+const { merchantService } = await import('./merchant.service');
+const { khalilService } = await import('../../kernel/khalil/service');
+const { merchantRepository } = await import('./merchant.repository');
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+describe('MerchantService.loginOwnerByPhone', () => {
+  it('ينجح: هاتف صاحب تاجر نشط → token وجلسة صحيحة', async () => {
+    vi.mocked(khalilService.findUserByPhone).mockResolvedValue(owner);
+    vi.mocked(merchantRepository.findByOwnerId).mockResolvedValue(activeMerchant);
+
+    const result = await merchantService.loginOwnerByPhone(owner.phone);
+
+    expect(result).not.toBeNull();
+    expect(result!.token).toBe('session-token-1');
+    expect(khalilService.createSession).toHaveBeenCalledWith({
+      userId: owner.id,
+      tenantId: activeMerchant.id,
+      role: 'merchant_owner',
+      ttlSeconds: expect.any(Number),
+    });
+  });
+
+  it('يرفض (null) رقماً غير مسجَّل إطلاقاً', async () => {
+    vi.mocked(khalilService.findUserByPhone).mockResolvedValue(null);
+
+    const result = await merchantService.loginOwnerByPhone('01099999999');
+
+    expect(result).toBeNull();
+    expect(khalilService.createSession).not.toHaveBeenCalled();
+  });
+
+  it('يرفض (null) مستخدماً مسجَّلاً لكن ليس merchant_owner (عميل عادي)', async () => {
+    vi.mocked(khalilService.findUserByPhone).mockResolvedValue(customer);
+
+    const result = await merchantService.loginOwnerByPhone(customer.phone);
+
+    expect(result).toBeNull();
+    expect(merchantRepository.findByOwnerId).not.toHaveBeenCalled();
+  });
+
+  it('يرفض (null) مالك تاجر بلا سجل merchant مرتبط (بيانات ناقصة)', async () => {
+    vi.mocked(khalilService.findUserByPhone).mockResolvedValue(owner);
+    vi.mocked(merchantRepository.findByOwnerId).mockResolvedValue(null);
+
+    const result = await merchantService.loginOwnerByPhone(owner.phone);
+
+    expect(result).toBeNull();
+    expect(khalilService.createSession).not.toHaveBeenCalled();
+  });
+
+  it('يرفض (null) تاجراً معطَّلاً (isActive: false)', async () => {
+    vi.mocked(khalilService.findUserByPhone).mockResolvedValue(owner);
+    vi.mocked(merchantRepository.findByOwnerId).mockResolvedValue({ ...activeMerchant, isActive: false });
+
+    const result = await merchantService.loginOwnerByPhone(owner.phone);
+
+    expect(result).toBeNull();
+    expect(khalilService.createSession).not.toHaveBeenCalled();
+  });
+});

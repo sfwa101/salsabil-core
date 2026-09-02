@@ -1,7 +1,7 @@
 ---
 title: سجل التغييرات
 status: ACTIVE
-version: 1.3
+version: 1.4
 last_updated: 2026-09-02
 owner: Claude (تلقائي مع كل مهمة كبيرة)
 source_of_truth: هذا الملف + Git log
@@ -12,6 +12,21 @@ source_of_truth: هذا الملف + Git log
 > يُسجَّل هنا فقط التغييرات المهمة (معمارية، قواعد أعمال، قاعدة بيانات، أمان، UX، قرارات، خارطة طريق) — لا كل commit صغير.
 
 ---
+
+## 2026-09-02 (اليوم 10) — طلبات التاجر: تسجيل دخول حقيقي + بوابة طلبات (ADR-012)
+- خطة صريحة عُرضت واعتُمدت قبل أي كود — سؤال مباشر للمؤسس بين 3 خيارات لهوية التاجر (جلسة حقيقية مصغّرة / بلا تسجيل دخول إطلاقاً / تأجيل ليوم Supabase Auth كاملة)، اختار المؤسس الخيار الأول
+- **اكتشافان أمنيان حقيقيان أثناء التحقق الحي من قاعدة البيانات (لا من التوثيق) قبل التنفيذ:**
+  1. `merchants` كانت قابلة للقراءة العامة بالكامل عبر `anon` منذ اليوم 4 (`phone`/`owner_id` مكشوفان) — تحقَّقنا أن لا مستهلك فعلي واحد لها في الكود، فحُذفت السياسة بالكامل بدل تقييدها
+  2. `OrdersService.transitionStatus()` (اليوم 9) بلا أي فحص عزل مستأجرين — تاجر كان يستطيع نظرياً تغيير حالة طلب تاجر آخر بمجرد معرفة `orderId`. أُغلقت الفجوة بإضافة `tenantId` إلزامي فعلياً لأدوار التاجر
+- جدول `sessions` جديد (كان `CONCEPTUAL` منذ اليوم 2) — يُفعِّل لأول مرة `Session`/`canAccessTenant` الموجودين في `khalil` منذ اليوم 4 بلا مستهلك فعلي
+- `MerchantService.loginOwnerByPhone()` — تسجيل دخول بالهاتف الشخصي لمالك التاجر بلا كلمة مرور (خطر أمني معروف ومقبول مؤقتاً، تاجر تجريبي واحد فقط الآن)
+- `KhalilService`: أربع دوال جديدة (`findUserByPhone` بلا إنشاء تلقائي، `createSession`, `validateSessionToken`, `destroySession`)
+- دمج تكرار: `canAccessTenant` كانت موجودة بنسختين (`khalilService` و`merchantService`) بلا أي مستدعٍ فعلياً لأيّهما — أُبقي على نسخة `khalilService`، حُذفت الأخرى
+- `merchant.repository.ts` تحوَّل من مفتاح `anon` إلى `service_role` — `create()` كان معطَّلاً صامتاً من الأساس (RLS يمنع إدراج `anon`)، نفس نمط اكتشاف `ADR-009` مع `khalil`
+- بوابة تاجر فعلية جديدة (`src/app/merchant/`): `/login` (نموذج هاتف) و`/orders` (قائمة معزولة بالتاجر، أزرار تغيير حالة نصية مبنية على `ORDER_TRANSITIONS ∩ ORDER_TRANSITION_ACTORS`)، بلا `manager`/`employee` (مالك واحد فقط لكل تاجر)
+- 17 اختباراً جديداً (5 وحدة merchant + 5 وحدة khalil session + 2 وحدة orders tenant-isolation + 5 تكامل حي merchant/orders) — المجموع الآن 55 اختباراً، كلها خضراء تحت `npm test` الكامل (وحدة + تكامل)
+- تحقق فعلي عبر متصفح حقيقي (Playwright): دخول بهاتف حقيقي → قائمة فارغة صحيحة → طلب مزروع يظهر → "تأكيد الطلب" يحدّث الحالة حياً → تسجيل خروج → مسار محمي يُعيد التوجيه → هاتف خاطئ يُظهر رسالة الخطأ الصحيحة. أثر جانبي حميد ملاحَظ: تحذير hydration mismatch من Playwright نفسه (`caret-color:transparent` يُحقَن آلياً عند ملء حقول الإدخال آلياً) — تحقَّقنا أنه لا يظهر في تفاعل مستخدم حقيقي وأنه لا علاقة له بمنطق التطبيق (نفس النمط غير موجود في نماذج الأيام السابقة)
+- تحديث `docs/DATABASE.md` (§merchants مقفول، §sessions جديد، تصحيح تصنيف RLS التاريخي)، `docs/DOMAIN_MAP.md` (Khalil, Tenant/Merchant, Orders)، `docs/ARCHITECTURE.md` (شجرة src/، عدد الجداول 11)، `docs/DECISIONS.md` (`ADR-012`)، `docs/ROADMAP.md` (اليوم 10 → DONE)، `specs/merchant/SPEC.md` (نسخة 2.0)، `specs/orders/README.md`
 
 ## 2026-09-02 (بين اليوم 9 واليوم 10) — حماية معمارية حتمية (Deterministic Guardrails, ADR-011)
 - Husky: `.husky/pre-commit` (typecheck + arch:check + test:unit، سريع بلا شبكة) و`.husky/pre-push` (مجموعة الاختبارات الكاملة، تشمل تكامل حي ضد Supabase)

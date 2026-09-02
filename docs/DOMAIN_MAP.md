@@ -46,12 +46,12 @@ source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md �
 | | |
 |---|---|
 | المسؤولية | الهوية، السياق (العالم/الاختصاص القضائي)، الأدوار والصلاحيات الأساسية |
-| يملك | جدول `users` |
-| البيانات | id, full_name, phone, email, role, created_at |
-| العلاقات | كل نطاق آخر يعتمد عليه لمعرفة "من المستخدم؟" |
+| يملك | جدولا `users`, `sessions` (الثاني `IMPLEMENTED` اليوم 10، كان `CONCEPTUAL` منذ اليوم 2) |
+| البيانات | `users`: id, full_name, phone, email, role, created_at. `sessions`: token, user_id, tenant_id، role, expires_at, created_at |
+| العلاقات | كل نطاق آخر يعتمد عليه لمعرفة "من المستخدم؟"؛ اليوم 10 — `MerchantService.loginOwnerByPhone` يستدعي `findUserByPhone`/`createSession` حياً بدل تكرار منطق الجلسات في نطاقه الخاص |
 | لا يحق له | حساب الأسعار، إدارة المخزون، تنفيذ عمليات دفع |
 | يستخدمه | كل التطبيقات الثلاثة (Customer, Merchant, Admin) |
-| الحالة | `PARTIALLY_IMPLEMENTED` — types.ts + service.ts + repository.ts موجودة، لا واجهة تسجيل دخول فعلية بعد، Session/Tenant من types.ts غير مربوطين بجداول فعلية بعد. **إضافة اليوم 8:** `findOrCreateCustomerByPhone()` — إنشاء/بحث مستخدم بالهاتف عبر `service_role` لسياق Checkout تحديداً (لا حل عام لتسجيل الدخول)، لأن سياسة RLS الوحيدة على `users` (`auth.uid() = id`) لا تنطبق بلا مصادقة حقيقية — راجع `ADR-009` |
+| الحالة | `PARTIALLY_IMPLEMENTED` — `Session`/`canAccessTenant` (موجودان في types.ts/service.ts منذ اليوم 4 بلا مستهلك فعلي) **مُفعَّلان فعلياً الآن** (اليوم 10) عبر `createSession`/`validateSessionToken`/`destroySession`/`findUserByPhone` الجديدة. **إضافة اليوم 8:** `findOrCreateCustomerByPhone()` — إنشاء/بحث مستخدم بالهاتف عبر `service_role` لسياق Checkout (يُنشئ عند عدم الوجود). **إضافة اليوم 10:** `findUserByPhone()` — بحث بلا إنشاء تلقائي، لتدفقات تسجيل الدخول (رفض بدل إنشاء عميل جديد خطأً). **لا يزال بلا تسجيل دخول حقيقي كامل (Supabase Auth/كلمة مرور)** — تسجيل دخول التاجر بالهاتف وحده، بلا أي تحقق ثانٍ، راجع `ADR-012` وOpen Questions في `specs/merchant/SPEC.md` |
 
 ### تيسير (Taysir) — المحرك المالي
 
@@ -154,17 +154,17 @@ source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md �
 | يستخدمه | ريف (الآن)، مستقبلاً كل عالم فيه منتجات |
 | الحالة | `IMPLEMENTED` — types.ts, catalog.service.ts (حساب السعر), catalog.repository.ts، جدول بيانات تجريبي (دجاجة بخيارات أحجام) |
 
-### Orders — Evidence: `PARTIALLY_IMPLEMENTED` (إنشاء + دورة حياة كاملة، اليوم 8 `CHECKOUT-001` + اليوم 9 `ORDERS-002`)
+### Orders — Evidence: `PARTIALLY_IMPLEMENTED` (إنشاء + دورة حياة كاملة + عزل مستأجرين + واجهة تاجر، اليوم 8-10)
 
 | | |
 |---|---|
-| المسؤولية | تحويل سلة إلى طلب (اليوم 8) ← دورة حياة كاملة بسجل تدقيق (اليوم 9): `pending → confirmed → preparing → ready → out_for_delivery → delivered`، مع `cancelled` من أي حالة غير نهائية |
+| المسؤولية | تحويل سلة إلى طلب (اليوم 8) ← دورة حياة كاملة بسجل تدقيق (اليوم 9) ← عزل مستأجرين + واجهة تاجر (اليوم 10): `pending → confirmed → preparing → ready → out_for_delivery → delivered`، مع `cancelled` من أي حالة غير نهائية |
 | يملك | جداول `orders`, `order_items`, `order_status_history` — **الثلاثة `IMPLEMENTED`** |
 | البيانات | راجع `docs/DATABASE.md §3` (قسم `orders`, `order_items`, `order_status_history`) |
-| العلاقات | يستدعي `CatalogService.calculatePrice`/`validateSelection` حياً لتجميد `unit_price_snapshot` (لا يُعيد كتابة منطق التسعير)، `InventoryService.isAvailable` لفحص حي قبل الإنشاء، `CartService.getSummary`/`clearCart`، `KhalilService.findOrCreateCustomerByPhone`، `CashOnDeliveryProvider.charge` |
-| لا يحق له | تعديل سعر منتج، تعديل مخزون مباشرة (فحص فقط، لا حجز)، **تقسيم طلب واحد لعدة تجار (`PROPOSED` ومؤجَّل — راجع الملاحظة أدناه)**، السماح لـ`customer` بتغيير أي حالة (لا مصادقة حقيقية تُثبت ملكية الطلب — راجع `specs/orders/README.md` → Open Questions) |
-| يستخدمه | ريف (الآن) |
-| الحالة | `PARTIALLY_IMPLEMENTED` — `types.ts` (`ORDER_TRANSITIONS`, `ORDER_TRANSITION_ACTORS` كمصدر حقيقة وحيد لآلة الحالات)، `orders.service.ts` (`checkout`, `transitionStatus`, `getStatusHistory`)، `orders.repository.ts` (`src/core/modules/orders/`)، مُختبَر (30 اختباراً: وحدة + تكامل ضد Supabase حقيقي، يغطي دورة الحياة الكاملة + رفض القفز/الفاعل غير المخوَّل/الحالة النهائية). لا واجهة مستخدم لتغيير الحالة بعد (اليوم 10). موثَّق في `ADR-009`/`ADR-010` (`docs/DECISIONS.md`) وSpec كامل في `specs/orders/README.md` |
+| العلاقات | يستدعي `CatalogService.calculatePrice`/`validateSelection` حياً لتجميد `unit_price_snapshot`، `InventoryService.isAvailable` لفحص حي قبل الإنشاء، `CartService.getSummary`/`clearCart`، `KhalilService.findOrCreateCustomerByPhone`، `CashOnDeliveryProvider.charge` — **اليوم 10:** بوابة التاجر (`src/app/merchant/orders/`) تستدعي `getOrdersForTenant`/`transitionStatus` بـ`tenantId` من جلسة `MerchantService`/`KhalilService` |
+| لا يحق له | تعديل سعر منتج، تعديل مخزون مباشرة (فحص فقط، لا حجز)، **تقسيم طلب واحد لعدة تجار (`PROPOSED` ومؤجَّل — راجع الملاحظة أدناه)**، السماح لـ`customer` بتغيير أي حالة، **السماح لتاجر بتغيير حالة طلب لا يخص `tenantId` جلسته (اليوم 10، `ADR-012`)** |
+| يستخدمه | ريف (الآن)، بوابة التاجر (اليوم 10) |
+| الحالة | `PARTIALLY_IMPLEMENTED` — `types.ts` (`ORDER_TRANSITIONS`, `ORDER_TRANSITION_ACTORS` كمصدر حقيقة وحيد لآلة الحالات)، `orders.service.ts` (`checkout`, `transitionStatus` بعزل مستأجرين، `getStatusHistory`, `getOrdersForTenant` جديد اليوم 10)، `orders.repository.ts`، مُختبَر (55 اختباراً إجمالياً في المشروع: وحدة + تكامل ضد Supabase حقيقي، يغطي دورة الحياة الكاملة + رفض القفز/الفاعل غير المخوَّل/الحالة النهائية/عزل المستأجرين). **واجهة مستخدم لتغيير الحالة `IMPLEMENTED` الآن (اليوم 10)** — `src/app/merchant/orders/`، مُتحقَّق منها فعلياً في متصفح حقيقي (دخول → عرض طلب → تأكيد → تحديث حي للحالة). موثَّق في `ADR-009`/`ADR-010`/`ADR-012` (`docs/DECISIONS.md`) وSpec في `specs/orders/README.md` |
 
 > **ملاحظة صريحة — تقسيم الطلب لكل تاجر (Multi-Vendor Order Splitting):** `PROPOSED`، مؤجَّل عمداً. تحقَّقت مباشرة من Supabase الحي وقت تخطيط اليوم 8: `products` يحتوي **صفاً واحداً فقط**، من تاجر واحد فقط — رياضياً يستحيل اليوم أن تحتوي أي سلة حقيقية أكثر من تاجر. لذا نُفِّذ طلب واحد بعمود `tenant_id` واحد إلزامي، بلا منطق تقسيم. `orders.service.ts` يرفض صراحة (خطأ واضح، لا طلب خاطئ صامت) أي محاولة Checkout لسلة تحتوي منتجات من أكثر من `tenant_id` — **هذا التحقق الدفاعي موجود فعلاً، لكن منطق التقسيم الفعلي (طلب مستقل لكل تاجر من نفس السلة) غير مبني**، ويُبنى فقط عند وجود تاجر ثانٍ فعلياً.
 
@@ -207,13 +207,13 @@ source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md �
 
 | | |
 |---|---|
-| المسؤولية | عزل بيانات كل تاجر (`tenant_id` من الجلسة فقط، لا من طلب العميل) |
+| المسؤولية | عزل بيانات كل تاجر (`tenant_id` من الجلسة فقط، لا من طلب العميل)؛ **اليوم 10:** تسجيل دخول تاجر (`loginOwnerByPhone`) |
 | يملك | جدول `merchants` (`stores` لا يزال `CONCEPTUAL`) |
 | البيانات | راجع `docs/DATABASE.md §3` (`merchants`) و`specs/merchant/SPEC.md` |
-| العلاقات | `Catalog.products.tenant_id` يُشير إلى `merchants.id`؛ يعتمد على `Session.tenantId` من Khalil |
-| لا يحق له | حساب الأسعار (يبقى في Catalog)، تعديل صلاحيات مستخدم مباشرة |
-| يستخدمه | ريف (الآن)، بوابة التاجر (مخطَّطة) |
-| الحالة | `PARTIALLY_IMPLEMENTED` — جدول `merchants` + `MerchantService`/`MerchantRepository` موجودة، عزل مُختبَر فعلياً (اليوم 4)، لا واجهة تسجيل تاجر بعد، `Session` لا يزال غير مربوط بمصادقة حقيقية (نفس فجوة Khalil) |
+| العلاقات | `Catalog.products.tenant_id` يُشير إلى `merchants.id`؛ `Orders` يتحقق من تطابق `tenantId` قبل أي انتقال حالة (`ADR-012`)؛ يستدعي `KhalilService` (`findUserByPhone`, `createSession`) لتسجيل الدخول — لا يكرر منطق الجلسات في نطاقه الخاص |
+| لا يحق له | حساب الأسعار (يبقى في Catalog)، تعديل صلاحيات مستخدم مباشرة، الوصول المباشر لـ`khalil.repository.ts` (يمر عبر `khalilService` فقط — مفروض آلياً عبر `dependency-cruiser`، راجع `docs/ARCHITECTURE.md §3.1`) |
+| يستخدمه | ريف (الآن)، بوابة التاجر (`src/app/merchant/`، اليوم 10) |
+| الحالة | `PARTIALLY_IMPLEMENTED` — جدول `merchants` + `MerchantService`/`MerchantRepository` (الآن `service_role`، كان `anon` بلا استخدام فعلي حتى اليوم 10) موجودة، عزل مُختبَر فعلياً (اليوم 4). **اليوم 10:** بوابة تاجر فعلية (`src/app/merchant/login`, `src/app/merchant/orders`) تعمل حياً — دخول بالهاتف، قائمة طلبات معزولة بالتاجر، أزرار تغيير حالة تستدعي `OrdersService.transitionStatus()` بـ`tenantId` الجلسة. **لا يزال:** بلا كلمة مرور/تحقق ثانٍ (`ADR-012`)، بلا `manager`/`employee` (مالك واحد فقط لكل تاجر) |
 
 ---
 

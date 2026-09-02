@@ -90,6 +90,7 @@ describe('Orders/Checkout integration (Supabase حقيقي)', () => {
 
 describe('Orders lifecycle integration (Supabase حقيقي، اليوم 9)', () => {
   let productId: string;
+  let tenantId: string;
   const orderIdsToClean: string[] = [];
   const userIdsToClean: string[] = [];
   const cartIdsToClean: string[] = [];
@@ -98,6 +99,8 @@ describe('Orders lifecycle integration (Supabase حقيقي، اليوم 9)', ()
     const product = await catalogRepository.findProductByName('دجاجة كاملة طازجة');
     if (!product) throw new Error('منتج الاختبار "دجاجة كاملة طازجة" غير موجود في قاعدة البيانات الحقيقية');
     productId = product.id;
+    if (!product.tenantId) throw new Error('المنتج التجريبي غير مرتبط بتاجر');
+    tenantId = product.tenantId;
     await supabaseAdmin.from('inventory').upsert({ product_id: productId, quantity_available: 10 }, { onConflict: 'product_id' });
   });
 
@@ -151,7 +154,7 @@ describe('Orders lifecycle integration (Supabase حقيقي، اليوم 9)', ()
       ];
 
       for (const toStatus of path) {
-        const updated = await ordersService.transitionStatus({ orderId: order.id, toStatus, actorRole: 'merchant_owner' });
+        const updated = await ordersService.transitionStatus({ orderId: order.id, toStatus, actorRole: 'merchant_owner', tenantId });
         expect(updated.status).toBe(toStatus);
       }
 
@@ -170,10 +173,10 @@ describe('Orders lifecycle integration (Supabase حقيقي، اليوم 9)', ()
     'ترفض حياً انتقالاً من حالة نهائية (delivered → cancelled) — CHECK constraint + منطق التطبيق متطابقان',
     async () => {
       const order = await createTestOrder();
-      await ordersService.transitionStatus({ orderId: order.id, toStatus: 'confirmed', actorRole: 'merchant_owner' });
+      await ordersService.transitionStatus({ orderId: order.id, toStatus: 'confirmed', actorRole: 'merchant_owner', tenantId });
       // نمر بأقصر مسار ممكن إلى delivered عبر الحالات الوسيطة (لا قفز مسموح)
       for (const toStatus of ['preparing', 'ready', 'out_for_delivery', 'delivered'] as const) {
-        await ordersService.transitionStatus({ orderId: order.id, toStatus, actorRole: 'merchant_owner' });
+        await ordersService.transitionStatus({ orderId: order.id, toStatus, actorRole: 'merchant_owner', tenantId });
       }
 
       await expect(
@@ -197,14 +200,31 @@ describe('Orders lifecycle integration (Supabase حقيقي، اليوم 9)', ()
 
   it('ينجح الإلغاء من preparing، حالة نهائية لا مزيد من الانتقالات بعدها', async () => {
     const order = await createTestOrder();
-    await ordersService.transitionStatus({ orderId: order.id, toStatus: 'confirmed', actorRole: 'merchant_owner' });
-    await ordersService.transitionStatus({ orderId: order.id, toStatus: 'preparing', actorRole: 'merchant_owner' });
+    await ordersService.transitionStatus({ orderId: order.id, toStatus: 'confirmed', actorRole: 'merchant_owner', tenantId });
+    await ordersService.transitionStatus({ orderId: order.id, toStatus: 'preparing', actorRole: 'merchant_owner', tenantId });
 
-    const cancelled = await ordersService.transitionStatus({ orderId: order.id, toStatus: 'cancelled', actorRole: 'merchant_owner' });
+    const cancelled = await ordersService.transitionStatus({ orderId: order.id, toStatus: 'cancelled', actorRole: 'merchant_owner', tenantId });
     expect(cancelled.status).toBe('cancelled');
 
     await expect(
-      ordersService.transitionStatus({ orderId: order.id, toStatus: 'confirmed', actorRole: 'merchant_owner' })
+      ordersService.transitionStatus({ orderId: order.id, toStatus: 'confirmed', actorRole: 'merchant_owner', tenantId })
     ).rejects.toThrow(/لا يمكن الانتقال/);
+  });
+
+  it('ترفض حياً تاجراً يحاول تغيير حالة طلب تاجر آخر (عزل المستأجرين، اليوم 10)', async () => {
+    const order = await createTestOrder();
+
+    await expect(
+      ordersService.transitionStatus({ orderId: order.id, toStatus: 'confirmed', actorRole: 'merchant_owner', tenantId: randomUUID() })
+    ).rejects.toThrow(/لا يخص تاجرك/);
+  });
+
+  it('getOrdersForTenant يعيد طلبات هذا التاجر فقط ضمن نتائج حقيقية من قاعدة البيانات', async () => {
+    const order = await createTestOrder();
+
+    const orders = await ordersService.getOrdersForTenant(tenantId);
+
+    expect(orders.some((o) => o.id === order.id)).toBe(true);
+    expect(orders.every((o) => o.tenantId === tenantId)).toBe(true);
   });
 });

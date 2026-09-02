@@ -145,6 +145,16 @@ export class OrdersRepository {
     return (data as OrderItemRow[]).map(toOrderItem);
   }
 
+  async findOrdersByTenantId(tenantId: string): Promise<Order[]> {
+    const { data, error } = await supabaseAdmin
+      .from('orders')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data as OrderRow[]).map(toOrder);
+  }
+
   async updateOrderStatus(orderId: string, status: OrderStatus): Promise<Order> {
     const { data, error } = await supabaseAdmin
       .from('orders')

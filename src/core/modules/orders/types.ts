@@ -24,6 +24,28 @@ export const ORDER_STATUSES = [
 
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
+// تسمية عربية موحَّدة لكل حالة — مصدر واحد يُعاد استخدامه في أي واجهة (تاجر الآن، عميل/إدارة لاحقاً)
+export const ORDER_STATUS_LABELS_AR: Record<OrderStatus, string> = {
+  pending: 'قيد الانتظار',
+  confirmed: 'مؤكَّد',
+  preparing: 'جارٍ التحضير',
+  ready: 'جاهز للتوصيل',
+  out_for_delivery: 'في الطريق',
+  delivered: 'تم التسليم',
+  cancelled: 'ملغي',
+};
+
+// نص زر الانتقال (فعل، لا اسم حالة) — "إلغاء" لا "ملغي" مثلاً، لواجهات التاجر/الإدارة
+export const ORDER_TRANSITION_ACTION_LABELS_AR: Record<OrderStatus, string> = {
+  pending: 'إعادة لقيد الانتظار',
+  confirmed: 'تأكيد الطلب',
+  preparing: 'بدء التحضير',
+  ready: 'جاهز للتوصيل',
+  out_for_delivery: 'خروج للتوصيل',
+  delivered: 'تسليم الطلب',
+  cancelled: 'إلغاء الطلب',
+};
+
 // مصدر واحد للحقيقة لآلة الحالات (State Machine) — يستهلكه orders.service.ts لفرض
 // الانتقال، وspecs/orders/README.md يوثّقه بصرياً. لا تُعدَّل هنا بلا تحديث كليهما.
 export const ORDER_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
@@ -82,6 +104,10 @@ export interface TransitionOrderStatusInput {
   orderId: string;
   toStatus: OrderStatus;
   actorRole: OrderActorRole;
+  // إلزامي لأي فاعل تاجر (merchant_owner/manager/employee) — عزل المستأجرين (اليوم 10):
+  // الطلب يجب أن يخص هذا التاجر بالذات، وإلا رفض صريح بدل السماح لتاجر بلمس طلب تاجر آخر.
+  // اختياري فقط لـ'platform_admin' (يرى كل شيء) و'system' (لا يُستخدَم فعلياً بعد الإنشاء الأولي).
+  tenantId?: string;
   actorId?: string;
   note?: string;
 }

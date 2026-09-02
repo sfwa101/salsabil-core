@@ -1,7 +1,7 @@
 ---
 title: المعمارية التقنية
 status: ACTIVE
-version: 1.3
+version: 1.4
 last_updated: 2026-09-02
 owner: المؤسس (أبوحتاب) + Claude (معماري)
 source_of_truth: هذا الملف (تفصيل)، SALSABIL_CONSTITUTION.md §4-§5 (المبدأ)
@@ -49,8 +49,12 @@ src/
 ├── app/                 → صفحات ونقاط دخول Next.js
 │   ├── layout.tsx        → Root Layout، يحمل data-world="diwan" على <html> (الافتراضي)
 │   ├── globals.css        → طبقتا التوكنز الدلالية لكل عالم — راجع §2.1 أدناه
-│   └── (reef)/            → Route Group لعالم ريف — layout.tsx يضع data-world="reef"
-│                             على عنصر جذر (لا على <html>)، لا يغيّر مسارات URL
+│   ├── (reef)/            → Route Group لعالم ريف — layout.tsx يضع data-world="reef"
+│   │                         على عنصر جذر (لا على <html>)، لا يغيّر مسارات URL — تطبيق العميل
+│   └── merchant/          → IMPLEMENTED (اليوم 10) — بوابة التاجر (البوابة الثانية من ثلاث،
+│                             CONSTITUTION §8). data-world="reef" أيضاً. login/ (دخول بالهاتف)
+│                             وorders/ (قائمة طلبات التاجر + أزرار انتقال حالة) — بادئة URL
+│                             حقيقية (لا Route Group مقنَّع) لأنها بوابة مستقلة، لا امتداد لريف
 ├── components/          → مكونات واجهة قابلة لإعادة الاستخدام، محايدة لونياً بالكامل
 │   │                       (تستهلك فقط bg-primary/text-foreground/border-border...)
 │   └── ui/               → فارغ حالياً — shadcn/ui **غير مثبّتة** (تحقَّق منه فعلياً
@@ -63,15 +67,20 @@ src/
 │                             globals.css ويجب أن تبقى متطابقة معه يدوياً.
 ├── core/
 │   ├── kernel/          → محركات النواة (خليل، تيسير، حكيم...) — راجع DOMAIN_MAP.md
-│   │   ├── khalil/       → IMPLEMENTED (types.ts, khalil.service.ts, khalil.repository.ts)
+│   │   ├── khalil/       → IMPLEMENTED — types.ts, khalil.service.ts (+ createSession/
+│   │   │                     validateSessionToken/destroySession/findUserByPhone، اليوم 10)،
+│   │   │                     khalil.repository.ts
 │   │   └── database/     → IMPLEMENTED
 │   │       ├── supabase-client.ts        → مفتاح anon، للقراءات العامة (categories/products/inventory)
 │   │       └── supabase-admin-client.ts  → مفتاح service_role (اليوم 7، ADR-008)، خادم فقط،
 │   │                                         محمي بحزمة server-only — يُستخدَم فقط عندما RLS
-│   │                                         مقفول بالكامل (لا policy لـanon، مثل carts/merchants)
+│   │                                         مقفول بالكامل (لا policy لـanon، مثل carts/orders/
+│   │                                         merchants منذ اليوم 10/sessions)
 │   ├── modules/          → النطاقات (Catalog, Orders, Inventory...)
 │   │   ├── catalog/      → IMPLEMENTED (types.ts, catalog.service.ts, catalog.repository.ts)
-│   │   ├── merchant/     → IMPLEMENTED (types.ts, merchant.service.ts, merchant.repository.ts)
+│   │   ├── merchant/     → IMPLEMENTED — types.ts, merchant.service.ts (+ loginOwnerByPhone،
+│   │   │                     اليوم 10)، merchant.repository.ts (service_role منذ اليوم 10،
+│   │   │                     كان anon بلا استخدام فعلي)، merchant-session.ts (كوكي الجلسة)
 │   │   ├── inventory/    → IMPLEMENTED (اليوم 7) — types.ts, inventory.service.ts (isAvailable
 │   │   │                     فقط، بلا حجز), inventory.repository.ts
 │   │   ├── cart/         → IMPLEMENTED (اليوم 7) — types.ts, cart.service.ts, cart.repository.ts
@@ -182,9 +191,9 @@ ImportProvider (واجهة عامة، مقترحة من محادثة الاست�
 |---|---|---|
 | الواجهة الأمامية | Next.js (RTL) + TypeScript + Tailwind | `ACTIVE` |
 | منطق الخادم | Edge Functions / Node.js | `ACTIVE` |
-| قاعدة البيانات | Supabase (Postgres + Auth + Realtime + Storage) | `ACTIVE`, `IMPLEMENTED` (اتصال حقيقي، 10 جداول: users, categories, products, merchants, inventory, carts, cart_items, orders, order_items, order_status_history) |
-| الصلاحيات (RLS) | Postgres RLS | `IMPLEMENTED` — نمطان: قراءة عامة (categories/products/inventory) وقفل كامل عبر service_role (merchants/carts/cart_items/orders/order_items/order_status_history، اليوم 7-9) |
-| اختبارات آلية | Vitest (وحدة + تكامل ضد Supabase حقيقي) | `IMPLEMENTED` (اليوم 7-9) — راجع `src/core/modules/cart/*.test.ts`, `src/core/modules/orders/*.test.ts` |
+| قاعدة البيانات | Supabase (Postgres + Auth + Realtime + Storage) | `ACTIVE`, `IMPLEMENTED` (اتصال حقيقي، 11 جدولاً: users, categories, products, merchants, inventory, carts, cart_items, orders, order_items, order_status_history, sessions) |
+| الصلاحيات (RLS) | Postgres RLS | `IMPLEMENTED` — نمطان: قراءة عامة (categories/products/inventory) وقفل كامل عبر service_role (merchants/carts/cart_items/orders/order_items/order_status_history/sessions، اليوم 7-10) |
+| اختبارات آلية | Vitest (وحدة + تكامل ضد Supabase حقيقي) | `IMPLEMENTED` (اليوم 7-10) — راجع `src/core/modules/cart/*.test.ts`, `src/core/modules/orders/*.test.ts`, `src/core/modules/merchant/*.test.ts` |
 | البحث | Meilisearch | `PROPOSED` (§9 دستور) — لم يُبنَ |
 | الدردشة | Supabase Realtime (المرحلة 1) | `PROPOSED` — لم يُبنَ بعد، مخطط §25 دستور |
 

@@ -1,10 +1,15 @@
 // src/core/modules/merchant/merchant.service.ts
 // منطق تسجيل التاجر والتحقق من النطاق والمستأجر — لا استدعاء لقاعدة بيانات هنا مباشرة
 
+import { khalilService } from '../../kernel/khalil/service';
 import type { Session } from '../../kernel/khalil/types';
+import { merchantRepository } from './merchant.repository';
 import type { Merchant, MerchantAgreement, MerchantRegistrationInput } from './types';
 
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+// TODO: مدة الجلسة (7 أيام) قيمة عملية غير معتمدة رسمياً من المؤسس بعد — نفس نمط BR-016 (OPEN_QUESTION)
+const MERCHANT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 export class MerchantService {
   /**
@@ -19,12 +24,24 @@ export class MerchantService {
   }
 
   /**
-   * القاعدة الذهبية: tenant_id يُقارَن دائماً بمعرّف الجلسة القادم من JWT،
-   * أبداً بما يرسله العميل مباشرة (SALSABIL_CONSTITUTION.md §5)
+   * تسجيل دخول تاجر بلا كلمة مرور (اليوم 10) — بالهاتف الشخصي لمالك التاجر (role: merchant_owner
+   * في users)، لا هاتف العمل التجاري في merchants.phone. يرفض بصمت (null، لا استثناء) عند أي
+   * فشل — رقم غير مسجَّل، دور غير merchant_owner، لا تاجر مرتبط، أو تاجر معطَّل — بلا تمييز
+   * الأسباب للمستدعي (يمنع تسريب معلومة "هذا الرقم مسجَّل لكن ليس تاجراً" لطرف خبيث).
    */
-  canAccessTenant(session: Session, merchant: Merchant): boolean {
-    if (session.role === 'platform_admin') return true;
-    return session.tenantId === merchant.id;
+  async loginOwnerByPhone(phone: string): Promise<{ token: string; session: Session } | null> {
+    const user = await khalilService.findUserByPhone(phone);
+    if (!user || user.role !== 'merchant_owner') return null;
+
+    const merchant = await merchantRepository.findByOwnerId(user.id);
+    if (!merchant || !merchant.isActive) return null;
+
+    return khalilService.createSession({
+      userId: user.id,
+      tenantId: merchant.id,
+      role: user.role,
+      ttlSeconds: MERCHANT_SESSION_TTL_SECONDS,
+    });
   }
 
   isOwner(merchant: Merchant, userId: string): boolean {

@@ -87,6 +87,7 @@ vi.mock('./orders.repository', () => ({
     deleteOrder: vi.fn(),
     findOrderById: vi.fn(),
     findOrderItems: vi.fn(),
+    findOrdersByTenantId: vi.fn(async () => []),
     updateOrderStatus: vi.fn(),
     insertStatusHistory: vi.fn(async () => ({})),
     findStatusHistory: vi.fn(async () => []),
@@ -220,7 +221,7 @@ describe('OrdersService.transitionStatus', () => {
     vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'pending' }) as never);
 
     await expect(
-      ordersService.transitionStatus({ orderId: 'order-1', toStatus: 'delivered', actorRole: 'merchant_owner' })
+      ordersService.transitionStatus({ orderId: 'order-1', toStatus: 'delivered', actorRole: 'merchant_owner', tenantId: 'tenant-a' })
     ).rejects.toThrow(/لا يمكن الانتقال/);
     expect(ordersRepository.updateOrderStatus).not.toHaveBeenCalled();
   });
@@ -242,7 +243,7 @@ describe('OrdersService.transitionStatus', () => {
     expect(ordersRepository.updateOrderStatus).not.toHaveBeenCalled();
   });
 
-  it('ينجح: pending → confirmed بفاعل تاجر مخوَّل، ويسجّل قيداً في السجل بالحالتين والفاعل', async () => {
+  it('ينجح: pending → confirmed بفاعل تاجر مخوَّل يملك نفس tenantId، ويسجّل قيداً في السجل بالحالتين والفاعل', async () => {
     vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'pending' }) as never);
     vi.mocked(ordersRepository.updateOrderStatus).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
 
@@ -251,6 +252,7 @@ describe('OrdersService.transitionStatus', () => {
       toStatus: 'confirmed',
       actorRole: 'merchant_owner',
       actorId: 'merchant-user-1',
+      tenantId: 'tenant-a',
       note: 'تأكيد يدوي',
     });
 
@@ -277,5 +279,46 @@ describe('OrdersService.transitionStatus', () => {
     });
 
     expect(order.status).toBe('cancelled');
+  });
+
+  it('يرفض تاجراً يحاول تغيير حالة طلب تاجر آخر (عزل المستأجرين، اليوم 10)', async () => {
+    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'pending' }) as never); // tenant-a
+
+    await expect(
+      ordersService.transitionStatus({
+        orderId: 'order-1',
+        toStatus: 'confirmed',
+        actorRole: 'merchant_owner',
+        actorId: 'merchant-user-2',
+        tenantId: 'tenant-b', // تاجر مختلف
+      })
+    ).rejects.toThrow(/لا يخص تاجرك/);
+    expect(ordersRepository.updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('لا يفرض تطابق tenantId على platform_admin (يرى/يُغيّر كل شيء)', async () => {
+    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'pending' }) as never);
+    vi.mocked(ordersRepository.updateOrderStatus).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
+
+    const order = await ordersService.transitionStatus({
+      orderId: 'order-1',
+      toStatus: 'confirmed',
+      actorRole: 'platform_admin',
+      // بلا tenantId إطلاقاً — يجب أن ينجح رغم ذلك
+    });
+
+    expect(order.status).toBe('confirmed');
+  });
+});
+
+describe('OrdersService.getOrdersForTenant', () => {
+  it('يعيد طلبات التاجر المطلوب فقط عبر findOrdersByTenantId', async () => {
+    const tenantOrders = [makeOrder({ status: 'pending' }), makeOrder({ status: 'confirmed' })];
+    vi.mocked(ordersRepository.findOrdersByTenantId).mockResolvedValue(tenantOrders as never);
+
+    const result = await ordersService.getOrdersForTenant('tenant-a');
+
+    expect(ordersRepository.findOrdersByTenantId).toHaveBeenCalledWith('tenant-a');
+    expect(result).toEqual(tenantOrders);
   });
 });
