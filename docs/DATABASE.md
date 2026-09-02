@@ -1,8 +1,8 @@
 ---
 title: مرجع قاعدة البيانات
 status: ACTIVE
-version: 1.2
-last_updated: 2026-09-01
+version: 1.3
+last_updated: 2026-09-02
 owner: المؤسس (أبوحتاب) + Claude
 source_of_truth: Supabase Project الفعلي (للجداول المنفَّذة) + هذا الملف (للتخطيط)
 ---
@@ -17,7 +17,7 @@ source_of_truth: Supabase Project الفعلي (للجداول المنفَّذ�
 
 - لا استدعاء مباشر لقاعدة البيانات من الواجهة — فقط عبر `[domain].repository.ts`.
 - `tenant_id` يأتي من الجلسة/JWT فقط، أبداً من طلب العميل. **`IMPLEMENTED` جزئياً منذ اليوم 4** — `products.tenant_id` موجود ويُشير إلى `merchants.id`؛ التحقق الفعلي عبر `Session.tenantId` لا يزال منطقياً فقط (لا مصادقة حقيقية بعد — راجع `specs/identity/SPEC.md`)، لا `stores` بعد.
-- RLS مفعَّل على كل جدول يحوي بيانات — `IMPLEMENTED` على التسعة جداول الموجودة حالياً (`users`, `categories`, `products`, `merchants`, `inventory`, `carts`, `cart_items`, `orders`, `order_items`). نمطان مختلفان: قراءة عامة (`categories`/`products`/`inventory`) مقابل قفل كامل بلا أي policy، وصول حصري عبر `service_role` (`merchants`, `carts`, `cart_items`, `orders`, `order_items` — راجع §6 وADR-008/ADR-009).
+- RLS مفعَّل على كل جدول يحوي بيانات — `IMPLEMENTED` على العشرة جداول الموجودة حالياً (`users`, `categories`, `products`, `merchants`, `inventory`, `carts`, `cart_items`, `orders`, `order_items`, `order_status_history`). نمطان مختلفان: قراءة عامة (`categories`/`products`/`inventory`) مقابل قفل كامل بلا أي policy، وصول حصري عبر `service_role` (`merchants`, `carts`, `cart_items`, `orders`, `order_items`, `order_status_history` — راجع §6 وADR-008/ADR-009/ADR-010).
 - كل سعر يُعاد حسابه من الخادم دائماً، لا يُصدَّق من العميل.
 
 ---
@@ -143,7 +143,7 @@ alter table cart_items enable row level security;
 - **RLS مفعَّل بلا أي policy على الجدولين** — قفل كامل لـ`anon`/`authenticated` (نفس نمط `merchants`)، **وليس نمط "قراءة عامة" المعتاد على `products`/`categories`/`inventory`** لأن بيانات السلة خاصة بصاحبها. كل الوصول يمر حصرياً عبر `src/core/kernel/database/supabase-admin-client.ts` (مفتاح `service_role`، خادم فقط) — هذا ضروري لأن السلة تُكتَب بلا مصادقة حقيقية (زائر)، فـRLS مسموح لـ`anon` لا يوفر حماية فعلية (كان سيخالف `docs/SECURITY.md` قاعدة 3).
 - لا عمود `status` (سلة نشطة واحدة فقط لكل هوية، لا أرشفة/تحويل — يُبنى لاحقاً مع Orders، اليوم 9).
 
-### `orders`, `order_items` — Evidence: `IMPLEMENTED` (اليوم 8، `CHECKOUT-001`)
+### `orders`, `order_items`, `order_status_history` — Evidence: `IMPLEMENTED` (اليوم 8 `CHECKOUT-001` للأولين، اليوم 9 `ORDERS-002` لدورة الحياة الكاملة + الثالث)
 
 ```sql
 create table orders (
@@ -159,6 +159,11 @@ create table orders (
 );
 alter table orders enable row level security;
 
+-- اليوم 9: القيد المؤجَّل عمداً في ADR-009، مُحسَم الآن (ADR-010)
+alter table orders
+  add constraint orders_status_check
+  check (status in ('pending','confirmed','preparing','ready','out_for_delivery','delivered','cancelled'));
+
 create table order_items (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null references orders(id) on delete cascade,
@@ -169,17 +174,40 @@ create table order_items (
   created_at timestamptz not null default now()
 );
 alter table order_items enable row level security;
+
+-- اليوم 9 (ORDERS-002) — سجل تدقيق دورة حياة الطلب، CONSTITUTION §4 بند 5
+create table order_status_history (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references orders(id) on delete cascade,
+  from_status text,
+  to_status text not null,
+  actor_role text not null,
+  actor_id uuid references users(id),
+  note text,
+  created_at timestamptz not null default now()
+);
+alter table order_status_history
+  add constraint order_status_history_to_status_check
+    check (to_status in ('pending','confirmed','preparing','ready','out_for_delivery','delivered','cancelled')),
+  add constraint order_status_history_from_status_check
+    check (from_status is null or from_status in ('pending','confirmed','preparing','ready','out_for_delivery','delivered','cancelled')),
+  add constraint order_status_history_actor_role_check
+    check (actor_role in ('platform_admin','merchant_owner','merchant_manager','employee','customer','system'));
+alter table order_status_history enable row level security;
+create index order_status_history_order_id_idx on order_status_history (order_id);
 ```
 
-**الحالة:** `IMPLEMENTED` جزئياً — **إنشاء الطلب فقط**، بحالة `pending` واحدة دائماً. **لا دورة حياة كاملة بعد** (تغيّر الحالة، تعيين مندوب، إلخ — اليوم 9). تحقَّق منه عبر اختبار تكامل حقيقي (`src/core/modules/orders/orders.integration.test.ts`) وتصفح فعلي في متصفح حقيقي (سلة → checkout → طلب مؤكَّد).
+**الحالة:** `IMPLEMENTED` — دورة حياة كاملة (`pending → confirmed → preparing → ready → out_for_delivery → delivered`، مع `cancelled` من أي حالة غير نهائية). مُتحقَّق منه حياً: محاولة إدراج `status` غير صحيحة في `orders` رُفضت فعلياً بـ`orders_status_check` (كود خطأ `23514`)، ودورة حياة كاملة نُفِّذت ضد Supabase حقيقي عبر `src/core/modules/orders/orders.integration.test.ts` مع بناء سجل `order_status_history` متسلسل صحيح. راجع `ADR-010` و`specs/orders/README.md` للتفصيل الكامل (آلة الحالات، مصفوفة الفاعلين المخوَّلين).
 
-**قرارات تصميم (راجع `ADR-009` في `docs/DECISIONS.md` للتفصيل الكامل):**
-- **`status` بلا `CHECK` constraint عمداً** — القيم الكاملة تُحسَم يوم 9؛ إضافة قيد بقيمة واحدة الآن يعني تعديله لاحقاً على أي حال.
+**قرارات تصميم (راجع `ADR-009`/`ADR-010` في `docs/DECISIONS.md` للتفصيل الكامل):**
 - **`unit_price_snapshot` عكس `cart_items` تماماً:** يُحسَب من `CatalogService.calculatePrice()` في لحظة إنشاء الطلب فقط، ثم يُجمَّد للأبد — لا يُعاد حسابه بعد هذه اللحظة مهما تغيّر سعر المنتج لاحقاً.
 - **`delivery_address` JSONB على الطلب نفسه** (`{ line1, city, notes? }`) — لا جدول عناوين منفصل قابل لإعادة الاستخدام، عمداً، خارج نطاق Vertical Slice.
 - **طلب واحد بلا تقسيم لكل تاجر** — `tenant_id` عمود واحد إلزامي على الطلب (لا جدول ربط). مبرَّر حالياً لأن `products` يحتوي منتجاً واحداً من تاجر واحد فقط (تحقَّق منه مباشرة من Supabase الحي وقت التخطيط، لا من التوثيق فقط). **تقسيم الطلب لكل تاجر عند تعدد التجار `PROPOSED` ومؤجَّل** — `orders.service.ts` يرفض صراحة أي محاولة سلة بمنتجات من أكثر من `tenant_id` بدل إنشاء طلب خاطئ صامتاً.
-- **بلا أي policy على الجدولين** — نفس نمط `carts`/`merchants`، وصول حصري عبر `service_role`.
+- **بلا أي policy على الجداول الثلاثة** — نفس نمط `carts`/`merchants`، وصول حصري عبر `service_role`.
 - **لا معاملة قاعدة بيانات ذرية حقيقية (Postgres transaction/RPC)** بين إنشاء `orders` و`order_items` — إن فشل إدراج البنود، يُحذَف صف `orders` تعويضياً (compensating action) في الكود بدل معاملة DB حقيقية. تحسين مستقبلي موثَّق، لم يُبنَ اليوم.
+- **`order_status_history.from_status` قابل لـ`NULL`** — القيد الأول عند إنشاء الطلب (`null → pending`) لا حالة سابقة له فعلياً.
+- **`order_status_history.actor_id` قابل لـ`NULL`** — عندما `actor_role = 'system'` (القيد الأول عند Checkout)، لا مستخدم بشري فعلي وراء الانتقال.
+- **`updated_at` على `orders` يُحدَّث يدوياً في الكود** (`orders.repository.ts` → `updateOrderStatus`) عند كل انتقال حالة — **لا trigger على مستوى قاعدة البيانات** (لا جدول حالي في المشروع يستخدم trigger، القرار الحالي إبقاء الاتساق مع هذا النمط، راجع ADR-010).
 
 ---
 
@@ -191,8 +219,7 @@ alter table order_items enable row level security;
 |---|---|---|---|
 | `stores` | Tenant (طبقة فرعية تحت `merchants`) | غير مجدوَل بعد | `CONCEPTUAL` |
 | `sessions` | Khalil | مع تسجيل الدخول | `CONCEPTUAL` — لم يُبنَ بعد رغم إنشاء `merchants`, `carts`, `orders` |
-| `order_status_history` | Orders (دورة الحياة الكاملة) | اليوم 9 | `CONCEPTUAL` — `orders`/`order_items` أنفسهما `IMPLEMENTED` منذ اليوم 8، راجع §3 |
-| `audit_log` | Audit | اليوم 12 (يوم الأمان، بعد الإزاحة) | `CONCEPTUAL` |
+| `audit_log` | Audit (عام، خارج نطاق طلب واحد) | اليوم 12 (يوم الأمان، بعد الإزاحة) | `CONCEPTUAL` — `order_status_history` (تدقيق خاص بالطلبات فقط) `IMPLEMENTED` منذ اليوم 9، راجع §3 |
 | `product_variant`, `sku`, `barcode`, `packaging` | Catalog (العمق الكامل) | غير مجدوَل بعد — أُجِّل لصالح Vertical Slice أولاً | `CONCEPTUAL` |
 
 ---
@@ -216,7 +243,7 @@ alter table order_items enable row level security;
 | `inventory` | قراءة عامة | `IMPLEMENTED` |
 | `merchants` | تمنع إدراج/كتابة بمفتاح `anon` (تحقَّق منه فعلياً) — نص السياسة الدقيق `OPEN_QUESTION` | `IMPLEMENTED` (جزئياً موثَّق) |
 | `carts`, `cart_items` | بلا أي policy — قفل كامل لـ`anon`/`authenticated`، وصول حصري عبر `service_role` (اليوم 7، `ADR-008`) | `IMPLEMENTED` |
-| `orders`, `order_items` | بلا أي policy — نفس نمط القفل الكامل (اليوم 8، `ADR-009`) | `IMPLEMENTED` (إنشاء فقط) |
+| `orders`, `order_items`, `order_status_history` | بلا أي policy — نفس نمط القفل الكامل (اليوم 8، `ADR-009`؛ الثالث اليوم 9، `ADR-010`) | `IMPLEMENTED` (دورة حياة كاملة) |
 
 **سياسات الكتابة (Insert/Update/Delete) لا تزال غير موجودة/موثَّقة على `users`/`categories`/`products`/`inventory` — `OPEN_QUESTION` صريح يحتاج حسماً قبل بناء بوابة التاجر الكاملة (اليوم 5+).**
 

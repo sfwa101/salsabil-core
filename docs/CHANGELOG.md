@@ -1,7 +1,7 @@
 ---
 title: سجل التغييرات
 status: ACTIVE
-version: 1.1
+version: 1.2
 last_updated: 2026-09-02
 owner: Claude (تلقائي مع كل مهمة كبيرة)
 source_of_truth: هذا الملف + Git log
@@ -12,6 +12,19 @@ source_of_truth: هذا الملف + Git log
 > يُسجَّل هنا فقط التغييرات المهمة (معمارية، قواعد أعمال، قاعدة بيانات، أمان، UX، قرارات، خارطة طريق) — لا كل commit صغير.
 
 ---
+
+## 2026-09-02 (اليوم 9) — دورة حياة الطلب الكاملة (Orders Lifecycle, ORDERS-002)
+- خطة صريحة (آلة الحالات + مصفوفة الفاعلين + SQL الهجرة) عُرضت واعتُمدت من المؤسس قبل أي تنفيذ كود — الهجرة طُبِّقت يدوياً عبر Supabase SQL Editor (لا أداة DDL مباشرة متاحة)، وتحقَّق منها Claude حياً بعدها (محاولة إدراج `status` غير صحيح رُفضت فعلياً بكود `23514`) قبل المتابعة
+- `orders.status`: حُسم القيد المؤجَّل عمداً في `ADR-009` — 7 قيم (`pending, confirmed, preparing, ready, out_for_delivery, delivered, cancelled`) مفروضة بـ`CHECK` حي
+- جدول `order_status_history` جديد (سجل تدقيق كامل: from/to/actor_role/actor_id/note)، بـ`CHECK` مطابقة، RLS مقفول بالكامل — نفس نمط `ADR-008`/`ADR-009`
+- إضافة `cancelled` كحالة نهائية غير مذكورة حرفياً في `CONSTITUTION §8` — مستندة صراحة لـ`BR-009` (`ACCEPTED`) التي كانت تنتظر هذا الجدول بالذات، موثَّقة كقرار صريح في `ADR-010` لا حسماً صامتاً
+- `orders.service.ts`: دالتان جديدتان — `transitionStatus()` (تحقق مزدوج: الانتقال مسموح؟ ثم الفاعل مخوَّل؟) و`getStatusHistory()`؛ `checkout()` يُنشئ الآن قيد سجل أول تلقائياً (`null → pending`, `actorRole: 'system'`)
+- **إصلاح خلل موجود مسبقاً من اليوم 8:** `orders.repository.ts` كان يُرجع `status: 'pending'` مُثبَّتة يدوياً في `toOrder()` بدل قراءة العمود الفعلي من الصف — لم يظهر كخطأ وقتها لأن النوع كان مقفولاً على `'pending'` فقط؛ صار خطأً حقيقياً الآن مع توسّع الحالات، فأُصلح ليقرأ `row.status`
+- `Order` يحمل الآن `updatedAt` أيضاً (كان مفقوداً رغم وجود العمود في قاعدة البيانات منذ اليوم 8)
+- 11 اختباراً جديداً (5 وحدة + 6 تكامل حي) — الأخيرة تغطي دورة الحياة الكاملة PENDING→...→DELIVERED ضد Supabase حقيقي بسجل متسلسل صحيح، رفض القفز، رفض الانتقال من حالة نهائية، رفض فاعل غير مخوَّل بلا إنشاء قيد سجل، والإلغاء من حالة وسيطة غير `pending`. المجموع الآن 30 اختباراً، كلها خضراء
+- `vitest.config.ts`: رفع `testTimeout` الافتراضي من 5 إلى 15 ثانية (اختبارات تكامل تضرب Supabase حياً، تحت تزامن ملفات متعددة تتجاوز 5 ثوانٍ أحياناً — ليس خللاً منطقياً)
+- `specs/orders/README.md` مُلئ بالكامل (كان placeholder فارغاً) — آلة الحالات، مصفوفة الفاعلين، Open Questions صريحة (من يملك حق `out_for_delivery`/`delivered` عند بناء برق؟ هل يحق للعميل الإلغاء بعد Auth حقيقي؟)
+- تحديث `docs/DATABASE.md` (§3 `orders`/`order_items`/`order_status_history`، §4 الجدول المفاهيمي)، `docs/DOMAIN_MAP.md` (Orders)، `docs/BUSINESS_RULES.md` (BR-009)، `docs/ARCHITECTURE.md` (شجرة `src/`، عدد الجداول)، `docs/DECISIONS.md` (`ADR-010`)، `docs/ROADMAP.md` (اليوم 9 → DONE، اليوم 10 → NEXT)
 
 ## 2026-09-02 — تحديث docs/ لمطابقة CART-001 قبل بدء اليوم 8
 - ARCHITECTURE.md: شجرة src/ محدَّثة (cart/, inventory/, supabase-admin-client.ts)، توضيح متى يُستخدَم كل عميل Supabase

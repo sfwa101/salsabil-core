@@ -1,8 +1,8 @@
 ---
 title: قواعد الأعمال
 status: ACTIVE
-version: 1.2
-last_updated: 2026-09-01
+version: 1.3
+last_updated: 2026-09-02
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف (يجمع كل قواعد الأعمال المؤكدة من الدستور والمحادثات)
 ---
@@ -98,7 +98,7 @@ Evidence Level: FOUNDER_DECISION — Pending Constitution Synchronization
 Source: محادثة 2026-09-01
 Description: إذا أُلغي الطلب بسبب تأخير المندوب أو خطأ من المنصة، يتحمل التاجر 0% من الخسارة. النظام يحدد الطرف المقصر تلقائياً عبر سجل الأحداث (audit_log) دون تدخل بشري مزاجي.
 Applies To: Orders lifecycle, Barq (برق)
-Implementation Notes: يعتمد على audit_log (CONCEPTUAL) و order_status_history (CONCEPTUAL) — لا يمكن تنفيذه قبل بناء Orders (اليوم 6-8)
+Implementation Notes: order_status_history أصبح IMPLEMENTED فعلياً (اليوم 9، ADR-010) — يسجّل كل انتقال حالة (من، إلى، الفاعل ودوره، متى)، وهو المتطلب المباشر الذي كانت هذه القاعدة تنتظره. لا يزال منطق "تحديد الطرف المقصر" نفسه (القراءة والتحليل، لا مجرد التسجيل) غير مبني — يعتمد أيضاً على audit_log العام (CONCEPTUAL) ونطاق برق (غير مبني). التنفيذ الفعلي لهذه القاعدة لا يزال PROPOSED رغم أن بنيتها التحتية (order_status_history) IMPLEMENTED الآن.
 ```
 
 ## BR-010 — التسوية الفورية والتخارج السلس (Automated Offboarding)

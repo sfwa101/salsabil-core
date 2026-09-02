@@ -1,8 +1,8 @@
 ---
 title: المعمارية التقنية
 status: ACTIVE
-version: 1.2
-last_updated: 2026-09-01
+version: 1.3
+last_updated: 2026-09-02
 owner: المؤسس (أبوحتاب) + Claude (معماري)
 source_of_truth: هذا الملف (تفصيل)، SALSABIL_CONSTITUTION.md §4-§5 (المبدأ)
 ---
@@ -74,8 +74,13 @@ src/
 │   │   ├── merchant/     → IMPLEMENTED (types.ts, merchant.service.ts, merchant.repository.ts)
 │   │   ├── inventory/    → IMPLEMENTED (اليوم 7) — types.ts, inventory.service.ts (isAvailable
 │   │   │                     فقط، بلا حجز), inventory.repository.ts
-│   │   └── cart/         → IMPLEMENTED (اليوم 7) — types.ts, cart.service.ts, cart.repository.ts
-│   │                         (يستخدم supabase-admin-client، لا supabase-client العام)
+│   │   ├── cart/         → IMPLEMENTED (اليوم 7) — types.ts, cart.service.ts, cart.repository.ts
+│   │   │                     (يستخدم supabase-admin-client، لا supabase-client العام)
+│   │   ├── payments/     → IMPLEMENTED جزئياً (اليوم 8) — PaymentProvider (واجهة) +
+│   │   │                     CashOnDeliveryProvider (التطبيق الوحيد الفعلي)
+│   │   └── orders/       → IMPLEMENTED (اليوم 8-9) — types.ts (ORDER_TRANSITIONS/
+│   │                         ORDER_TRANSITION_ACTORS كمصدر حقيقة لآلة الحالات)، orders.service.ts
+│   │                         (checkout, transitionStatus, getStatusHistory), orders.repository.ts
 │   ├── offline/          → دعم العمل بلا إنترنت — PROPOSED، لم يُبنَ بعد
 │   └── telemetry/        → سجل الأحداث والتدقيق — PROPOSED، لم يُبنَ بعد
 └── types/                → أنواع TypeScript مشتركة عبر النطاقات
@@ -149,9 +154,9 @@ ImportProvider (واجهة عامة، مقترحة من محادثة الاست�
 |---|---|---|
 | الواجهة الأمامية | Next.js (RTL) + TypeScript + Tailwind | `ACTIVE` |
 | منطق الخادم | Edge Functions / Node.js | `ACTIVE` |
-| قاعدة البيانات | Supabase (Postgres + Auth + Realtime + Storage) | `ACTIVE`, `IMPLEMENTED` (اتصال حقيقي، 7 جداول: users, categories, products, merchants, inventory, carts, cart_items) |
-| الصلاحيات (RLS) | Postgres RLS | `IMPLEMENTED` — نمطان: قراءة عامة (categories/products/inventory) وقفل كامل عبر service_role (merchants/carts/cart_items، اليوم 7) |
-| اختبارات آلية | Vitest (وحدة + تكامل ضد Supabase حقيقي) | `IMPLEMENTED` (اليوم 7) — راجع `src/core/modules/cart/*.test.ts` |
+| قاعدة البيانات | Supabase (Postgres + Auth + Realtime + Storage) | `ACTIVE`, `IMPLEMENTED` (اتصال حقيقي، 10 جداول: users, categories, products, merchants, inventory, carts, cart_items, orders, order_items, order_status_history) |
+| الصلاحيات (RLS) | Postgres RLS | `IMPLEMENTED` — نمطان: قراءة عامة (categories/products/inventory) وقفل كامل عبر service_role (merchants/carts/cart_items/orders/order_items/order_status_history، اليوم 7-9) |
+| اختبارات آلية | Vitest (وحدة + تكامل ضد Supabase حقيقي) | `IMPLEMENTED` (اليوم 7-9) — راجع `src/core/modules/cart/*.test.ts`, `src/core/modules/orders/*.test.ts` |
 | البحث | Meilisearch | `PROPOSED` (§9 دستور) — لم يُبنَ |
 | الدردشة | Supabase Realtime (المرحلة 1) | `PROPOSED` — لم يُبنَ بعد، مخطط §25 دستور |
 

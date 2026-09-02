@@ -1,6 +1,6 @@
 // src/core/modules/orders/orders.service.ts
-// تحويل سلة إلى طلب PENDING — يستدعي CatalogService/InventoryService/CartService/KhalilService
-// حياً، لا يُعيد كتابة أي من منطقها (docs/ARCHITECTURE.md §3، §7)
+// تحويل سلة إلى طلب + دورة حياة الطلب الكاملة (اليوم 9) — يستدعي CatalogService/InventoryService/
+// CartService/KhalilService حياً، لا يُعيد كتابة أي من منطقها (docs/ARCHITECTURE.md §3، §7)
 
 import { cartService } from '../cart/cart.service';
 import { catalogService } from '../catalog/catalog.service';
@@ -8,7 +8,15 @@ import { inventoryService } from '../inventory/inventory.service';
 import { khalilService } from '../../kernel/khalil/service';
 import { cashOnDeliveryProvider } from '../payments/cash-on-delivery.provider';
 import { ordersRepository } from './orders.repository';
-import type { CheckoutInput, Order, OrderWithItems } from './types';
+import {
+  ORDER_TRANSITIONS,
+  ORDER_TRANSITION_ACTORS,
+  type CheckoutInput,
+  type Order,
+  type OrderStatusHistoryEntry,
+  type OrderWithItems,
+  type TransitionOrderStatusInput,
+} from './types';
 
 export class OrdersService {
   // TODO(BR-016): لا حد أدنى لقيمة الطلب مطبَّق بعد — القيمة غير معتمدة رسمياً.
@@ -72,6 +80,15 @@ export class OrdersService {
 
     await cartService.clearCart(cart.id);
 
+    // أول قيد في سجل التدقيق — الحالة الابتدائية 'pending' بلا حالة سابقة، فاعلها النظام
+    // نفسه لا مستخدماً بشرياً (CONSTITUTION §4 بند 5: كل تحوّل يُسجَّل من فعله ومتى ولماذا)
+    await ordersRepository.insertStatusHistory({
+      orderId: order.id,
+      fromStatus: null,
+      toStatus: 'pending',
+      actorRole: 'system',
+    });
+
     return order;
   }
 
@@ -80,6 +97,42 @@ export class OrdersService {
     if (!order) return null;
     const items = await ordersRepository.findOrderItems(orderId);
     return { order, items };
+  }
+
+  async getStatusHistory(orderId: string): Promise<OrderStatusHistoryEntry[]> {
+    return ordersRepository.findStatusHistory(orderId);
+  }
+
+  // ينفّذ انتقال حالة واحداً وفق آلة الحالات في types.ts (ORDER_TRANSITIONS)، ويرفض أي انتقال
+  // غير مسموح أو فاعل غير مخوَّل بدل تنفيذه صامتاً — نفس منطق الرفض الصريح في checkout()
+  async transitionStatus(input: TransitionOrderStatusInput): Promise<Order> {
+    const order = await ordersRepository.findOrderById(input.orderId);
+    if (!order) {
+      throw new Error('الطلب غير موجود');
+    }
+
+    const allowedNextStatuses = ORDER_TRANSITIONS[order.status];
+    if (!allowedNextStatuses.includes(input.toStatus)) {
+      throw new Error(`لا يمكن الانتقال من الحالة "${order.status}" إلى "${input.toStatus}"`);
+    }
+
+    const allowedActors = ORDER_TRANSITION_ACTORS[input.toStatus];
+    if (!allowedActors.includes(input.actorRole)) {
+      throw new Error(`الدور "${input.actorRole}" غير مخوَّل لتغيير الحالة إلى "${input.toStatus}"`);
+    }
+
+    const updatedOrder = await ordersRepository.updateOrderStatus(input.orderId, input.toStatus);
+
+    await ordersRepository.insertStatusHistory({
+      orderId: input.orderId,
+      fromStatus: order.status,
+      toStatus: input.toStatus,
+      actorRole: input.actorRole,
+      actorId: input.actorId,
+      note: input.note,
+    });
+
+    return updatedOrder;
   }
 }
 

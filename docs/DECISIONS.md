@@ -1,8 +1,8 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.4
-last_updated: 2026-09-01
+version: 1.5
+last_updated: 2026-09-02
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف
 ---
@@ -133,6 +133,24 @@ Alternatives: (أ) بناء منطق تقسيم الطلب لعدة تجار ا�
 Why: الحل الأبسط والمتحقَّق من صحته ببيانات حقيقية دائماً أفضل من بناء تعميم لا دليل عليه بعد (فلسفة Vertical Slice، ADR-002). الرفض الصريح لتعدد التجار (بدل تجاهله) يمنع طلباً خاطئاً صامتاً لاحقاً عند إضافة تاجر ثانٍ فعلياً.
 Consequences: تقسيم الطلب لكل تاجر PROPOSED ومؤجَّل — يُبنى فقط عند وجود تاجر ثانٍ حقيقي (راجع docs/DOMAIN_MAP.md → Orders). findOrCreateCustomerByPhone حل جزئي فقط لسؤال "من يملك حق إنشاء users" (docs/SECURITY.md) — لا يحل تسجيل الدخول الحقيقي أو تسجيل التاجر. لا معاملة قاعدة بيانات ذرية حقيقية بين orders وorder_items — تعويض بحذف الطلب عند فشل إدراج البنود، لا RPC حقيقي (تحسين مستقبلي موثَّق).
 Related Documents: docs/DATABASE.md §3 (orders, order_items)، docs/DOMAIN_MAP.md → Orders/Payments، docs/SECURITY.md §5/§7/§8، docs/BUSINESS_RULES.md BR-016
+```
+
+---
+
+## ADR-010
+```
+Title: آلة حالات الطلب الكاملة (7 قيم، بينها cancelled غير مذكورة حرفياً في CONSTITUTION §8) + قفل service_role على order_status_history
+Status: ACCEPTED
+Date: 2026-09-02 (اليوم 9 من خطة الـ14 يوماً، ORDERS-002)
+Decision: (أ) orders.status يحمل 7 قيم (pending, confirmed, preparing, ready, out_for_delivery, delivered, cancelled)، مفروضة بـCHECK constraint حي على orders — يحسم القيد الذي أُجِّل عمداً في ADR-009.
+          (ب) إضافة delivered وcancelled كحالتين نهائيتين — لا انتقال منهما إطلاقاً. cancelled مسموحة من أي حالة غير نهائية (pending/confirmed/preparing/ready/out_for_delivery)، لا من pending فقط.
+          (ج) جدول order_status_history جديد — سجل تدقيق كامل (from_status, to_status, actor_role, actor_id, note)، بـCHECK constraints مطابقة لقيم الحالة/الدور، RLS مقفول بالكامل بلا أي policy — وصول حصري عبر service_role (نفس نمط ADR-008/ADR-009).
+          (د) تحقق مزدوج في OrdersService.transitionStatus(): الانتقال مسموح في ORDER_TRANSITIONS؟ ثم الفاعل (actorRole) مخوَّل في ORDER_TRANSITION_ACTORS؟ — كلا الجدولين مصدر حقيقة برمجي وحيد في types.ts.
+Context: اليوم 8 (CHECKOUT-001) أنشأ الطلب بحالة pending ثابتة فقط، بلا أي CHECK على status عمداً (ADR-009 أجّل القرار لهذا اليوم). BR-009 (عدالة المسؤولية المادية، ACCEPTED منذ محادثة 2026-09-01) تفترض صراحة وجود order_status_history لتحديد الطرف المقصر آلياً — كانت تنتظر هذا الجدول بالذات.
+Alternatives: (أ) الاقتصار حرفياً على المسار الستة في CONSTITUTION §8 بلا cancelled — رُفض: يخالف BR-009 المعتمدة فعلاً التي تفترض إلغاءً ممكناً، ويترك النظام بلا مخرج لطلب فشل قبل التسليم. (ب) السماح بـcancelled من pending فقط (قبل تأكيد التاجر) — رُفض: لا يعكس واقع تشغيلي حقيقي (نفاد مخزون أثناء preparing، فشل توصيل أثناء ready، إلخ). (ج) trigger قاعدة بيانات لتحديث updated_at تلقائياً بدل تحديثه يدوياً في الكود — رُفض مؤقتاً: لا جدول حالي في المشروع يستخدم trigger، يكسر الاتساق مع النمط القائم بلا حاجة فعلية الآن.
+Why: قرار المؤسس المباشر في هذه المحادثة — عرض التصميم وآلة الحالات ومصفوفة الفاعلين قبل التنفيذ، ووافق عليها صراحة ("التصميم ومصفوفة الانتقالات ممتازة ومتوافقة تماماً") قبل تطبيق الهجرة يدوياً عبر Supabase SQL Editor.
+Consequences: ready→out_for_delivery وout_for_delivery→delivered مُخوَّلتان مؤقتاً لأدوار التاجر/الإدارة فقط (لا نطاق برق/مندوب توصيل مبني بعد) — يحتاج actorRole جديداً أو نطاقاً منفصلاً عند بناء التوصيل الفعلي. customer مستبعد من كل الانتقالات حالياً (بما فيها cancelled) لعدم وجود مصادقة حقيقية تُثبت ملكية الطلب — راجع specs/orders/README.md → Open Questions.
+Related Documents: docs/DATABASE.md §3 (order_status_history)، docs/DOMAIN_MAP.md → Orders، docs/BUSINESS_RULES.md → BR-009، specs/orders/README.md، ADR-008، ADR-009
 ```
 
 ---

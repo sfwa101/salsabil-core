@@ -1,8 +1,8 @@
 ---
 title: خريطة النطاقات
 status: ACTIVE (يحتوي OPEN_QUESTION واحد جوهري)
-version: 1.3
-last_updated: 2026-09-01
+version: 1.4
+last_updated: 2026-09-02
 owner: المؤسس (أبوحتاب) + Claude (معماري)
 source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md §6-§8 (المصدر الأصلي)
 ---
@@ -154,17 +154,17 @@ source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md �
 | يستخدمه | ريف (الآن)، مستقبلاً كل عالم فيه منتجات |
 | الحالة | `IMPLEMENTED` — types.ts, catalog.service.ts (حساب السعر), catalog.repository.ts، جدول بيانات تجريبي (دجاجة بخيارات أحجام) |
 
-### Orders — Evidence: `PARTIALLY_IMPLEMENTED` (إنشاء فقط، اليوم 8، `CHECKOUT-001`)
+### Orders — Evidence: `PARTIALLY_IMPLEMENTED` (إنشاء + دورة حياة كاملة، اليوم 8 `CHECKOUT-001` + اليوم 9 `ORDERS-002`)
 
 | | |
 |---|---|
-| المسؤولية | تحويل سلة إلى طلب (اليوم 8: إنشاء بحالة `pending` فقط) ← دورة حياة كاملة (اليوم 9، مؤجَّلة) |
-| يملك | جدولا `orders`, `order_items` (`IMPLEMENTED`)؛ `order_status_history` لا يزال `CONCEPTUAL` (يوم 9) |
-| البيانات | راجع `docs/DATABASE.md §3` (قسم `orders`, `order_items`) |
+| المسؤولية | تحويل سلة إلى طلب (اليوم 8) ← دورة حياة كاملة بسجل تدقيق (اليوم 9): `pending → confirmed → preparing → ready → out_for_delivery → delivered`، مع `cancelled` من أي حالة غير نهائية |
+| يملك | جداول `orders`, `order_items`, `order_status_history` — **الثلاثة `IMPLEMENTED`** |
+| البيانات | راجع `docs/DATABASE.md §3` (قسم `orders`, `order_items`, `order_status_history`) |
 | العلاقات | يستدعي `CatalogService.calculatePrice`/`validateSelection` حياً لتجميد `unit_price_snapshot` (لا يُعيد كتابة منطق التسعير)، `InventoryService.isAvailable` لفحص حي قبل الإنشاء، `CartService.getSummary`/`clearCart`، `KhalilService.findOrCreateCustomerByPhone`، `CashOnDeliveryProvider.charge` |
-| لا يحق له | تعديل سعر منتج، تعديل مخزون مباشرة (فحص فقط، لا حجز — ذلك يوم 9)، **تقسيم طلب واحد لعدة تجار (`PROPOSED` ومؤجَّل — راجع الملاحظة أدناه)** |
+| لا يحق له | تعديل سعر منتج، تعديل مخزون مباشرة (فحص فقط، لا حجز)، **تقسيم طلب واحد لعدة تجار (`PROPOSED` ومؤجَّل — راجع الملاحظة أدناه)**، السماح لـ`customer` بتغيير أي حالة (لا مصادقة حقيقية تُثبت ملكية الطلب — راجع `specs/orders/README.md` → Open Questions) |
 | يستخدمه | ريف (الآن) |
-| الحالة | `PARTIALLY_IMPLEMENTED` — `types.ts`, `orders.service.ts`, `orders.repository.ts` (`src/core/modules/orders/`)، مُختبَر (وحدة + تكامل ضد Supabase حقيقي + متصفح فعلي). موثَّق في `ADR-009` (`docs/DECISIONS.md`) |
+| الحالة | `PARTIALLY_IMPLEMENTED` — `types.ts` (`ORDER_TRANSITIONS`, `ORDER_TRANSITION_ACTORS` كمصدر حقيقة وحيد لآلة الحالات)، `orders.service.ts` (`checkout`, `transitionStatus`, `getStatusHistory`)، `orders.repository.ts` (`src/core/modules/orders/`)، مُختبَر (30 اختباراً: وحدة + تكامل ضد Supabase حقيقي، يغطي دورة الحياة الكاملة + رفض القفز/الفاعل غير المخوَّل/الحالة النهائية). لا واجهة مستخدم لتغيير الحالة بعد (اليوم 10). موثَّق في `ADR-009`/`ADR-010` (`docs/DECISIONS.md`) وSpec كامل في `specs/orders/README.md` |
 
 > **ملاحظة صريحة — تقسيم الطلب لكل تاجر (Multi-Vendor Order Splitting):** `PROPOSED`، مؤجَّل عمداً. تحقَّقت مباشرة من Supabase الحي وقت تخطيط اليوم 8: `products` يحتوي **صفاً واحداً فقط**، من تاجر واحد فقط — رياضياً يستحيل اليوم أن تحتوي أي سلة حقيقية أكثر من تاجر. لذا نُفِّذ طلب واحد بعمود `tenant_id` واحد إلزامي، بلا منطق تقسيم. `orders.service.ts` يرفض صراحة (خطأ واضح، لا طلب خاطئ صامت) أي محاولة Checkout لسلة تحتوي منتجات من أكثر من `tenant_id` — **هذا التحقق الدفاعي موجود فعلاً، لكن منطق التقسيم الفعلي (طلب مستقل لكل تاجر من نفس السلة) غير مبني**، ويُبنى فقط عند وجود تاجر ثانٍ فعلياً.
 

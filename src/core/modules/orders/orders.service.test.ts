@@ -81,11 +81,15 @@ vi.mock('./orders.repository', () => ({
       deliveryAddress: input.deliveryAddress,
       total: input.total,
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     })),
     createOrderItems: vi.fn(async () => []),
     deleteOrder: vi.fn(),
     findOrderById: vi.fn(),
     findOrderItems: vi.fn(),
+    updateOrderStatus: vi.fn(),
+    insertStatusHistory: vi.fn(async () => ({})),
+    findStatusHistory: vi.fn(async () => []),
   },
 }));
 
@@ -169,6 +173,12 @@ describe('OrdersService.checkout', () => {
       expect.arrayContaining([expect.objectContaining({ unitPriceSnapshot: 100, quantity: 2 })])
     );
     expect(cartRepository.deleteItem).toHaveBeenCalledWith('item-1');
+    expect(ordersRepository.insertStatusHistory).toHaveBeenCalledWith({
+      orderId: 'order-1',
+      fromStatus: null,
+      toStatus: 'pending',
+      actorRole: 'system',
+    });
   });
 
   it('لا يُنشئ مستخدماً جديداً إذا وُجد مستخدم مطابق بالهاتف مسبقاً', async () => {
@@ -178,5 +188,94 @@ describe('OrdersService.checkout', () => {
     await ordersService.checkout(checkoutInput);
 
     expect(khalilRepository.createUser).not.toHaveBeenCalled();
+  });
+});
+
+function makeOrder(overrides: Partial<{ status: string }> = {}) {
+  return {
+    id: 'order-1',
+    userId: 'user-1',
+    tenantId: 'tenant-a',
+    status: 'pending',
+    paymentMethod: 'cash_on_delivery',
+    deliveryAddress: { line1: 'شارع 1', city: 'القاهرة' },
+    total: 100,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+describe('OrdersService.transitionStatus', () => {
+  it('يرفض إذا كان الطلب غير موجود', async () => {
+    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(null);
+
+    await expect(
+      ordersService.transitionStatus({ orderId: 'missing', toStatus: 'confirmed', actorRole: 'merchant_owner' })
+    ).rejects.toThrow(/غير موجود/);
+    expect(ordersRepository.updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('يرفض انتقالاً غير مسموح في آلة الحالات (pending → delivered مباشرة)', async () => {
+    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'pending' }) as never);
+
+    await expect(
+      ordersService.transitionStatus({ orderId: 'order-1', toStatus: 'delivered', actorRole: 'merchant_owner' })
+    ).rejects.toThrow(/لا يمكن الانتقال/);
+    expect(ordersRepository.updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('يرفض انتقالاً من حالة نهائية (delivered → أي شيء)', async () => {
+    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'delivered' }) as never);
+
+    await expect(
+      ordersService.transitionStatus({ orderId: 'order-1', toStatus: 'cancelled', actorRole: 'platform_admin' })
+    ).rejects.toThrow(/لا يمكن الانتقال/);
+  });
+
+  it('يرفض فاعلاً غير مخوَّل (customer لا يملك حق تأكيد الطلب)', async () => {
+    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'pending' }) as never);
+
+    await expect(
+      ordersService.transitionStatus({ orderId: 'order-1', toStatus: 'confirmed', actorRole: 'customer' })
+    ).rejects.toThrow(/غير مخوَّل/);
+    expect(ordersRepository.updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('ينجح: pending → confirmed بفاعل تاجر مخوَّل، ويسجّل قيداً في السجل بالحالتين والفاعل', async () => {
+    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'pending' }) as never);
+    vi.mocked(ordersRepository.updateOrderStatus).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
+
+    const order = await ordersService.transitionStatus({
+      orderId: 'order-1',
+      toStatus: 'confirmed',
+      actorRole: 'merchant_owner',
+      actorId: 'merchant-user-1',
+      note: 'تأكيد يدوي',
+    });
+
+    expect(order.status).toBe('confirmed');
+    expect(ordersRepository.updateOrderStatus).toHaveBeenCalledWith('order-1', 'confirmed');
+    expect(ordersRepository.insertStatusHistory).toHaveBeenCalledWith({
+      orderId: 'order-1',
+      fromStatus: 'pending',
+      toStatus: 'confirmed',
+      actorRole: 'merchant_owner',
+      actorId: 'merchant-user-1',
+      note: 'تأكيد يدوي',
+    });
+  });
+
+  it('ينجح: يمكن الإلغاء من preparing (وليس فقط من pending)', async () => {
+    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'preparing' }) as never);
+    vi.mocked(ordersRepository.updateOrderStatus).mockResolvedValue(makeOrder({ status: 'cancelled' }) as never);
+
+    const order = await ordersService.transitionStatus({
+      orderId: 'order-1',
+      toStatus: 'cancelled',
+      actorRole: 'platform_admin',
+    });
+
+    expect(order.status).toBe('cancelled');
   });
 });
