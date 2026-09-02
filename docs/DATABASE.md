@@ -16,8 +16,8 @@ source_of_truth: Supabase Project الفعلي (للجداول المنفَّذ�
 ## 1. فلسفة البيانات — Evidence: `CONSTITUTION` §4, §5
 
 - لا استدعاء مباشر لقاعدة البيانات من الواجهة — فقط عبر `[domain].repository.ts`.
-- `tenant_id` يأتي فقط من JWT الموقَّع، أبداً من طلب العميل (غير مُطبَّق بعد فعلياً — لا `tenant_id` في أي جدول حتى الآن، لأن `merchants`/`stores` لم يُبنيا).
-- RLS مفعَّل على كل جدول يحوي بيانات — `IMPLEMENTED` على الجداول الأربعة الموجودة.
+- `tenant_id` يأتي من الجلسة/JWT فقط، أبداً من طلب العميل. **`IMPLEMENTED` جزئياً منذ اليوم 4** — `products.tenant_id` موجود ويُشير إلى `merchants.id`؛ التحقق الفعلي عبر `Session.tenantId` لا يزال منطقياً فقط (لا مصادقة حقيقية بعد — راجع `specs/identity/SPEC.md`)، لا `stores` بعد.
+- RLS مفعَّل على كل جدول يحوي بيانات — `IMPLEMENTED` على السبعة الجداول الموجودة حالياً (`users`, `categories`, `products`, `merchants`, `inventory`, `carts`, `cart_items`). نمطان مختلفان: قراءة عامة (`categories`/`products`/`inventory`) مقابل قفل كامل بلا أي policy، وصول حصري عبر `service_role` (`merchants`, `carts`, `cart_items` — راجع §6 وADR-008).
 - كل سعر يُعاد حسابه من الخادم دائماً، لا يُصدَّق من العميل.
 
 ---

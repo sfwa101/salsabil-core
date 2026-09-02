@@ -1,7 +1,7 @@
 ---
 title: المعمارية التقنية
 status: ACTIVE
-version: 1.0
+version: 1.2
 last_updated: 2026-09-01
 owner: المؤسس (أبوحتاب) + Claude (معماري)
 source_of_truth: هذا الملف (تفصيل)، SALSABIL_CONSTITUTION.md §4-§5 (المبدأ)
@@ -64,10 +64,18 @@ src/
 ├── core/
 │   ├── kernel/          → محركات النواة (خليل، تيسير، حكيم...) — راجع DOMAIN_MAP.md
 │   │   ├── khalil/       → IMPLEMENTED (types.ts, khalil.service.ts, khalil.repository.ts)
-│   │   └── database/     → IMPLEMENTED (supabase-client.ts)
+│   │   └── database/     → IMPLEMENTED
+│   │       ├── supabase-client.ts        → مفتاح anon، للقراءات العامة (categories/products/inventory)
+│   │       └── supabase-admin-client.ts  → مفتاح service_role (اليوم 7، ADR-008)، خادم فقط،
+│   │                                         محمي بحزمة server-only — يُستخدَم فقط عندما RLS
+│   │                                         مقفول بالكامل (لا policy لـanon، مثل carts/merchants)
 │   ├── modules/          → النطاقات (Catalog, Orders, Inventory...)
 │   │   ├── catalog/      → IMPLEMENTED (types.ts, catalog.service.ts, catalog.repository.ts)
-│   │   └── merchant/     → IMPLEMENTED (types.ts, merchant.service.ts, merchant.repository.ts)
+│   │   ├── merchant/     → IMPLEMENTED (types.ts, merchant.service.ts, merchant.repository.ts)
+│   │   ├── inventory/    → IMPLEMENTED (اليوم 7) — types.ts, inventory.service.ts (isAvailable
+│   │   │                     فقط، بلا حجز), inventory.repository.ts
+│   │   └── cart/         → IMPLEMENTED (اليوم 7) — types.ts, cart.service.ts, cart.repository.ts
+│   │                         (يستخدم supabase-admin-client، لا supabase-client العام)
 │   ├── offline/          → دعم العمل بلا إنترنت — PROPOSED، لم يُبنَ بعد
 │   └── telemetry/        → سجل الأحداث والتدقيق — PROPOSED، لم يُبنَ بعد
 └── types/                → أنواع TypeScript مشتركة عبر النطاقات
@@ -102,10 +110,13 @@ core/modules/*/service.ts (منطق أعمال)
      ↓ يستدعي فقط
 core/modules/*/repository.ts (وصول بيانات)
      ↓ يستدعي فقط
-core/kernel/database/supabase-client.ts
+core/kernel/database/supabase-client.ts         (قراءة عامة، مفتاح anon)
+core/kernel/database/supabase-admin-client.ts   (نطاقات مقفولة بالكامل بـRLS، مفتاح service_role — اليوم 7)
 ```
 
 **ممنوع:** أي اتجاه معاكس (repository يستدعي service، أو component يستدعي repository مباشرة). هذه القاعدة **مُستنتجة من الكود الفعلي المكتوب في الأيام 1-3**، وليست منصوصاً عليها حرفياً بهذا الشكل في الدستور — لذا وسمها `INFERRED`. **مقترح: تُرفع لتصبح `DOCUMENTED_DECISION` صريحة في DECISIONS.md (انظر ADR-005 المقترح).**
+
+**قاعدة إضافية (اليوم 7، `ADR-008`):** أي `repository.ts` لنطاق تُقفَل جداوله بالكامل عبر RLS (بلا أي policy لـ`anon`/`authenticated`) **يجب** أن يستخدم `supabase-admin-client.ts`، لا `supabase-client.ts` العام. هذا ليس اختياراً أسلوبياً — استخدام العميل الخطأ يعني فشل كل استعلام صامتاً (RLS يمنع anon) أو ثغرة أمنية (لو أُزيلت RLS بالخطأ). القرار بين العميلين يُحسَم عند تصميم RLS للجدول، لا بعده.
 
 ---
 
@@ -138,8 +149,9 @@ ImportProvider (واجهة عامة، مقترحة من محادثة الاست�
 |---|---|---|
 | الواجهة الأمامية | Next.js (RTL) + TypeScript + Tailwind | `ACTIVE` |
 | منطق الخادم | Edge Functions / Node.js | `ACTIVE` |
-| قاعدة البيانات | Supabase (Postgres + Auth + Realtime + Storage) | `ACTIVE`, `IMPLEMENTED` (اتصال حقيقي، 4 جداول) |
-| الصلاحيات (RLS) | Postgres RLS | `IMPLEMENTED` (على جدول users، categories، products، inventory) |
+| قاعدة البيانات | Supabase (Postgres + Auth + Realtime + Storage) | `ACTIVE`, `IMPLEMENTED` (اتصال حقيقي، 7 جداول: users, categories, products, merchants, inventory, carts, cart_items) |
+| الصلاحيات (RLS) | Postgres RLS | `IMPLEMENTED` — نمطان: قراءة عامة (categories/products/inventory) وقفل كامل عبر service_role (merchants/carts/cart_items، اليوم 7) |
+| اختبارات آلية | Vitest (وحدة + تكامل ضد Supabase حقيقي) | `IMPLEMENTED` (اليوم 7) — راجع `src/core/modules/cart/*.test.ts` |
 | البحث | Meilisearch | `PROPOSED` (§9 دستور) — لم يُبنَ |
 | الدردشة | Supabase Realtime (المرحلة 1) | `PROPOSED` — لم يُبنَ بعد، مخطط §25 دستور |
 
