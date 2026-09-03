@@ -14,6 +14,7 @@ import {
   type CheckoutInput,
   type Order,
   type OrderActorRole,
+  type OrderCustomerView,
   type OrderStatusHistoryEntry,
   type OrderWithItems,
   type TransitionOrderStatusInput,
@@ -106,6 +107,28 @@ export class OrdersService {
     if (!order) return null;
     const items = await ordersRepository.findOrderItems(orderId);
     return { order, items };
+  }
+
+  // صفحة تتبّع الطلب للعميل الضيف (اليوم 14، /order/[id]) — بلا فحص تاجر/جلسة عمداً، ومختلفة
+  // عن التحذير أعلاه: التحذير يخاطب فاعلاً تابعاً لتاجر (أدوار merchant_*) قد يخمّن orderId
+  // ليطّلع على طلب تاجر آخر خارج نطاقه. هنا لا فاعل تاجر ولا جلسة إطلاقاً — عميل ضيف (بلا حساب،
+  // بقرار صريح في نطاق هذا اليوم) يملك رابطاً دائماً يحمل orderId (UUID عشوائي غير قابل للتخمين
+  // عملياً، gen_random_uuid()) كآلية تفويض بحد ذاتها — نفس نمط "رقم تتبّع شحنة" شائع في أي خدمة
+  // توصيل حقيقية. لتقليل الأثر لو تسرَّب رابط لطرف غير مقصود: هذه الدالة (ومستهلكها الوحيد،
+  // الصفحة) لا تُعيد عنوان التوصيل ولا هاتف/اسم العميل — الحالة والعناصر والإجمالي فقط.
+  async getOrderForCustomerView(orderId: string): Promise<OrderCustomerView | null> {
+    const order = await ordersRepository.findOrderById(orderId);
+    if (!order) return null;
+
+    const items = await ordersRepository.findOrderItems(orderId);
+    const itemsWithProductNames = await Promise.all(
+      items.map(async (item) => {
+        const product = await catalogService.getProductById(item.productId);
+        return { item, productName: product?.name ?? null };
+      })
+    );
+
+    return { order, items: itemsWithProductNames };
   }
 
   // ⚠️ أمان (اليوم 12، ADR-014): نفس تحذير getOrderWithItems أعلاه بالضبط — بلا فحص تاجر داخلي.

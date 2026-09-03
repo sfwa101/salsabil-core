@@ -26,6 +26,26 @@ export class CartService {
     return existing ?? cartRepository.createCartForSession(identity.sessionToken);
   }
 
+  // عدّاد الـHeader (اليوم 14) — مجموع الكميات لا عدد الأصناف (3 وحدات من صنف واحد تُعرَض "3"، لا
+  // "1"). يعيد استخدام findItems الموجودة أصلاً بدل إضافة استعلام SQL مخصَّص — لا حاجة فعلية له
+  // عند هذا الحجم من البيانات (نفس فلسفة "لا نبني أكثر من المطلوب فعلاً").
+  async getItemCount(cartId: string): Promise<number> {
+    const items = await cartRepository.findItems(cartId);
+    return items.reduce((sum, item) => sum + item.quantity, 0);
+  }
+
+  // قراءة فقط — عمداً لا تستدعي getOrCreateCart. الـHeader (اليوم 14) يظهر في كل صفحات (reef)،
+  // بما فيها /cart و/checkout حيث تستدعي الصفحة نفسها getOrCreateCart بالتوازي (RSC تُحلّل
+  // المكوّنات غير المعتمدة على بعضها بالتوازي في نفس الجولة) — لو استدعى الـHeader أيضاً
+  // getOrCreateCart بنفس التوكن الجديد، يتسابق الاثنان على إدراج نفس session_token (UNIQUE)
+  // ويفشل الخاسر بخطأ قيد فريد. تجنّب حقيقي للسباق لا معالجة له بعد وقوعه: لا سلة بعد لهذا
+  // التوكن يعني حرفياً "لا عناصر"، فالقراءة وحدها صحيحة ومكتملة هنا.
+  async getItemCountForSession(sessionToken: string): Promise<number> {
+    const cart = await cartRepository.findCartBySessionToken(sessionToken);
+    if (!cart) return 0;
+    return this.getItemCount(cart.id);
+  }
+
   // TODO(BR-016): لا حد أدنى للطلب مطبَّق بعد — القيمة غير معتمدة رسمياً.
   // راجع docs/BUSINESS_RULES.md → BR-016 (OPEN_QUESTION) قبل الإطلاق.
   async getSummary(cartId: string): Promise<CartSummary> {

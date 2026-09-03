@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { submitCheckoutAction } from '@/app/(reef)/checkout/actions';
-import type { Order } from '@/core/modules/orders/types';
 
 export function CheckoutForm() {
+  const router = useRouter();
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [line1, setLine1] = useState('');
@@ -12,7 +13,6 @@ export function CheckoutForm() {
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [order, setOrder] = useState<Order | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -28,20 +28,12 @@ export function CheckoutForm() {
     if ('error' in result) {
       setStatus('error');
       setError(result.error);
-    } else {
-      setOrder(result.order);
+      return;
     }
-  }
 
-  if (order) {
-    return (
-      <div className="rounded-2xl border border-primary bg-primary/5 p-6 text-center">
-        <p className="mb-2 text-lg font-semibold text-foreground">تم استلام طلبك ✓</p>
-        <p className="text-sm text-muted-foreground">
-          رقم الطلب: {order.id.slice(0, 8)} — الإجمالي: {order.total} جنيه (الدفع عند الاستلام)
-        </p>
-      </div>
-    );
+    // صفحة تتبّع الطلب هي مصدر عرض "تأكيد الطلب" الوحيد الآن — رابط دائم قابل للحفظ/المشاركة
+    // (اليوم 14)، بدل حالة محلية تُفقَد عند إعادة تحميل الصفحة
+    router.push(`/order/${result.order.id}`);
   }
 
   return (

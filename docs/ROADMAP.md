@@ -1,8 +1,8 @@
 ---
 title: خارطة الطريق
 status: ACTIVE
-version: 1.7
-last_updated: 2026-09-02
+version: 1.8
+last_updated: 2026-09-03
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTION.md §23 (الخطة الأصلية + تصحيح 14→18 يوماً)
 ---
@@ -37,9 +37,9 @@ source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTI
 | 11 | لوحة الإدارة الأساسية | `DONE` — تسجيل دخول `platform_admin`، إدارة تجار، رؤية/تحكم كل الطلبات، سجل تدقيق من `order_status_history`. راجع `docs/DECISIONS.md → ADR-013`، `specs/admin/SPEC.md` |
 | 12 | يوم الأمان الكامل | `DONE` — commit `dd13cea`، `audit_log` عام، إصلاح IDOR في السلة، تحقق مدخلات (`zod`)، Rate Limiting على الدخول. راجع `docs/DECISIONS.md → ADR-014`، `ADR-015` |
 | 13 | الاختبار الشامل (E2E-DAY13-001) | `DONE` — اختبار تكامل شامل لرحلة "ريف المدينة" الكاملة (زائر → سلة → Checkout → تاجر أ → عزل مستأجرين ضد تاجر ب حقيقي (تطبيقياً وRLS مباشرة) → تاجر أ يكمل → إدارة تُسلِّم → `order_status_history`/`audit_log`)، 8 سيناريوهات، ذاتي التنظيف. المجموع الآن 97 اختباراً، صفر حالات تسابق (Race Conditions) متبقية معروفة في هذا الملف. commits `c3b28eb`، `5b3cd2a`، `68efdf4` |
-| 14 | مرحلة الواجهة الأمامية (UI/Frontend) — جزء 1 | 🆕 `NEXT` — **جديدة، لم تكن في الخطة الأصلية 0-14 ولا في الإزاحتين السابقتين. التفاصيل الدقيقة بانتظار توجيه المؤسس — لا كود يُبدأ قبل ذلك.** |
-| 15 | مرحلة الواجهة الأمامية (UI/Frontend) — جزء 2 | 🆕 `PLANNED` — تفاصيل غير محدَّدة بعد، نفس ملاحظة اليوم 14 |
-| 16 | مرحلة الواجهة الأمامية (UI/Frontend) — جزء 3 | 🆕 `PLANNED` — تفاصيل غير محدَّدة بعد، نفس ملاحظة اليوم 14 |
+| 14 | مرحلة الواجهة الأمامية (UI/Frontend) — إصلاح خطأ 500 الحرج في `/cart`/`/checkout` (`src/proxy.ts`) | `DONE` — اكتُشف الخطأ حياً عبر تدقيق `UI-FRONTEND-AUDIT-001` (زيارة مباشرة بلا كوكي سابقة تُسقِط الصفحتين)، أُصلِح عبر `proxy.ts` (لا `middleware.ts` — اصطلاح Next.js 16 الجديد، تحقُّق حي من `node_modules/next/dist/docs`). راجع `docs/DECISIONS.md → ADR-016` |
+| 15 | مرحلة الواجهة الأمامية (UI/Frontend) — Header/Navigation موحّد + عدّاد سلة حي | `DONE` — مكوّن `Header.tsx` عبر كل صفحات `(reef)`؛ فصل صريح بين قراءة/إنشاء هوية السلة لمنع سباق حقيقي اكتُشف أثناء التخطيط (`getItemCountForSession` لا تُنشئ سلة). راجع `ADR-016` |
+| 16 | مرحلة الواجهة الأمامية (UI/Frontend) — صفحة تتبّع الطلب `/order/[id]` | `DONE` — رابط UUID دائم كآلية تفويض لعميل ضيف بلا حساب (`ordersService.getOrderForCustomerView`)، لا يعرض عنوان/هاتف العميل. `CheckoutForm` يُوجِّه إليها بعد نجاح الطلب بدل حالة داخلية مؤقتة. المجموع الآن 104 اختباراً (وحدة + تكامل)، كل الثلاثة بنود مُتحقَّق منها حياً عبر Playwright (200/404، console نظيف، رابط يعمل من متصفح منفصل كلياً بلا جلسة). راجع `ADR-016`، `docs/SECURITY.md §16` |
 | 17 | التجهيز للإنتاج (Production Deployment) | `PLANNED` |
 | 18 | الإطلاق الحي (Live Launch) | `PLANNED` |
 

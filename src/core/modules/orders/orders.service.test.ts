@@ -313,6 +313,41 @@ describe('OrdersService.transitionStatus', () => {
   });
 });
 
+describe('OrdersService.getOrderForCustomerView', () => {
+  it('يعيد null لطلب غير موجود بلا محاولة جلب بنود', async () => {
+    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(null);
+
+    const result = await ordersService.getOrderForCustomerView('missing');
+
+    expect(result).toBeNull();
+    expect(ordersRepository.findOrderItems).not.toHaveBeenCalled();
+  });
+
+  it('يُثري كل بند باسم المنتج الحقيقي عبر catalogService', async () => {
+    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
+    vi.mocked(ordersRepository.findOrderItems).mockResolvedValue([
+      { id: 'oi-1', orderId: 'order-1', productId: chicken.id, quantity: 2, selection: { sizeId: 'small' }, unitPriceSnapshot: 100, createdAt: new Date().toISOString() },
+    ]);
+
+    const result = await ordersService.getOrderForCustomerView('order-1');
+
+    expect(result!.items).toHaveLength(1);
+    expect(result!.items[0].productName).toBe('دجاجة اختبار');
+    expect(result!.items[0].item.unitPriceSnapshot).toBe(100);
+  });
+
+  it('يعيد productName: null لو حُذف المنتج (لا يفشل الاستعلام)', async () => {
+    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
+    vi.mocked(ordersRepository.findOrderItems).mockResolvedValue([
+      { id: 'oi-1', orderId: 'order-1', productId: 'deleted-product', quantity: 1, selection: {}, unitPriceSnapshot: 50, createdAt: new Date().toISOString() },
+    ]);
+
+    const result = await ordersService.getOrderForCustomerView('order-1');
+
+    expect(result!.items[0].productName).toBeNull();
+  });
+});
+
 describe('OrdersService.getOrdersForTenant', () => {
   it('يعيد طلبات التاجر المطلوب فقط عبر findOrdersByTenantId', async () => {
     const tenantOrders = [makeOrder({ status: 'pending' }), makeOrder({ status: 'confirmed' })];

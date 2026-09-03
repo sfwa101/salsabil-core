@@ -133,3 +133,15 @@ export interface OrderWithItems {
   order: Order;
   items: OrderItem[];
 }
+
+// عرض العميل الضيف (اليوم 14) — صفحة تتبّع الطلب /order/[id]، بلا حساب/تسجيل دخول. اسم المنتج
+// مُثرى هنا (order_items لا يخزّن إلا productId) لعرض "اسم × كمية" مفهوم، لا معرّفات خام.
+export interface OrderItemWithProductName {
+  item: OrderItem;
+  productName: string | null; // null فقط لو حُذف المنتج لاحقاً (لا حذف فعلي في المشروع اليوم)
+}
+
+export interface OrderCustomerView {
+  order: Order;
+  items: OrderItemWithProductName[];
+}

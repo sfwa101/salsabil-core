@@ -4,7 +4,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { cartService } from '@/core/modules/cart/cart.service';
-import { getCartIdentity } from '@/core/modules/cart/cart-session';
+import { getCartIdentity, getExistingCartSessionToken } from '@/core/modules/cart/cart-session';
 import type { AddItemInput, CartSummary } from '@/core/modules/cart/types';
 
 type ActionResult = { summary: CartSummary } | { error: string };
@@ -13,6 +13,15 @@ export async function getCartSummaryAction(): Promise<CartSummary> {
   const identity = await getCartIdentity();
   const cart = await cartService.getOrCreateCart(identity);
   return cartService.getSummary(cart.id);
+}
+
+// للـHeader (اليوم 14) — يُستدعى من كل صفحات (reef)، بما فيها صفحات لا تمس السلة إطلاقاً
+// (الرئيسية، الأقسام، المنتج). يقرأ الكوكي بلا إنشائها (getExistingCartSessionToken) عمداً: لا
+// كتابة كوكي أثناء عرض RSC (نفس مشكلة اليوم 14 الأصلية)، ولا داعٍ لإنشاء سلة لزائر لم يلمسها.
+export async function getCartItemCountAction(): Promise<number> {
+  const token = await getExistingCartSessionToken();
+  if (!token) return 0;
+  return cartService.getItemCountForSession(token);
 }
 
 export async function addToCartAction(input: AddItemInput): Promise<ActionResult> {

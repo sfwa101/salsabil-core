@@ -139,6 +139,48 @@ describe('CartService.updateItemQuantity', () => {
   });
 });
 
+describe('CartService.getItemCount', () => {
+  it('يجمع الكميات عبر كل البنود لا عدد الأصناف', async () => {
+    vi.mocked(cartRepository.findItems).mockResolvedValue([
+      makeItem({ id: 'a', quantity: 2 }),
+      makeItem({ id: 'b', quantity: 3 }),
+    ]);
+
+    const count = await cartService.getItemCount(cart.id);
+
+    expect(count).toBe(5);
+  });
+
+  it('يعيد صفراً لسلة بلا بنود', async () => {
+    vi.mocked(cartRepository.findItems).mockResolvedValue([]);
+
+    const count = await cartService.getItemCount(cart.id);
+
+    expect(count).toBe(0);
+  });
+});
+
+describe('CartService.getItemCountForSession', () => {
+  it('اختبار حاسم (اليوم 14، منع سباق مع الـHeader): لا يستدعي إنشاء سلة جديدة إطلاقاً — يعيد صفراً إن لم توجد سلة لهذا التوكن بعد', async () => {
+    vi.mocked(cartRepository.findCartBySessionToken).mockResolvedValue(null);
+
+    const count = await cartService.getItemCountForSession('brand-new-token');
+
+    expect(count).toBe(0);
+    expect(cartRepository.createCartForSession).not.toHaveBeenCalled();
+    expect(cartRepository.findItems).not.toHaveBeenCalled();
+  });
+
+  it('يجمع كميات السلة الموجودة فعلاً لهذا التوكن', async () => {
+    vi.mocked(cartRepository.findCartBySessionToken).mockResolvedValue(cart);
+    vi.mocked(cartRepository.findItems).mockResolvedValue([makeItem({ quantity: 4 })]);
+
+    const count = await cartService.getItemCountForSession(cart.sessionToken!);
+
+    expect(count).toBe(4);
+  });
+});
+
 describe('CartService.removeItem', () => {
   it('يحذف البند ويُعيد ملخصاً محدَّثاً عندما ينتمي فعلاً لهذه السلة', async () => {
     const item = makeItem();
