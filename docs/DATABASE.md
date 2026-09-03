@@ -1,8 +1,8 @@
 ---
 title: مرجع قاعدة البيانات
 status: ACTIVE
-version: 1.4
-last_updated: 2026-09-02
+version: 1.5
+last_updated: 2026-09-03
 owner: المؤسس (أبوحتاب) + Claude
 source_of_truth: Supabase Project الفعلي (للجداول المنفَّذة) + هذا الملف (للتخطيط)
 ---
@@ -347,3 +347,5 @@ create index audit_log_created_at_idx on audit_log (created_at desc);
 ## 8. Migrations
 
 لا نظام Migrations رسمي (مثل Supabase CLI migrations) مُفعَّل بعد — كل SQL نُفِّذ يدوياً عبر SQL Editor. **مخاطرة موثَّقة:** هذا مقبول في مرحلة Vertical Slice الأولى، لكن يجب الانتقال لـ Migrations رسمية قبل أي عمل فريق متعدد أو قبل الإنتاج (اليوم 13، §23). يُضاف كبند في `docs/ROADMAP.md`.
+
+**أول خطوة فعلية (اليوم 17، `ADR-017`):** `scripts/schema-setup.sql` يُعيد بناء المخطط الكامل (الاثني عشر جدولاً، بترتيب Foreign Keys صارم) كملف SQL واحد قابل للصق في مشروع Supabase جديد فارغ — يُستخدَم فعلياً لتأسيس بيئة `staging.reefam.com`. `scripts/seed-test-accounts.sql` (منفصل) يزرع حسابات/بيانات اختبار أولية بعده. **هذا ليس نظام Migrations رسمياً بعد** — لا تتبع نُسخ مخطط، لا `up`/`down`، لا أداة CLI مخصَّصة — فقط أول أثر ملموس نحوه بدل توثيق نظري فقط. راجع `ADR-017` للتفصيل الكامل، بما فيه توثيق أن أجزاءً من `schema-setup.sql` (RLS الفعلية على `categories`/`products`/`inventory`، شكل جدول `merchants`) إعادة بناء استنتاجية (`INFERRED`) لا نقلاً حرفياً موثَّقاً — لا نص SQL أصلي محفوظ لها في هذا المستودع.

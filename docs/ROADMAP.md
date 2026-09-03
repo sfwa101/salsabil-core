@@ -1,7 +1,7 @@
 ---
 title: خارطة الطريق
 status: ACTIVE
-version: 1.8
+version: 1.9
 last_updated: 2026-09-03
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTION.md §23 (الخطة الأصلية + تصحيح 14→18 يوماً)
@@ -18,6 +18,11 @@ source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTI
 ---
 
 ## Current Phase — القطعة الرأسية الأولى (Vertical Slice)
+
+**الحالة الرسمية للمشروع:** `Phase 1 Complete — Live in Production` (قرار مؤسس مباشر، 2026-09-03، `FULL-DOCS-AUDIT-AND-SYNC-UP-TO-DAY18`).
+**المحطة القادمة:** `Phase 2 Preparation (Contextual Worlds & Ecosystem Scaling)`.
+
+> **⚠️ ملاحظة دقة صريحة (لا تُقرأ الحالة أعلاه بلا هذا السطر):** الدليل الحي الفعلي وراء "Live in Production" هو `staging.reefam.com` تحديداً — تحقَّقتُ حياً أنه يعمل بنفس الكود المدفوع (`docs/CHANGELOG.md` اليوم 18)، بما فيه إصلاح `/cart` الحرج. **لا قرار أو فعل موثَّق في هذا المستودع بتحويل نطاق إنتاج منفصل بلا بادئة "staging"**، ولا تأكيد أن المؤسس أتمّ فعلياً "أول شراء حقيقي" بنفسه بعد (الإرشادات سُلِّمت له، التنفيذ اليدوي متروك له — راجع اليوم 18). القرار أعلاه بصياغته الحرفية نُفِّذ كما طلب المؤسس صراحة؛ هذا السطر توثيق للفجوة بين "الكود/البيئة جاهزان ومُتحقَّق منهما" و"عميل حقيقي أول اشترى فعلاً"، لا اعتراض عليه.
 
 **الهدف:** ريف المدينة — حي السوبرماركت، بنطاق كامل (عميل + تاجر + إدارة) يعمل من الألف للياء.
 
@@ -40,8 +45,8 @@ source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTI
 | 14 | مرحلة الواجهة الأمامية (UI/Frontend) — إصلاح خطأ 500 الحرج في `/cart`/`/checkout` (`src/proxy.ts`) | `DONE` — اكتُشف الخطأ حياً عبر تدقيق `UI-FRONTEND-AUDIT-001` (زيارة مباشرة بلا كوكي سابقة تُسقِط الصفحتين)، أُصلِح عبر `proxy.ts` (لا `middleware.ts` — اصطلاح Next.js 16 الجديد، تحقُّق حي من `node_modules/next/dist/docs`). راجع `docs/DECISIONS.md → ADR-016` |
 | 15 | مرحلة الواجهة الأمامية (UI/Frontend) — Header/Navigation موحّد + عدّاد سلة حي | `DONE` — مكوّن `Header.tsx` عبر كل صفحات `(reef)`؛ فصل صريح بين قراءة/إنشاء هوية السلة لمنع سباق حقيقي اكتُشف أثناء التخطيط (`getItemCountForSession` لا تُنشئ سلة). راجع `ADR-016` |
 | 16 | مرحلة الواجهة الأمامية (UI/Frontend) — صفحة تتبّع الطلب `/order/[id]` | `DONE` — رابط UUID دائم كآلية تفويض لعميل ضيف بلا حساب (`ordersService.getOrderForCustomerView`)، لا يعرض عنوان/هاتف العميل. `CheckoutForm` يُوجِّه إليها بعد نجاح الطلب بدل حالة داخلية مؤقتة. المجموع الآن 104 اختباراً (وحدة + تكامل)، كل الثلاثة بنود مُتحقَّق منها حياً عبر Playwright (200/404، console نظيف، رابط يعمل من متصفح منفصل كلياً بلا جلسة). راجع `ADR-016`، `docs/SECURITY.md §16` |
-| 17 | التجهيز للإنتاج (Production Deployment) | `PLANNED` |
-| 18 | الإطلاق الحي (Live Launch) | `PLANNED` |
+| 17 | التجهيز للإنتاج (Production Deployment) | `DONE` — فحص متغيرات بيئة حي كامل + `.env.example`، `npm run build` نظيف صفر تحذيرات، `scripts/schema-setup.sql`/`scripts/seed-test-accounts.sql` (أول خطوة فعلية نحو Migrations رسمية). راجع `docs/DECISIONS.md → ADR-017` |
+| 18 | الإطلاق الحي (Live Launch) | `DONE` — تحقُّق حي أن `staging.reefam.com` يعمل بنفس الكود (إصلاح `/cart` يعمل هناك فعلياً)، `scripts/test-first-real-purchase.e2e.ts` (سكربت رحلة شراء كامل، مُتحقَّق منه ضد dev لا staging — راجع ملاحظة الدقة أعلاه)، إرشادات يدوية مُسلَّمة للمؤسس. المجموع يبقى 104. راجع `ADR-017` |
 
 **تفاصيل كل يوم (الترقيم الأصلي 0-14، مع الإزاحات والتمديد حتى اليوم 18):** راجع `SALSABIL_CONSTITUTION.md §23`، القسم الفرعي **"تصحيح تاريخي: من 14 إلى 18 يوماً"**.
 

@@ -1,8 +1,8 @@
 ---
 title: نظام التصميم (Design System)
 status: PROPOSED (الاتجاه العام + معمارية الثيمات متعددة العوالم §8 ACCEPTED من حيث المبدأ ومُنفَّذة تقنياً لديوان/ريف، القيم الدقيقة للألوان و5 العوالم الأخرى لا تزال PROPOSED)
-version: 1.2
-last_updated: 2026-09-01
+version: 1.3
+last_updated: 2026-09-03
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف، SALSABIL_CONSTITUTION.md §21, §30.2 (المصدر الأصلي)
 ---
@@ -88,9 +88,9 @@ source_of_truth: هذا الملف، SALSABIL_CONSTITUTION.md §21, §30.2 (ال
 
 ---
 
-## 7. RTL و Mobile-First — Evidence: `IMPLEMENTED` (على مستوى الإعداد التقني)
+## 7. RTL و Mobile-First — Evidence: `IMPLEMENTED` (الإعداد التقني + مكوّنات حقيقية فعلية منذ اليوم 5)
 
-Next.js مُعَدّ باتجاه RTL افتراضي (`SALSABIL_CONSTITUTION.md §9`). Mobile-first كتوجه عام مذكور ضمنياً في أولوية عرض الريلز على الموبايل (§32.3) — لم يُطبَّق بعد فعلياً في أي مكوّن واجهة (لا مكونات واجهة حقيقية موجودة حتى الآن).
+Next.js مُعَدّ باتجاه RTL افتراضي (`SALSABIL_CONSTITUTION.md §9`). **تصحيح (اليوم 14-16):** الجملة السابقة هنا ("لا مكونات واجهة حقيقية موجودة حتى الآن") كانت دقيقة وقت كتابتها (اليوم 6) لكنها أصبحت بالية — عشرات المكوّنات الحقيقية موجودة الآن (`CategoryCard`, `ProductCard`, `ProductOptions`, `CheckoutForm`, `OrderRow`, `MerchantLoginForm`, `AdminLoginForm`, `AdminMerchantRow`, `Header`)، كلها تتّبع RTL عبر Flexbox القياسي (`justify-between` يعكس ترتيب العناصر تلقائياً مع `dir="rtl"` بلا حاجة لـ`flex-row-reverse` صريح — مُتحقَّق منه حياً في `Header.tsx`، أول مكوّن تنقّل موحّد عبر كل صفحات `(reef)`). Mobile-first كتوجه عام (§32.3) يبقى غير مُختبَر صراحة على مقاسات شاشة متعددة حتى الآن — لا يزال `OPEN_QUESTION` عملياً، لا `IMPLEMENTED`.
 
 ---
 
