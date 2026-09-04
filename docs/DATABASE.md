@@ -1,7 +1,7 @@
 ---
 title: مرجع قاعدة البيانات
 status: ACTIVE
-version: 1.6
+version: 1.7
 last_updated: 2026-09-04
 owner: المؤسس (أبوحتاب) + Claude
 source_of_truth: Supabase Project الفعلي (للجداول المنفَّذة) + هذا الملف (للتخطيط)
@@ -17,7 +17,7 @@ source_of_truth: Supabase Project الفعلي (للجداول المنفَّذ�
 
 - لا استدعاء مباشر لقاعدة البيانات من الواجهة — فقط عبر `[domain].repository.ts`.
 - `tenant_id` يأتي من الجلسة/JWT فقط، أبداً من طلب العميل. **`IMPLEMENTED` منذ اليوم 10** — `products.tenant_id` يُشير إلى `merchants.id`؛ `Session.tenantId` أصبح حقيقياً الآن (جدول `sessions`، تسجيل دخول تاجر بالهاتف، اليوم 10، `ADR-012`) — لا يزال بلا كلمة مرور حقيقية ولا Supabase Auth كاملة (`specs/identity/SPEC.md` لا يزال الفجوة الأشمل)، لكن `tenant_id` نفسه صار يُقرأ فعلياً من جلسة server-side لا من مدخل عميل. لا `stores` بعد.
-- RLS مفعَّل على كل جدول يحوي بيانات — `IMPLEMENTED` على الاثني عشر جدولاً الموجودة حالياً (`users`, `categories`, `products`, `merchants`, `inventory`, `carts`, `cart_items`, `orders`, `order_items`, `order_status_history`, `sessions`, `audit_log`). ثلاثة أنماط: (أ) قراءة عامة + كتابة ممنوعة لـ`anon` (`categories`/`products`/`inventory` فقط — **`merchants` أُزيلت من هذه المجموعة اليوم 10**، راجع الملاحظة أدناه)، (ب) قفل كامل بلا أي policy، وصول حصري عبر `service_role` (`carts`, `cart_items`, `orders`, `order_items`, `order_status_history`, **`merchants`**, `sessions`, **`audit_log`** — راجع ADR-008/ADR-009/ADR-010/ADR-012/ADR-014)، (ج) قراءة الذات فقط (`users`، **معطَّلة عملياً حالياً — راجع §6**).
+- RLS مفعَّل على كل جدول يحوي بيانات — `IMPLEMENTED` على الأربعة عشر جدولاً الموجودة حالياً (`users`, `categories`, `products`, `merchants`, `inventory`, `carts`, `cart_items`, `orders`, `order_items`, `order_status_history`, `sessions`, `audit_log`, `worlds`, `user_personas`). ثلاثة أنماط: (أ) قراءة عامة + كتابة ممنوعة لـ`anon` (`categories`/`products`/`inventory` فقط — **`merchants` أُزيلت من هذه المجموعة اليوم 10**، راجع الملاحظة أدناه)، (ب) قفل كامل بلا أي policy، وصول حصري عبر `service_role` (`carts`, `cart_items`, `orders`, `order_items`, `order_status_history`, **`merchants`**, `sessions`, **`audit_log`** — راجع ADR-008/ADR-009/ADR-010/ADR-012/ADR-014)، (ج) قراءة الذات فقط (`users`، **معطَّلة عملياً حالياً — راجع §6**).
 - **تصحيح تاريخي (اليوم 9.5، تحقُّق حي):** إلى اليوم 9، `merchants` كانت مصنَّفة خطأً هنا كجزء من النمط (ب)، بينما كانت فعلياً في النمط (أ) — قابلة للقراءة العامة بالكامل عبر `anon` (`phone`/`owner_id` مكشوفان). اليوم 10 (`ADR-012`) نقلها فعلياً وحقيقياً للنمط (ب) — حُذفت سياسة القراءة العامة (`"Merchants are viewable by everyone"`) بعد تأكيد عدم وجود أي مستهلك فعلي لها في الكود.
 - كل سعر يُعاد حسابه من الخادم دائماً، لا يُصدَّق من العميل.
 
@@ -237,6 +237,9 @@ alter table sessions
   check (role in ('platform_admin','merchant_owner','merchant_manager','employee','customer'));
 alter table sessions enable row level security;
 create index sessions_user_id_idx on sessions (user_id);
+
+-- اليوم 19 (Context Engine، ADR-018) — عمود جديد، nullable
+alter table sessions add column active_persona_id uuid references user_personas(id);
 ```
 
 **الحالة:** `IMPLEMENTED` — كان `CONCEPTUAL` منذ اليوم 2 ("مع تسجيل الدخول")، بُني الآن فعلياً عند أول تدفق دخول حقيقي (تسجيل دخول تاجر بالهاتف بلا كلمة مرور). يُفعِّل لأول مرة `Session`/`canAccessTenant` الموجودين في `src/core/kernel/khalil/` منذ اليوم 4 بلا أي مستهلك فعلي حتى الآن. مُتحقَّق منه حياً: دخول حقيقي بهاتف تاجر تجريبي موجود مسبقاً في القاعدة، قراءة الجلسة عبر `token`، إبطالها (`destroySession`)، ومحاولة إدراج `role` غير صحيحة (رُفضت فعلياً بـ`sessions_role_check`).
@@ -291,6 +294,66 @@ create index audit_log_created_at_idx on audit_log (created_at desc);
 - **لا بيانات حساسة في `metadata`** — لا كلمة مرور (غير موجودة أصلاً في التصميم)، لا Token جلسة، فقط قيم قبل/بعد
   أو رقم الهاتف/الدور المستخدَم في محاولة الدخول.
 
+### `worlds`, `user_personas` (+ `sessions.active_persona_id`) — Evidence: `IMPLEMENTED` (اليوم 19، `ADR-018`)
+
+```sql
+create table worlds (
+  id uuid primary key default gen_random_uuid(),
+  slug text unique not null,
+  name text not null,
+  description text,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+alter table worlds enable row level security;
+-- بلا أي policy — قفل كامل، نفس النمط 2 (merchants/orders/carts/audit_log). تأكيد المؤسس الصريح:
+-- worlds تحدد الصلاحيات، بيانات حساسة، لا قراءة عامة إطلاقاً.
+
+create table user_personas (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id),
+  world_id uuid not null references worlds(id),
+  is_default boolean not null default false,
+  created_at timestamptz not null default now()
+);
+alter table user_personas enable row level security;
+-- بلا أي policy — نفس النمط 2 (شخصية = هوية، بيانات حساسة).
+
+create unique index user_personas_default_per_world_uidx
+  on user_personas (user_id, world_id) where is_default = true;
+create unique index user_personas_one_default_uidx
+  on user_personas (user_id) where is_default = true;
+
+alter table sessions add column active_persona_id uuid references user_personas(id);
+```
+
+**الحالة:** `IMPLEMENTED` — كان `CONCEPTUAL` بانتظار بوابة قرار RFC (`docs/DECISIONS.md → CONFLICT-006`)، بُني فعلياً
+اليوم 19 كأول تنفيذ حقيقي (لكن محدود جداً) لِـ`ideas/CONTEXTUAL_WORLDS_RFC.md`. **DDL طُبِّق يدوياً عبر Supabase
+SQL Editor** (`scripts/day19-context-engine-schema.sql`، نفس عُرف كل جدول سابق — لا اتصال Postgres مباشر متاح
+لـ Claude Code في هذا المشروع، فقط `@supabase/supabase-js` عبر PostgREST، الذي لا يُنفِّذ DDL). Seed/Backfill/التحقق
+الحي نُفِّذت مباشرة بعدها عبر `scripts/day19-context-engine-seed-and-verify.ts` (`service_role`، DML بحت):
+- صف واحد فقط زُرِع في `worlds`: `individuals` (الأفراد).
+- Backfill: 5 مستخدمين بدور `customer` كانوا موجودين فعلياً وقت التنفيذ — كلهم حصلوا على شخصية افتراضية
+  (`is_default = true`) في عالم `individuals`. **لا التاجر التجريبي ولا حساب `platform_admin`** — عمداً
+  (`CONFLICT-006`).
+- تحقُّق حي بمحاولات إدراج فاشلة متعمَّدة (9/9 نجحت، نفس منهجية `ADR-010`/`ADR-012`): تكرار `worlds.slug`
+  (`23505`)، `user_personas.world_id`/`user_id` غير موجودين (`23503` لكليهما)، شخصية افتراضية ثانية لنفس
+  (`user_id`, `world_id`) (`23505` — الفهرس الجزئي الأول)، شخصية افتراضية ثانية لنفس `user_id` عبر عالم آخر
+  (`23505` — الفهرس الجزئي الثاني، عبر عالم مؤقت أُنشئ وحُذِف فوراً ضمن السكربت نفسه)، وقراءة `anon` فارغة
+  تماماً على الجدولين (قفل RLS).
+
+**قرارات تصميم (راجع `ADR-018` في `docs/DECISIONS.md` للتفصيل الكامل):**
+- **`user_personas` تسمح نظرياً بأكثر من شخصية غير افتراضية لكل (`user_id`, `world_id`)** — لا `UNIQUE` كامل على
+  الزوج نفسه، فقط على الشخصيات الافتراضية (`is_default = true`). هذا متعمَّد: يسمح مستقبلاً (مثال: عالم "أعمال")
+  بأن يملك مستخدم واحد أكثر من شخصية داخل نفس العالم (يدير متجرين منفصلين) دون تعارض بنيوي اليوم.
+- **الفهرس الجزئي الأول** (`user_personas_default_per_world_uidx`، على `(user_id, world_id)` حيث `is_default`):
+  شخصية افتراضية واحدة على الأكثر لكل عالم يدخله المستخدم — يبقى صحيحاً حتى لو تعدَّدت العوالم مستقبلاً.
+- **الفهرس الجزئي الثاني** (`user_personas_one_default_uidx`، على `user_id` حيث `is_default`): شخصية افتراضية
+  واحدة على الأكثر لكل مستخدم عبر **كل** العوالم مجتمعة — القيد الفعلي الحاكم اليوم (عالم واحد فقط)، يضمن
+  لـ`sessions.active_persona_id` افتراضياً واحداً لا لبس فيه. يُحذَف وحده عند تخفيف القاعدة مستقبلاً، الأول يبقى.
+- **`sessions.active_persona_id` قابل لـ`NULL` عمداً** — لا مستهلك فعلي له بعد (لا واجهة تبديل شخصية، لا كود
+  يقرأه أو يكتبه خارج هذا الـMigration). بنية تحتية دنيا فقط، بانضباط `SALSABIL_CONSTITUTION.md §1`.
+
 ---
 
 ## 4. الجداول — CONCEPTUAL (مخطَّطة في الدستور، لم تُبنَ)
@@ -302,12 +365,11 @@ create index audit_log_created_at_idx on audit_log (created_at desc);
 | `stores` | Tenant (طبقة فرعية تحت `merchants`) | غير مجدوَل بعد | `CONCEPTUAL` |
 | `users.national_id`, `users.is_verified` (أعمدة جديدة على `users`، لا جدول منفصل) | Identity — Phase 2 من نموذج الهوية المرحلي (`ADR-015`) | يُبنى عند بدء نطاق تاجر جديد/شركاء النجاح/تيسير تحديداً — غير مجدوَل بعد | `CONCEPTUAL` — توثيق هوية إجباري فقط عند تلك الخدمات، لا للتصفح/الشراء العادي |
 | `product_variant`, `sku`, `barcode`, `packaging` | Catalog (العمق الكامل) | غير مجدوَل بعد — أُجِّل لصالح Vertical Slice أولاً | `CONCEPTUAL` |
-| `worlds`, `user_personas` (+ `sessions.active_persona_id` جديد، `nullable`) | خليل (Khalil) — Context Engine، امتداد لِـ`ideas/CONTEXTUAL_WORLDS_RFC.md` | اليوم 19 — راجع `docs/DECISIONS.md → CONFLICT-006` لبوابة القرار | `CONCEPTUAL` (قيد الجدولة لليوم 19) |
 
-**⚠️ تحذير تسمية صريح — `worlds` (هذا الجدول) ≠ `WorldSlug`/`WORLD_THEMES` (`src/config/theme-registry.ts`):**
-المفهومان يحملان اسماً متشابهاً بالصدفة، ولا علاقة بنيوية بينهما:
+**⚠️ تحذير تسمية صريح — `worlds` (جدول `IMPLEMENTED`، راجع §3 أعلاه) ≠ `WorldSlug`/`WORLD_THEMES`
+(`src/config/theme-registry.ts`):** المفهومان يحملان اسماً متشابهاً بالصدفة، ولا علاقة بنيوية بينهما:
 - `WorldSlug`/`WORLD_THEMES` (`ADR-007`, `IMPLEMENTED` منذ اليوم 6): تعداد ثابت في الكود (`'diwan' | 'reef' | 'asrab' | ...`) لثيمات CSS **بصرية** فقط — أي لون/رمز يُطبَّق عبر `data-world="<slug>"`. لا صلة له بهوية المستخدم أو صلاحياته.
-- `worlds` (هذا الجدول، `CONCEPTUAL`): صفوف بيانات في Supabase تمثّل **سياقات هوية** (Context Packages بحسب RFC) — مثال: صف `individuals` (الأفراد) وحده مُقرَّر لليوم 19 (لا صف "أعمال" أو غيره بعد، `CONFLICT-006`). يرتبط بـ`user_personas` (شخصية نشطة لكل مستخدم داخل عالم معيّن) و`sessions.active_persona_id`.
+- `worlds` (جدول Supabase، `IMPLEMENTED` اليوم 19): صفوف بيانات تمثّل **سياقات هوية** (Context Packages بحسب RFC) — صف `individuals` وحده موجود اليوم (لا صف "أعمال" أو غيره، `CONFLICT-006`). يرتبط بـ`user_personas` و`sessions.active_persona_id`.
 - عالم بصري واحد (مثال: `reef`) قد يُستهلَك من أكثر من صف `worlds` مستقبلاً (فرد يتصفح ريف بشخصية "فرد" مقابل شخصية "تاجر جملة")، والعكس أيضاً وارد نظرياً — **لا افتراض تطابق واحد-لواحد بين الاثنين**. أي كود مستقبلي يخلط بينهما (مثال: افتراض أن `WorldSlug` يكفي لتحديد صلاحيات المستخدم) خطأ معماري يجب رفضه.
 
 ---
@@ -334,6 +396,7 @@ create index audit_log_created_at_idx on audit_log (created_at desc);
 | `orders`, `order_items`, `order_status_history` | بلا أي policy — نفس نمط القفل الكامل (اليوم 8، `ADR-009`؛ الثالث اليوم 9، `ADR-010`) | `IMPLEMENTED` (دورة حياة كاملة) |
 | `sessions` | بلا أي policy — قفل كامل، وصول حصري عبر `service_role` (اليوم 10، `ADR-012`) | `IMPLEMENTED` |
 | `audit_log` | بلا أي policy — قفل كامل، وصول حصري عبر `service_role` (اليوم 12، `ADR-014`) | `IMPLEMENTED` |
+| `worlds`, `user_personas` | بلا أي policy — قفل كامل، وصول حصري عبر `service_role` (اليوم 19، `ADR-018`) | `IMPLEMENTED` |
 
 **سياسات الكتابة (Insert/Update/Delete) لا تزال غير موجودة/موثَّقة على `users`/`categories`/`products`/`inventory` — `OPEN_QUESTION` صريح. مراجعة اليوم 12 تحقَّقت حياً: لا كود كتابة إطلاقاً على `categories`/`products`/`inventory` حتى الآن (`catalog.repository.ts`/`inventory.repository.ts` قراءة فقط) — لا خطر فعلي اليوم. **قاعدة القرار المعتمدة لأي كتابة مستقبلية على هذه الجداول** (مثال: بوابة تاجر تضيف منتجاً): يُحسَم عندها تحديداً بين نقل الجدول لعميل `service_role` (نمط ب) أو سياسة كتابة مقيَّدة بالدور — لا يُقرَّر مسبقاً بلا حاجة فعلية (نفس منهج `ADR-008`).**
 

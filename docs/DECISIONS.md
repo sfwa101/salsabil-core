@@ -1,7 +1,7 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.10
+version: 1.11
 last_updated: 2026-09-04
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف
@@ -443,6 +443,66 @@ Related Documents: docs/DATABASE.md §8 (Migrations)، docs/SECURITY.md OPEN_QUE
 
 ---
 
+## ADR-018
+```
+Title: اليوم 19 — أول تنفيذ فعلي لِـ Context Engine: worlds/user_personas بصف individuals وحيد،
+          فهرسان جزئيان بدل UNIQUE كامل، وDDL يدوي (لا اتصال Postgres مباشر لـClaude Code)
+Status: ACCEPTED
+Date: 2026-09-04 (اليوم 19، بعد حسم بوابة RFC في CONFLICT-006)
+Decision: (أ) جدولا `worlds`/`user_personas` جديدان (`docs/DATABASE.md §3` للـSQL الكامل) — `worlds` بلا أي
+          `UNIQUE` على المحتوى غير `slug`، صف واحد فقط مزروع اليوم (`individuals`). `user_personas` **بلا**
+          `UNIQUE` كامل على `(user_id, world_id)` — يسمح نظرياً بأكثر من شخصية غير افتراضية لنفس المستخدم في
+          نفس العالم (تحسّباً لعوالم "أعمال" مستقبلية: مستخدم يدير متجرين منفصلين كشخصيتين مختلفتين). القيدان
+          الفعليان اثنان فقط، كلاهما فهرس جزئي (`WHERE is_default = true`) لا `UNIQUE` عمودي كامل:
+          `user_personas_default_per_world_uidx` (`user_id, world_id`) و`user_personas_one_default_uidx`
+          (`user_id` وحده — القيد الحاكم فعلياً اليوم بعالم واحد فقط).
+          (ب) `sessions.active_persona_id uuid references user_personas(id)` — عمود جديد `nullable` على جدول
+          `sessions` القائم (اليوم 10، `ADR-012`)، بلا أي مستهلك كود بعد.
+          (ج) RLS: قفل كامل بلا أي `policy` على الجدولين — نفس النمط 2 (`merchants`/`orders`/`carts`/`audit_log`)،
+          بتأكيد صريح من المؤسس أن كلا الجدولين بيانات حساسة (صلاحيات + هوية شخصية) لا تحتمل قراءة عامة.
+          (د) Backfill: صف `user_personas` افتراضي واحد لكل `users.role = 'customer'` كانوا موجودين فعلياً وقت
+          التنفيذ (5 مستخدمين) — لا التاجر التجريبي (`merchant_owner`)، لا حساب `platform_admin` — بقرار مؤسس
+          مباشر (`CONFLICT-006`، بند 3).
+          (هـ) **تنفيذ DDL يدوي عبر Supabase SQL Editor** (`scripts/day19-context-engine-schema.sql`) — اكتُشف
+          حياً أثناء التخطيط أن هذا المشروع لا يملك اتصال Postgres مباشر (لا `DATABASE_URL`، لا حزمة `pg`) —
+          فقط `@supabase/supabase-js` عبر PostgREST (`service_role`/`anon`)، الذي ينفّذ DML (`INSERT`/`SELECT`/
+          `UPDATE`/`DELETE`) على جداول قائمة لكن **لا** DDL (`CREATE TABLE`/`ALTER TABLE`/`CREATE INDEX`). هذا
+          ليس استثناءً — نفس نمط كل Migration سابق في هذا المستودع (`ADR-008` حتى `ADR-017`) طُبِّق يدوياً عبر
+          SQL Editor أيضاً؛ Claude Code صاغ الـSQL وتحقَّق حياً قبل/بعد، لم يُنفِّذ DDL مباشرة في أي يوم سابق.
+          (و) Seed/Backfill/تحقُّق حي كلها DML بحت، نُفِّذت مباشرة عبر `scripts/day19-context-engine-seed-and-
+          verify.ts` (`service_role`) بلا أي خطوة يدوية إضافية — بما فيها إنشاء عالم مؤقت لاختبار الفهرس الجزئي
+          الثاني (شخصية افتراضية ثانية لنفس المستخدم عبر عالم آخر)، حُذف فوراً ضمن نفس تشغيل السكربت.
+Context: `CONFLICT-006` حسم بوابة RFC (`ideas/CONTEXTUAL_WORLDS_RFC.md`) لكن دون تفاصيل SQL دقيقة مسترجَعة من
+          جلسة سابقة مفقودة — فقط ملخص المؤسس (`worlds` بصف `individuals`، `user_personas` بفهرسين جزئيين،
+          `sessions.active_persona_id nullable`). صُمِّم شكل الفهرسين الجزئيين هنا من الصفر (`⚠️ إعادة بناء
+          (INFERRED)`، لا استرجاع نص مفقود)، مبرَّراً هندسياً لا مخموناً عشوائياً — راجع Alternatives أدناه.
+Alternatives: (أ) `UNIQUE` كامل على `(user_id, world_id)` بدل فهرس جزئي مشروط بـ`is_default` — رُفض: يمنع
+          مسبقاً أي مستخدم من امتلاك أكثر من شخصية في نفس العالم، افتراض تقييدي لا يوجد دليل عليه اليوم (لا
+          عالم "أعمال" مبني بعد أصلاً)، يخالف "لا نبني قيداً لا حاجة فعلية له" (نفس منهج `ADR-009` مع تقسيم
+          الطلب). (ب) فهرس جزئي واحد فقط (`user_id` عالمياً) بلا الفهرس الثاني على `(user_id, world_id)` — رُفض:
+          يجعل أي تخفيف مستقبلي للقاعدة (السماح بشخصية افتراضية واحدة لكل عالم بدل واحدة عالمياً) يتطلب Migration
+          جديدة لإضافة فهرس لم يكن موجوداً، بدل حذف الفهرس الأضيق فقط والإبقاء على الأوسع الموجود سلفاً. (ج)
+          محاولة اتصال Postgres مباشر (حزمة `pg` + `DATABASE_URL`) لتنفيذ DDL آلياً بدل SQL Editor يدوي — رُفض:
+          تغيير في المكدس التقني (يضيف اعتماداً جديداً، سر بيئة جديد) يتجاوز نطاق "Migration واحدة"، ويخالف نمط
+          كل يوم سابق في هذا المستودع بلا مبرر فعلي (اليوم اليدوي يعمل، بلا مخاطرة إضافية). (د) Backfill لكل
+          أدوار `users` (بما فيها `merchant_owner`/`platform_admin`) — رُفض صراحة بقرار مؤسس مباشر (`CONFLICT-006`).
+Why: قرار المؤسس المباشر — تأكيد صريح على نمط RLS (النمط 2، بلا استثناء) والخطوات الخمس بالترتيب (إنشاء، RLS،
+          seed، backfill، تحقُّق حي بمحاولات فاشلة متعمَّدة) قبل التنفيذ. تصميم الفهرسين الجزئيين وقرار DDL اليدوي
+          قرارات هندسية اتُّخذت أثناء التنفيذ بناءً على تحقُّق حي (غياب اتصال Postgres مباشر)، لا افتراضاً مسبقاً.
+Consequences: `worlds`/`user_personas`/`sessions.active_persona_id` بيانات حية على Supabase الآن (`IMPLEMENTED`)
+          لكن **بلا أي مستهلك كود** — لا `types.ts`، لا `khalil.repository.ts`/`khalil.service.ts` يقرأ/يكتب هذه
+          الجداول بعد (مؤجَّل لليوم 20 صراحة بقرار المؤسس). لا واجهة تبديل شخصية، لا تكيّف محركات نواة — هذه
+          الـMigration بنية تحتية دنيا فقط، تماماً كما وثَّق `docs/DIWAN_VISION.md → "الحالة الحالية مقابل الرؤية"`.
+          `scripts/day19-context-engine-schema.sql` ليس جزءاً من `scripts/schema-setup.sql` (تأسيس مشروع جديد من
+          الصفر) — أي بيئة `staging`/إنتاج مستقبلية تحتاج تطبيق كلا الملفين بالترتيب، لا الاكتفاء بالأول (فجوة
+          موثَّقة، لم تُغلَق اليوم — خارج نطاق اليوم 19).
+Related Documents: docs/DATABASE.md §3 (worlds, user_personas, sessions)، docs/DOMAIN_MAP.md → خليل، CONFLICT-006،
+          docs/DIWAN_VISION.md، ideas/CONTEXTUAL_WORLDS_RFC.md، ADR-010 (منهجية التحقُّق الحي)، ADR-012 (نمط
+          الجلسات)، scripts/day19-context-engine-schema.sql، scripts/day19-context-engine-seed-and-verify.ts
+```
+
+---
+
 ## سجل التعارضات (CONFLICT LOG)
 
 ### CONFLICT-001
@@ -521,7 +581,8 @@ Related Documents: docs/DATABASE.md §8 (Migrations)، docs/SECURITY.md OPEN_QUE
           الفعلي يُوثَّق بـADR منفصل عند اكتماله.
 يحتاج قراراً من: — تم الحسم في هذا التحديث بصفته القرار المنفصل نفسه الذي اشترطه RFC؛ لا حاجة لموافقة إضافية على
           البوابة ذاتها. أي تفصيل تقني يتجاوز الأربعة المُدرجين أعلاه يبقى بحاجة تأكيد صريح إن ظهر تعارض عند التنفيذ.
-الحالة: RESOLVED
+الحالة: RESOLVED — التنفيذ الفعلي (اليوم 19) موثَّق في `ADR-018`
 Related Documents: ideas/CONTEXTUAL_WORLDS_RFC.md، docs/DIWAN_VISION.md (جديد — الرؤية الأوسع مدى التي ينتمي
-          إليها RFC العوالم السياقية كجزء تنفيذي أول منها فقط)، docs/DATABASE.md §4، docs/DOMAIN_MAP.md → خليل
+          إليها RFC العوالم السياقية كجزء تنفيذي أول منها فقط)، docs/DATABASE.md §3/§4، docs/DOMAIN_MAP.md → خليل،
+          ADR-018 (التنفيذ الفعلي)
 ```

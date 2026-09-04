@@ -1,8 +1,8 @@
 ---
 title: سجل التغييرات
 status: ACTIVE
-version: 1.6
-last_updated: 2026-09-03
+version: 1.7
+last_updated: 2026-09-04
 owner: Claude (تلقائي مع كل مهمة كبيرة)
 source_of_truth: هذا الملف + Git log
 ---
@@ -12,6 +12,30 @@ source_of_truth: هذا الملف + Git log
 > يُسجَّل هنا فقط التغييرات المهمة (معمارية، قواعد أعمال، قاعدة بيانات، أمان، UX، قرارات، خارطة طريق) — لا كل commit صغير.
 
 ---
+
+## 2026-09-04 (اليوم 19) — Context Engine: Migration أولى لـ`worlds`/`user_personas` (RESUME-CONTEXT-ENGINE-AFTER-MIGRATION)
+
+> **سياق:** أول جلسة بعد نقل المستودع من OneDrive لهارد محلي. بوابة `ideas/CONTEXTUAL_WORLDS_RFC.md` (تشترط قراراً
+> منفصلاً من المؤسس قبل أي تنفيذ) حُسمت في `CONFLICT-006` استناداً لِـ`docs/ROADMAP.md` (المحطة القادمة "Contextual
+> Worlds & Ecosystem Scaling"). تفاصيل جلسة سابقة (الأسئلة الأربعة الأصلية) غير مسترجَعة — موثَّق صراحة في
+> `CONFLICT-006`/`ADR-018` كفجوة معروفة، لا كاسترجاع نص مفقود.
+
+- `docs/DIWAN_VISION.md` (جديد) — تدوين حرفي لنصّي رؤية بعيدة المدى من استشارة معمارية خارجية ("عوالم ديوان"
+  و"المستويات الثلاثة")، مع قسم "الحالة الحالية مقابل الرؤية". `VISIONARY` بحت، لا يُجدوِل تنفيذاً.
+- `scripts/day19-context-engine-schema.sql` (جديد) — DDL لجدولي `worlds`/`user_personas` + `sessions.
+  active_persona_id`. **طُبِّق يدوياً عبر Supabase SQL Editor** — اكتُشف حياً أثناء التخطيط أن المشروع لا يملك
+  اتصال Postgres مباشر (لا `pg`، لا `DATABASE_URL`)، فقط `@supabase/supabase-js` (لا ينفّذ DDL). نفس نمط كل
+  Migration سابق (`ADR-008`-`ADR-017`).
+- `scripts/day19-context-engine-seed-and-verify.ts` (جديد) — نُفِّذ حياً فعلياً (لا يدوياً) عبر `service_role`:
+  seed صف `individuals`، backfill لـ5 مستخدمين `customer` حاليين (لا التاجر التجريبي، لا `platform_admin`)، ثم
+  9 محاولات تحقُّق حي (تكرار `slug`، FK مزدوج، الفهرسان الجزئيان، قفل RLS ضد `anon`) — 9/9 نجحت، ذاتي التنظيف
+  بالكامل (عالم مؤقت للفهرس الثاني أُنشئ وحُذف ضمن نفس التشغيل).
+- `docs/DATABASE.md`, `docs/DOMAIN_MAP.md`, `docs/DECISIONS.md` (`ADR-018`, `CONFLICT-006`), `docs/ROADMAP.md` —
+  محدَّثة بالكامل لتعكس الحالة الحية الجديدة.
+- **لا مستهلك كود بعد** — `types.ts`/`khalil.repository.ts`/`khalil.service.ts` لا يقرأون/يكتبون هذه الجداول
+  إطلاقاً حتى الآن، مؤجَّل لليوم 20 بقرار مؤسس صريح. لا اختبارات Vitest جديدة (Migration + سكربتات خارج `npm
+  test`) — المجموع يبقى 104.
+- commit: (يُضاف بعد commit هذا التحديث نفسه).
 
 ## 2026-09-03 (اليوم 18) — الإطلاق الحي: تحقّق Staging وسكربت التجربة الأولى (FULL-DOCS-AUDIT-AND-SYNC)
 

@@ -1,7 +1,7 @@
 ---
 title: خارطة الطريق
 status: ACTIVE
-version: 1.10
+version: 1.11
 last_updated: 2026-09-04
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTION.md §23 (الخطة الأصلية + تصحيح 14→18 يوماً)
@@ -47,6 +47,7 @@ source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTI
 | 16 | مرحلة الواجهة الأمامية (UI/Frontend) — صفحة تتبّع الطلب `/order/[id]` | `DONE` — رابط UUID دائم كآلية تفويض لعميل ضيف بلا حساب (`ordersService.getOrderForCustomerView`)، لا يعرض عنوان/هاتف العميل. `CheckoutForm` يُوجِّه إليها بعد نجاح الطلب بدل حالة داخلية مؤقتة. المجموع الآن 104 اختباراً (وحدة + تكامل)، كل الثلاثة بنود مُتحقَّق منها حياً عبر Playwright (200/404، console نظيف، رابط يعمل من متصفح منفصل كلياً بلا جلسة). راجع `ADR-016`، `docs/SECURITY.md §16` |
 | 17 | التجهيز للإنتاج (Production Deployment) | `DONE` — فحص متغيرات بيئة حي كامل + `.env.example`، `npm run build` نظيف صفر تحذيرات، `scripts/schema-setup.sql`/`scripts/seed-test-accounts.sql` (أول خطوة فعلية نحو Migrations رسمية). راجع `docs/DECISIONS.md → ADR-017` |
 | 18 | الإطلاق الحي (Live Launch) | `DONE` — تحقُّق حي أن `staging.reefam.com` يعمل بنفس الكود (إصلاح `/cart` يعمل هناك فعلياً)، `scripts/test-first-real-purchase.e2e.ts` (سكربت رحلة شراء كامل، مُتحقَّق منه ضد dev لا staging — راجع ملاحظة الدقة أعلاه)، إرشادات يدوية مُسلَّمة للمؤسس. المجموع يبقى 104. راجع `ADR-017` |
+| 19 | Context Engine — Migration `worlds`/`user_personas` على Supabase (dev) | `DONE` — DDL يدوي عبر SQL Editor (`scripts/day19-context-engine-schema.sql`)، RLS بالنمط 2 (قفل كامل)، seed صف `individuals`، backfill لـ5 مستخدمين `customer` حاليين، تحقُّق حي 9/9 بمحاولات إدراج فاشلة متعمَّدة (`scripts/day19-context-engine-seed-and-verify.ts`). لا مستهلك كود بعد (`types.ts`/`khalil.repository.ts` مؤجَّلان لليوم 20 صراحة). راجع `ADR-018`، `CONFLICT-006`، `docs/DIWAN_VISION.md` |
 
 **تفاصيل كل يوم (الترقيم الأصلي 0-14، مع الإزاحات والتمديد حتى اليوم 18):** راجع `SALSABIL_CONSTITUTION.md §23`، القسم الفرعي **"تصحيح تاريخي: من 14 إلى 18 يوماً"**.
 
