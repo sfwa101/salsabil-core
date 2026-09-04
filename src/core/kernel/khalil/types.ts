@@ -26,3 +26,22 @@ export interface Tenant {
   isActive: boolean;
   createdAt: string;
 }
+
+// اليوم 19 (ADR-018) — Context Engine. لا يُخلَط مع WorldSlug/WORLD_THEMES
+// (src/config/theme-registry.ts) — ذاك ثيمات CSS بصرية، هذا سياق هوية/صلاحيات (راجع docs/DATABASE.md §3).
+export interface World {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface UserPersona {
+  id: string;
+  userId: string;
+  worldId: string;
+  isDefault: boolean;
+  createdAt: string;
+}

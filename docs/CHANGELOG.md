@@ -1,7 +1,7 @@
 ---
 title: سجل التغييرات
 status: ACTIVE
-version: 1.7
+version: 1.8
 last_updated: 2026-09-04
 owner: Claude (تلقائي مع كل مهمة كبيرة)
 source_of_truth: هذا الملف + Git log
@@ -12,6 +12,21 @@ source_of_truth: هذا الملف + Git log
 > يُسجَّل هنا فقط التغييرات المهمة (معمارية، قواعد أعمال، قاعدة بيانات، أمان، UX، قرارات، خارطة طريق) — لا كل commit صغير.
 
 ---
+
+## 2026-09-04 (اليوم 20) — Context Engine: `types.ts` + `khalil.repository.ts` (4 دوال جديدة، إضافي بحت)
+
+- `src/core/kernel/khalil/types.ts` — واجهتان جديدتان: `World`، `UserPersona` (camelCase، تطابق أعمدة
+  `worlds`/`user_personas` من `ADR-018`). تعليق تحذيري صريح ضد الخلط مع `WorldSlug`/`WORLD_THEMES`.
+- `src/core/kernel/khalil/khalil.repository.ts` — 4 دوال جديدة، عبر `supabaseAdmin` حصراً (نفس نمط
+  `sessions`/`merchants` — الجدولان مقفولان بالكامل، لا عميل `anon` يعمل عليهما): `findWorldBySlug`،
+  `listActiveWorlds`، `findPersonaByUserAndWorld`، `createPersona`. **لا تعديل على أي دالة/نوع قائم.**
+- `src/core/kernel/khalil/khalil.repository.test.ts` (جديد، 10 اختبارات) — **أول ملف في هذا المستودع
+  يموّه عميل `supabaseAdmin` مباشرة** بدل الاكتفاء بتكامل حي أو تمويه طبقة `service.ts`: لا مستهلك
+  `service.ts` بعد لهذه الدوال (اليوم 21)، فلا "طبقة أعلى" ممكن تمويهها بنفس نمط `service.test.ts`
+  القائم بعد. مُوثَّق صراحة كتعليق داخل الملف نفسه، لا كتوسيع صامت لنمط الاختبارات القائم.
+- المجموع: 68 → **78** اختباراً وحدة (104 → **114** إجمالاً مع التكامل). `typecheck`/`arch:check` نظيفان.
+- لا تغيير على `service.ts` أو أي مستهلك آخر — مؤجَّل لليوم 21 بقرار مؤسس صريح.
+- commit: (يُضاف بعد commit هذا التحديث نفسه).
 
 ## 2026-09-04 (اليوم 19) — Context Engine: Migration أولى لـ`worlds`/`user_personas` (RESUME-CONTEXT-ENGINE-AFTER-MIGRATION)
 

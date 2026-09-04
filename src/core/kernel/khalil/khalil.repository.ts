@@ -3,7 +3,7 @@
 
 import { supabase } from '../database/supabase-client';
 import { supabaseAdmin } from '../database/supabase-admin-client';
-import type { User, Tenant, UserRole, Session } from './types';
+import type { User, Tenant, UserRole, Session, World, UserPersona } from './types';
 
 interface UserRow {
   id: string;
@@ -28,6 +28,23 @@ interface SessionRow {
   tenant_id: string | null;
   role: string;
   expires_at: string;
+  created_at: string;
+}
+
+interface WorldRow {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+interface UserPersonaRow {
+  id: string;
+  user_id: string;
+  world_id: string;
+  is_default: boolean;
   created_at: string;
 }
 
@@ -58,6 +75,27 @@ function toSession(row: SessionRow): Session {
     tenantId: row.tenant_id,
     role: row.role as UserRole,
     expiresAt: row.expires_at,
+  };
+}
+
+function toWorld(row: WorldRow): World {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    description: row.description ?? undefined,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+  };
+}
+
+function toUserPersona(row: UserPersonaRow): UserPersona {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    worldId: row.world_id,
+    isDefault: row.is_default,
+    createdAt: row.created_at,
   };
 }
 
@@ -121,6 +159,42 @@ export class KhalilRepository {
   async deleteSession(token: string): Promise<void> {
     const { error } = await supabaseAdmin.from('sessions').delete().eq('token', token);
     if (error) throw error;
+  }
+
+  // اليوم 19 (ADR-018) — worlds/user_personas مقفولان بالكامل (RLS بلا أي policy، نفس نمط
+  // sessions/merchants) — service_role إلزامي، لا عميل anon هنا كما في findUserById/findUserByPhone.
+
+  async findWorldBySlug(slug: string): Promise<World | null> {
+    const { data, error } = await supabaseAdmin.from('worlds').select('*').eq('slug', slug).maybeSingle();
+    if (error) throw error;
+    return data ? toWorld(data as WorldRow) : null;
+  }
+
+  async listActiveWorlds(): Promise<World[]> {
+    const { data, error } = await supabaseAdmin.from('worlds').select('*').eq('is_active', true);
+    if (error) throw error;
+    return (data as WorldRow[]).map(toWorld);
+  }
+
+  async findPersonaByUserAndWorld(userId: string, worldId: string): Promise<UserPersona | null> {
+    const { data, error } = await supabaseAdmin
+      .from('user_personas')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('world_id', worldId)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toUserPersona(data as UserPersonaRow) : null;
+  }
+
+  async createPersona(input: { userId: string; worldId: string; isDefault?: boolean }): Promise<UserPersona> {
+    const { data, error } = await supabaseAdmin
+      .from('user_personas')
+      .insert({ user_id: input.userId, world_id: input.worldId, is_default: input.isDefault ?? false })
+      .select('*')
+      .single();
+    if (error) throw error;
+    return toUserPersona(data as UserPersonaRow);
   }
 }
 
