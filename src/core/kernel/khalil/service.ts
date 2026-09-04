@@ -2,7 +2,7 @@
 // منطق الأعمال الخاص بخليل — لا استدعاء لقاعدة بيانات هنا مباشرة، فقط عبر khalilRepository
 
 import { khalilRepository } from './khalil.repository';
-import type { User, Session, UserRole, UserPersona } from './types';
+import type { User, Session, UserRole, UserPersona, World } from './types';
 
 // اليوم 19 (ADR-018) — الصف الوحيد المزروع في worlds حتى الآن. راجع docs/DECISIONS.md → CONFLICT-006
 // لسبب حصر النطاق (لا عالم "أعمال" أو غيره بعد).
@@ -45,6 +45,15 @@ export class KhalilService {
    */
   async findUserByPhone(phone: string): Promise<User | null> {
     return khalilRepository.findUserByPhoneAdmin(phone);
+  }
+
+  /**
+   * كل العوالم النشطة من جدول worlds — مُستهلَكة أولاً عبر bayan.service.ts (اليوم 23) لتحديد
+   * عالم individuals، ولاحقاً عبر مبدّل العوالم في الواجهة (اليوم 29). تمريرة رقيقة فقط —
+   * dependency-cruiser يمنع أي نطاق خارج kernel/khalil/ من استيراد khalilRepository مباشرة.
+   */
+  async listActiveWorlds(): Promise<World[]> {
+    return khalilRepository.listActiveWorlds();
   }
 
   async createSession(input: { userId: string; tenantId: string | null; role: UserRole; ttlSeconds: number }): Promise<{ token: string; session: Session }> {

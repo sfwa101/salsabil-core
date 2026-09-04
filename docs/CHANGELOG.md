@@ -1,8 +1,8 @@
 ---
 title: سجل التغييرات
 status: ACTIVE
-version: 1.10
-last_updated: 2026-09-04
+version: 1.11
+last_updated: 2026-09-05
 owner: Claude (تلقائي مع كل مهمة كبيرة)
 source_of_truth: هذا الملف + Git log
 ---
@@ -12,6 +12,35 @@ source_of_truth: هذا الملف + Git log
 > يُسجَّل هنا فقط التغييرات المهمة (معمارية، قواعد أعمال، قاعدة بيانات، أمان، UX، قرارات، خارطة طريق) — لا كل commit صغير.
 
 ---
+
+## 2026-09-05 (اليوم 23) — بيان (Bayan): الباك-إند (BAYAN-HOME-FEED-001)
+
+> **بداية سلسلة جديدة (الأيام 23-32 مخطَّطة):** خلاصة بيان الرئيسية لريف المدينة — Spec+Plan كامل
+> اعتُمد صراحة عبر EnterPlanMode/ExitPlanMode قبل أي سطر كود، بما فيه ثلاثة قرارات نطاق حُسمت عبر
+> AskUserQuestion (دلالة تبويبات `post_type`، إدخال صور المنشور برابط نصي لا رفع فعلي، تفضيل الثيم في
+> `localStorage` لا قاعدة بيانات — لا حساب حقيقي لمعظم زوّار ريف اليوم، `ADR-015`).
+
+- `src/core/modules/bayan/` (جديد) — `types.ts` (`Post`/`PostMedia`/`PostProductLink`، ووحدة تمييزية
+  `PostMediaLink = ProductLink | RecipeLink | NoLink` بنفس نمط `ProductOption` من اليوم 3)،
+  `bayan.repository.ts` (يعكس شكل `catalog.repository.ts` حرفياً، عميلا `supabase`/`supabaseAdmin`
+  معاً حسب حساسية كل دالة)، `bayan.service.ts` (تجميع الخلاصة المُرقَّمة صفحياً + حساب كميات وصفة
+  متناسبة مع عدد أفراد العائلة — قياس خطي بسيط، لا ذكاء اصطناعي).
+- `khalilService.listActiveWorlds()` (جديد، إضافي بحت) — تمريرة رقيقة تكشف دالة repository موجودة
+  أصلاً منذ اليوم 20، أول مستهلك لها `bayan.service.ts` لتحديد عالم `individuals`.
+- `scripts/day23-bayan-schema.sql` (جديد) — DDL لجداول `posts`/`post_media`/`post_products`، RLS
+  **النمط 1** (قراءة عامة للمنشورات المنشورة فقط) — أول انحراف متعمَّد عن نمط `worlds`/`user_personas`
+  المقفول بالكامل، لأن هذا محتوى عام لا بيانات هوية. طُبِّق يدوياً عبر SQL Editor (نفس قيد عدم وجود
+  اتصال Postgres مباشر، الأيام 19/22).
+- `scripts/day23-bayan-seed-and-verify.ts` (جديد) — نُفِّذ حياً فور التطبيق: **8/8 نجحت** — منشور حقيقي
+  (صورتان: رابط منتج + رابط وصفة) ومسودة، قفل RLS ضد `anon` للمسودة (صف فارغ فعلياً لا خطأ)، 3 محاولات
+  إدراج فاشلة متعمَّدة رُفضت بالأكواد المتوقَّعة تماماً (`23503` × 2، `23514`)، وحذف متسلسل
+  (`on delete cascade`) نظيف بلا صفوف يتيمة. القاعدة عادت لصفر صفوف بعد التنظيف الذاتي.
+- 20 اختباراً وحدة جديدة (`bayan.repository.test.ts`، `bayan/service.test.ts`، + اختبار واحد لـ
+  `khalilService.listActiveWorlds()`) — المجموع: 83 → **103** وحدة (140 إجمالاً مع التكامل).
+  `typecheck`/`arch:check` نظيفان.
+- `docs/DECISIONS.md` (`ADR-021`)، `docs/DATABASE.md`، `docs/DOMAIN_MAP.md` (بيان → `PARTIALLY_
+  IMPLEMENTED`)، `docs/ROADMAP.md` محدَّثة بالكامل لتعكس الحالة الحية.
+- commit: (يُضاف بعد commit هذا التحديث نفسه).
 
 ## 2026-09-04 (اليوم 22) — Context Engine: سياسة حذف صريحة (`ADR-020`) + إغلاق الأيام 19-22
 

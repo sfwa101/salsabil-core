@@ -34,6 +34,7 @@ vi.mock('./khalil.repository', () => ({
     findWorldBySlug: vi.fn(),
     findPersonaByUserAndWorld: vi.fn(),
     createPersona: vi.fn(),
+    listActiveWorlds: vi.fn(),
   },
 }));
 
@@ -178,5 +179,17 @@ describe('KhalilService.findOrCreateCustomerByPhone', () => {
     expect(khalilRepository.createUser).toHaveBeenCalledWith({ fullName: customer.fullName, phone: customer.phone, role: 'customer' });
     expect(khalilRepository.createPersona).toHaveBeenCalledWith({ userId: customer.id, worldId: individualsWorld.id, isDefault: true });
     expect(result).toEqual(customer);
+  });
+});
+
+// اليوم 23 (BAYAN-HOME-FEED-001) — أول مستهلك لهذه التمريرة (bayan.service.ts)
+describe('KhalilService.listActiveWorlds', () => {
+  it('يفوّض مباشرة لـ khalilRepository.listActiveWorlds ويعيد نفس النتيجة', async () => {
+    vi.mocked(khalilRepository.listActiveWorlds).mockResolvedValue([individualsWorld]);
+
+    const result = await khalilService.listActiveWorlds();
+
+    expect(khalilRepository.listActiveWorlds).toHaveBeenCalledOnce();
+    expect(result).toEqual([individualsWorld]);
   });
 });

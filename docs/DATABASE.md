@@ -1,8 +1,8 @@
 ---
 title: مرجع قاعدة البيانات
 status: ACTIVE
-version: 1.8
-last_updated: 2026-09-04
+version: 1.10
+last_updated: 2026-09-05
 owner: المؤسس (أبوحتاب) + Claude
 source_of_truth: Supabase Project الفعلي (للجداول المنفَّذة) + هذا الملف (للتخطيط)
 ---
@@ -17,7 +17,7 @@ source_of_truth: Supabase Project الفعلي (للجداول المنفَّذ�
 
 - لا استدعاء مباشر لقاعدة البيانات من الواجهة — فقط عبر `[domain].repository.ts`.
 - `tenant_id` يأتي من الجلسة/JWT فقط، أبداً من طلب العميل. **`IMPLEMENTED` منذ اليوم 10** — `products.tenant_id` يُشير إلى `merchants.id`؛ `Session.tenantId` أصبح حقيقياً الآن (جدول `sessions`، تسجيل دخول تاجر بالهاتف، اليوم 10، `ADR-012`) — لا يزال بلا كلمة مرور حقيقية ولا Supabase Auth كاملة (`specs/identity/SPEC.md` لا يزال الفجوة الأشمل)، لكن `tenant_id` نفسه صار يُقرأ فعلياً من جلسة server-side لا من مدخل عميل. لا `stores` بعد.
-- RLS مفعَّل على كل جدول يحوي بيانات — `IMPLEMENTED` على الأربعة عشر جدولاً الموجودة حالياً (`users`, `categories`, `products`, `merchants`, `inventory`, `carts`, `cart_items`, `orders`, `order_items`, `order_status_history`, `sessions`, `audit_log`, `worlds`, `user_personas`). ثلاثة أنماط: (أ) قراءة عامة + كتابة ممنوعة لـ`anon` (`categories`/`products`/`inventory` فقط — **`merchants` أُزيلت من هذه المجموعة اليوم 10**، راجع الملاحظة أدناه)، (ب) قفل كامل بلا أي policy، وصول حصري عبر `service_role` (`carts`, `cart_items`, `orders`, `order_items`, `order_status_history`, **`merchants`**, `sessions`, **`audit_log`** — راجع ADR-008/ADR-009/ADR-010/ADR-012/ADR-014)، (ج) قراءة الذات فقط (`users`، **معطَّلة عملياً حالياً — راجع §6**).
+- RLS مفعَّل على كل جدول يحوي بيانات — `IMPLEMENTED` على السبعة عشر جدولاً الموجودة حالياً (`users`, `categories`, `products`, `merchants`, `inventory`, `carts`, `cart_items`, `orders`, `order_items`, `order_status_history`, `sessions`, `audit_log`, `worlds`, `user_personas`, `posts`, `post_media`, `post_products`). ثلاثة أنماط: (أ) قراءة عامة + كتابة ممنوعة لـ`anon` (`categories`/`products`/`inventory` فقط — **`merchants` أُزيلت من هذه المجموعة اليوم 10**، راجع الملاحظة أدناه)، (ب) قفل كامل بلا أي policy، وصول حصري عبر `service_role` (`carts`, `cart_items`, `orders`, `order_items`, `order_status_history`, **`merchants`**, `sessions`, **`audit_log`** — راجع ADR-008/ADR-009/ADR-010/ADR-012/ADR-014)، (ج) قراءة الذات فقط (`users`، **معطَّلة عملياً حالياً — راجع §6**).
 - **تصحيح تاريخي (اليوم 9.5، تحقُّق حي):** إلى اليوم 9، `merchants` كانت مصنَّفة خطأً هنا كجزء من النمط (ب)، بينما كانت فعلياً في النمط (أ) — قابلة للقراءة العامة بالكامل عبر `anon` (`phone`/`owner_id` مكشوفان). اليوم 10 (`ADR-012`) نقلها فعلياً وحقيقياً للنمط (ب) — حُذفت سياسة القراءة العامة (`"Merchants are viewable by everyone"`) بعد تأكيد عدم وجود أي مستهلك فعلي لها في الكود.
 - كل سعر يُعاد حسابه من الخادم دائماً، لا يُصدَّق من العميل.
 
@@ -364,6 +364,72 @@ SQL Editor** (`scripts/day19-context-engine-schema.sql`، نفس عُرف كل �
   حذف مستخدم اختباري له شخصية رُفضت فعلياً بكود `23503`. مرتبط بـ`docs/DATABASE.md §7` (`OPEN_QUESTION`
   Soft/Hard Delete للمستخدمين عموماً) — يحسم جزءاً ضيقاً فقط، لا السؤال الأشمل.
 
+### `posts`, `post_media`, `post_products` — Evidence: `IMPLEMENTED` (اليوم 23، `ADR-021`، BAYAN-HOME-FEED-001)
+
+```sql
+create table posts (
+  id uuid primary key default gen_random_uuid(),
+  world_scope uuid not null references worlds(id),
+  category_id uuid not null references categories(id),
+  post_type text not null check (post_type in ('post', 'reel', 'product_highlight', 'offer')),
+  caption text,
+  is_published boolean not null default false,
+  priority int not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+alter table posts enable row level security;
+create policy "Public read published posts" on posts for select using (is_published = true);
+create index posts_priority_created_idx on posts (priority desc, created_at desc);
+create index posts_post_type_idx on posts (post_type);
+
+create table post_media (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references posts(id) on delete cascade,
+  image_url text not null,
+  display_order int not null default 0,
+  link jsonb not null default '{"type":"none"}'::jsonb,
+  created_at timestamptz not null default now()
+);
+alter table post_media enable row level security;
+create policy "Public read post media" on post_media for select using (true);
+create index post_media_post_id_idx on post_media (post_id, display_order);
+
+create table post_products (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references posts(id) on delete cascade,
+  product_id uuid not null references products(id),
+  display_order int not null default 0
+);
+alter table post_products enable row level security;
+create policy "Public read post products" on post_products for select using (true);
+create index post_products_post_id_idx on post_products (post_id, display_order);
+```
+
+**الحالة:** `IMPLEMENTED` — أول تنفيذ فعلي لمحرك بيان (`CONCEPTUAL` منذ الدستور v1.0). DDL طُبِّق يدوياً عبر
+Supabase SQL Editor (`scripts/day23-bayan-schema.sql`، نفس قيد عدم وجود اتصال Postgres مباشر). تحقُّق حي
+(8/8 نجحت، `scripts/day23-bayan-seed-and-verify.ts`): منشور حقيقي بصورتين (رابط منتج + رابط وصفة) ومسودة
+حقيقية — `anon` قرأ المنشور المنشور فقط، لا المسودة إطلاقاً (RLS `is_published = true`)؛ ثلاث محاولات
+إدراج فاشلة متعمَّدة رُفضت بالضبط بالأكواد المتوقَّعة (`23503` × 2 لِـ`world_scope`/`category_id`،
+`23514` لِـ`post_type`)؛ حذف منشور حذف صوره وروابط منتجاته تلقائياً (`on delete cascade`) بلا صف يتيم.
+القاعدة عادت لصفر صفوف في الجداول الثلاثة بعد التنظيف.
+
+**⚠️ `world_scope` (سياق بيانات) ≠ `data-world` (سمة CSS بصرية)** — راجع تحذير التسمية الكامل في §4
+أدناه. صفحة خلاصة بيان نفسها تبقى `data-world="reef"` دائماً.
+
+**قرارات تصميم (راجع `ADR-021` للتفصيل الكامل والبدائل المرفوضة):**
+- **RLS النمط 1 (قراءة عامة)، لا النمط 2** المستخدَم لـ`worlds`/`user_personas` (`ADR-018`) — هذا محتوى
+  عام يتصفحه أي زائر بلا مصادقة، لا بيانات هوية/صلاحيات حساسة.
+- **`post_media`/`post_products` بسياسة `using (true)`** — بلا عمود `is_published` خاص بهما، فلا يمكن
+  لـRLS وحده استبعاد صور/منتجات منشور مسودة. الاستبعاد الفعلي مسؤولية `bayan.service.ts` (طبقة التطبيق)
+  — **نفس نمط عزل المستأجرين في `orders.service.ts`، `ADR-012`**، لا فجوة جديدة. أي دالة قراءة عامة
+  مستقبلية على هذين الجدولين مباشرة (بدل عبر `bayan.service.ts`) تُعرِّض بيانات مسودات — نفس تحذير
+  `getOrderWithItems`/`getStatusHistory` في `ADR-014`.
+- **`link jsonb` على `post_media`** — نفس فلسفة `products.options` (`ADR-004`): Discriminated Union
+  (`ProductLink | RecipeLink | NoLink`) مفروض TypeScript فقط، لا قيد قاعدة بيانات.
+- **`world_scope uuid references worlds(id)`** — FK حقيقي، لا نص/enum حر كما ورد حرفياً في الموجّه
+  الأصلي؛ انحراف طفيف موثَّق صراحة في `ADR-021`، يطابق سابقة `user_personas.world_id`.
+
 ---
 
 ## 4. الجداول — CONCEPTUAL (مخطَّطة في الدستور، لم تُبنَ)
@@ -375,6 +441,11 @@ SQL Editor** (`scripts/day19-context-engine-schema.sql`، نفس عُرف كل �
 | `stores` | Tenant (طبقة فرعية تحت `merchants`) | غير مجدوَل بعد | `CONCEPTUAL` |
 | `users.national_id`, `users.is_verified` (أعمدة جديدة على `users`، لا جدول منفصل) | Identity — Phase 2 من نموذج الهوية المرحلي (`ADR-015`) | يُبنى عند بدء نطاق تاجر جديد/شركاء النجاح/تيسير تحديداً — غير مجدوَل بعد | `CONCEPTUAL` — توثيق هوية إجباري فقط عند تلك الخدمات، لا للتصفح/الشراء العادي |
 | `product_variant`, `sku`, `barcode`, `packaging` | Catalog (العمق الكامل) | غير مجدوَل بعد — أُجِّل لصالح Vertical Slice أولاً | `CONCEPTUAL` |
+
+**⚠️ نفس تحذير التسمية ينطبق على `posts.world_scope` (اليوم 23، `IMPLEMENTED`، `ADR-021`):** فلتر بيانات
+يشير لجدول `worlds` — أي سياق/شخصية يخص هذا المحتوى (اليوم فقط `individuals`) — لا علاقة له إطلاقاً بسمة
+`data-world` البصرية. صفحة خلاصة بيان نفسها تبقى `data-world="reef"` دائماً (هي الصفحة الرئيسية لريف)،
+حتى بعد بناء واجهتها بالكامل.
 
 **⚠️ تحذير تسمية صريح — `worlds` (جدول `IMPLEMENTED`، راجع §3 أعلاه) ≠ `WorldSlug`/`WORLD_THEMES`
 (`src/config/theme-registry.ts`):** المفهومان يحملان اسماً متشابهاً بالصدفة، ولا علاقة بنيوية بينهما:
@@ -407,6 +478,8 @@ SQL Editor** (`scripts/day19-context-engine-schema.sql`، نفس عُرف كل �
 | `sessions` | بلا أي policy — قفل كامل، وصول حصري عبر `service_role` (اليوم 10، `ADR-012`) | `IMPLEMENTED` |
 | `audit_log` | بلا أي policy — قفل كامل، وصول حصري عبر `service_role` (اليوم 12، `ADR-014`) | `IMPLEMENTED` |
 | `worlds`, `user_personas` | بلا أي policy — قفل كامل، وصول حصري عبر `service_role` (اليوم 19، `ADR-018`) | `IMPLEMENTED` |
+| `posts` | قراءة عامة للمنشورات المنشورة فقط (`is_published = true`) — النمط 1، لا النمط 2 (اليوم 23، `ADR-021`) | `IMPLEMENTED` |
+| `post_media`, `post_products` | قراءة عامة كاملة (`using (true)`) — استبعاد محتوى المسودات مسؤولية `bayan.service.ts`، لا RLS (اليوم 23، `ADR-021`) | `IMPLEMENTED` |
 
 **سياسات الكتابة (Insert/Update/Delete) لا تزال غير موجودة/موثَّقة على `users`/`categories`/`products`/`inventory` — `OPEN_QUESTION` صريح. مراجعة اليوم 12 تحقَّقت حياً: لا كود كتابة إطلاقاً على `categories`/`products`/`inventory` حتى الآن (`catalog.repository.ts`/`inventory.repository.ts` قراءة فقط) — لا خطر فعلي اليوم. **قاعدة القرار المعتمدة لأي كتابة مستقبلية على هذه الجداول** (مثال: بوابة تاجر تضيف منتجاً): يُحسَم عندها تحديداً بين نقل الجدول لعميل `service_role` (نمط ب) أو سياسة كتابة مقيَّدة بالدور — لا يُقرَّر مسبقاً بلا حاجة فعلية (نفس منهج `ADR-008`).**
 

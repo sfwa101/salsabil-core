@@ -1,8 +1,8 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.13
-last_updated: 2026-09-04
+version: 1.14
+last_updated: 2026-09-05
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف
 ---
@@ -633,6 +633,81 @@ Consequences: **لا تأثير تشغيلي فوري** — لا كود يحذف
           أو `user_personas` إطلاقاً بعد) — قد يحتاج قراراً مشابهاً منفصلاً عند ظهور حاجة فعلية.
 Related Documents: docs/DATABASE.md §3 (user_personas)، §7 (OPEN_QUESTION Soft/Hard Delete)، ADR-018،
           ADR-019، SALSABIL_CONSTITUTION.md §4 بند 5، scripts/day22-user-personas-fk-policy.sql
+```
+
+---
+
+## ADR-021
+```
+Title: اليوم 23 — بيان (Bayan): أول تنفيذ فعلي لمحرك المحتوى (posts/post_media/post_products)،
+          BAYAN-HOME-FEED-001
+Status: ACCEPTED — طُبِّق ومُتحقَّق منه حياً (DDL يدوي عبر SQL Editor، نفس نمط الأيام 19/22)
+Date: 2026-09-05 (اليوم 23)
+Decision: (أ) ثلاثة جداول جديدة — `posts` (منشور واحد، `world_scope uuid references worlds(id)` إلزامي
+          من اليوم الأول لكل جدول في هذه المهمة، `category_id references categories(id)`، `post_type`
+          محصور بـ`CHECK` في `('post','reel','product_highlight','offer')`، `priority int` ترتيب يدوي
+          فقط — لا خوارزمية توصية)، `post_media` (صور مرتَّبة لكل منشور، `link jsonb` بشكل Discriminated
+          Union — `ProductLink | RecipeLink | NoLink` — مفروض TypeScript فقط لا قاعدة بيانات، نفس فلسفة
+          `products.options`، `ADR-004`)، `post_products` (الرف الأفقي أسفل المنشور، مستقل عن روابط
+          الصور الفردية).
+          (ب) RLS — **النمط 1 (قراءة عامة)**، لا النمط 2 المقفول المستخدَم لـ`worlds`/`user_personas`
+          (`ADR-018`): `posts` سياسة `is_published = true`؛ `post_media`/`post_products` سياسة `true`
+          (قراءة كل الصفوف) لأنهما بلا عمود `is_published` خاص بهما — عزل "لا تُعرَض صور منشور مسودة"
+          مُطبَّق في `bayan.service.ts` (طبقة التطبيق)، لا RLS، **نفس نمط عزل المستأجرين الموثَّق فعلياً
+          في `orders.service.ts` (`ADR-012`) لا سابقة جديدة**. كتابة عبر `service_role` حصراً من لوحة
+          الإدارة (اليوم 24) — لا سياسة كتابة لـ`anon` على أي من الثلاثة.
+          (ج) `src/core/modules/bayan/` — يعكس شكل `src/core/modules/catalog/` حرفياً (`types.ts` +
+          `bayan.repository.ts` + `bayan.service.ts`، كل كلاس بصيغة singleton مُصدَّر). المستودَع
+          يستخدم **عميلين معاً**: `supabase` (anon) لدوال القراءة العامة (الخلاصة)، `supabaseAdmin`
+          (service_role) لدوال الإدارة (تشمل قراءة المسودات + كل الكتابة) — نفس القاعدة الصريحة في
+          `docs/ARCHITECTURE.md §3.1` ("اختيار العميل يُحسَم عند تصميم RLS، لا بعده").
+          (د) `khalilService.listActiveWorlds()` — تمريرة رقيقة جديدة (إضافية بحتة، بلا لمس أي دالة
+          قائمة) تكشف `khalilRepository.listActiveWorlds()` الموجودة أصلاً (اليوم 20) لأي نطاق خارج
+          `kernel/khalil/` — أول مستهلك لها `bayan.service.ts.getIndividualsWorldId()`، والثاني المخطَّط
+          له مبدّل العوالم في الواجهة (اليوم 29).
+          (هـ) `BayanService.scaleRecipeQuantities()` — قياس خطي بسيط (`baseQuantity × familySize ÷
+          baseFamilySize`، مقرَّب، بحد أدنى 1) لتحويل مكوّنات وصفة إلى كميات مقترحة عند تغيير عدد أفراد
+          العائلة. لا حساب تغذوي حقيقي ولا اقتراح ذكي — حساب حسابي بحت، بانضباط "لا خوارزمية توصية
+          حقيقية (حكيم)" المذكور صراحة في نطاق المهمة.
+          (و) الوصفة (`RecipeLink`) مُخزَّنة **داخل** `post_media.link jsonb` مباشرة، لا في جدول
+          `recipes` منفصل — لا حاجة فعلية اليوم لإعادة استخدام وصفة عبر أكثر من منشور واحد.
+Context: Context Engine (خليل، الأيام 19-22) أُغلق. هذه أول مهمة تبني نطاقاً استهلاكياً حقيقياً فوقه
+          (`bayan.service.ts` يستدعي `khalilService.listActiveWorlds()` مباشرة، نفس نمط
+          `orders.service.ts` مع `khalilService`/`cartService`/`catalogService`). المؤسس اشترط صراحة أن
+          يحمل كل جدول `world_scope` من اليوم الأول (بنفس انضباط `products.tenant_id` الاستباقي منذ
+          اليوم 4)، رغم وجود صف واحد فقط (`individuals`) في `worlds` اليوم.
+Alternatives: (أ) `world_scope` نص/enum حر (كما ورد حرفياً في موجّه المهمة) بدل FK حقيقي إلى
+          `worlds(id)` — رُفض لصالح FK: يمنع بنيوياً أي إشارة لعالم غير موجود، ويطابق سابقة
+          `user_personas.world_id` في `ADR-018` نفسها. مُوثَّق صراحة كانحراف طفيف عن نص الموجّه الحرفي،
+          لا قراراً صامتاً. (ب) النمط 2 (قفل كامل، نفس `worlds`/`user_personas`) بدل النمط 1 لهذه
+          الجداول — رُفض: `posts`/`post_media`/`post_products` محتوى عام يتصفحه أي زائر ريف اليوم بلا
+          مصادقة (نفس فئة `products`/`categories`)، لا بيانات هوية/صلاحيات حساسة. (ج) جدول `recipes`
+          منفصل قابل لإعادة الاستخدام عبر منشورات متعددة — رُفض حالياً، بلا مبرر تجاري فعلي اليوم؛ شكل
+          `RecipeLink` المعزول في الكود يجعل الاستخراج لاحقاً غير مكلف إن ظهرت حاجة فعلية. (د) بادئة
+          `bayan_` على أسماء الجداول (`bayan_posts`...) لتفادي عمومية اسم "posts" — رُفض لصالح مطابقة
+          العُرف القائم فعلياً في هذا المستودع (`products`/`orders`/`merchants` بلا بادئة نطاق)؛ مُوثَّق
+          كخيار قابل للنقاش لا حسماً نهائياً.
+Why: قرار المؤسس المباشر (BAYAN-HOME-FEED-001، بعد Spec+Plan مُوافَق عليه صراحة عبر EnterPlanMode/
+          ExitPlanMode) — تفاصيل `post_type`/إدخال الصور/تخزين تفضيل الثيم حُسمت عبر AskUserQuestion قبل
+          أي كتابة كود. تصميم الفهرس/RLS/الشكل الداخلي لكل جدول قرارات هندسية اتُّخذت أثناء التنفيذ
+          بانضباط نفس منهجية `ADR-018`/`ADR-020`.
+Consequences: **تحقُّق حي (لا افتراضي) بعد التطبيق (8/8 نجحت):** منشور حقيقي بصورتين (رابط منتج + رابط
+          وصفة) ومسودة حقيقية — `anon` قرأ المنشور المنشور بنجاح ولم يقرأ المسودة إطلاقاً (لا خطأ، صف
+          فارغ فعلياً، يطابق سياسة `is_published = true`)؛ ثلاث محاولات إدراج فاشلة متعمَّدة رُفضت
+          بالضبط بالأكواد المتوقَّعة (`23503` مرتين لِـ`world_scope`/`category_id`، `23514` لِـ
+          `post_type`)؛ حذف المنشور المنشور حذف صوره وروابط منتجاته تلقائياً (`on delete cascade`) بلا
+          أي صف يتيم متبقٍ. القاعدة عادت لصفر صفوف في الجداول الثلاثة بعد التنظيف الكامل. لا مستهلك
+          واجهة بعد (لوحة الإدارة اليوم 24، الخلاصة نفسها الأيام 26-27) — بنية باك-إند مُختبَرة وحدياً
+          بالكامل (103 اختباراً) ومُتحقَّق منها حياً الآن. `post_media`/`post_products` بلا حماية RLS جوهرية على مستوى الصف (سياسة `true`) —
+          مقبول لأنه محتوى عام أصلاً بالتصميم، لا فجوة أمنية حقيقية طالما `posts.is_published` هو حارس
+          الظهور الفعلي الوحيد المُطبَّق في طبقة الخدمة. أي دالة قراءة عامة مستقبلية على `post_media`/
+          `post_products` **يجب** أن تمر عبر `bayan.service.ts` (الذي يستبعد صور/منتجات المسودات)، لا
+          استعلاماً مباشراً على الجدولين — نفس تحذير `getOrderWithItems`/`getStatusHistory` في
+          `ADR-014`.
+Related Documents: docs/DATABASE.md §3 (posts/post_media/post_products)، docs/DOMAIN_MAP.md → بيان،
+          ADR-004 (سابقة JSONB)، ADR-012 (سابقة عزل مستأجرين بطبقة تطبيق لا RLS)، ADR-018 (سابقة FK
+          لـworld_id)، ADR-019 (سابقة استيراد service-to-service)، scripts/day23-bayan-schema.sql،
+          scripts/day23-bayan-seed-and-verify.ts، src/core/modules/bayan/، src/core/kernel/khalil/service.ts
 ```
 
 ---
