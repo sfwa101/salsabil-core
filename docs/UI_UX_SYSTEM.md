@@ -1,8 +1,8 @@
 ---
 title: نظام التصميم (Design System)
 status: PROPOSED (الاتجاه العام + معمارية الثيمات متعددة العوالم §8 ACCEPTED من حيث المبدأ ومُنفَّذة تقنياً لديوان/ريف، القيم الدقيقة للألوان و5 العوالم الأخرى لا تزال PROPOSED)
-version: 1.3
-last_updated: 2026-09-03
+version: 1.4
+last_updated: 2026-09-05
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف، SALSABIL_CONSTITUTION.md §21, §30.2 (المصدر الأصلي)
 ---
@@ -78,10 +78,10 @@ source_of_truth: هذا الملف، SALSABIL_CONSTITUTION.md §21, §30.2 (ال
 - Shadows / Elevation levels
 - تصميم البطاقات (Cards) — لا مرجع بصري دقيق بعد
 - Buttons / Inputs — لا مواصفات دقيقة
-- Bottom navigation / Bottom sheets — لا تصميم بعد
+- Bottom navigation — لا تصميم بعد. **Bottom sheets تحديداً: تحديث (اليوم 25-26):** `src/components/BottomSheet.tsx` مكوّن عام `IMPLEMENTED` فعلياً (فتح/إغلاق بالزر/الخلفية/`Escape`)، بأول استخدام حي حقيقي (اختيار عنوان في `FeedTopBar.tsx`، اليوم 26). التصميم الدقيق (radius `rounded-t-2xl`, `shadow-xl`) امتداد للأنماط القائمة أصلاً لا قرار جديد رسمي — لا يُعتبَر هذا حسماً شاملاً لكل استخدامات Bottom Sheet مستقبلية، فقط أول نمط حي يُرجَع إليه.
 - Skeletons / Loading states / Empty states / Error states — لا تصميم بعد
 - Accessibility guidelines — لم تُناقَش بعد
-- **مكتبة الأيقونات الفعلية (Lucide / Phosphor / Heroicons أو غيرها)** — لم تُحسم؛ راجع §8.4 أدناه للمفاهيم الرمزية الوصفية فقط
+- **مكتبة الأيقونات الفعلية (Lucide / Phosphor / Heroicons أو غيرها)** — لم تُحسم رسمياً، لكن **`lucide-react` أصبح النمط الفعلي القائم** (`Header.tsx` منذ اليوم 14، ثم `FeedTopBar.tsx` اليوم 26: `Globe`/`MapPin`/`Barcode`/`Search`/`ChevronDown`) — أي مكوّن جديد يحتاج أيقونة يجب أن يستخدم `lucide-react` لا مكتبة أخرى، تفادياً لتضارب بصري، إلى أن يصدر قرار مؤسس رسمي مغاير. راجع §8.4 أدناه للمفاهيم الرمزية الوصفية المستقلة عن مكتبة الأيقونات نفسها.
 - **Dark Mode لكل عالم** — لم يُطلب بعد، معمارية §8 لا تمنعه مستقبلاً لكنه خارج نطاق هذا التحديث
 
 **قاعدة صريحة:** كل هذه القرارات تُتخذ عند بدء العمل الفعلي على واجهة المستخدم (بعد اليوم 5-7 من §23) — لن تُخترع الآن لمجرد ملء هذا الملف.
@@ -90,7 +90,7 @@ source_of_truth: هذا الملف، SALSABIL_CONSTITUTION.md §21, §30.2 (ال
 
 ## 7. RTL و Mobile-First — Evidence: `IMPLEMENTED` (الإعداد التقني + مكوّنات حقيقية فعلية منذ اليوم 5)
 
-Next.js مُعَدّ باتجاه RTL افتراضي (`SALSABIL_CONSTITUTION.md §9`). **تصحيح (اليوم 14-16):** الجملة السابقة هنا ("لا مكونات واجهة حقيقية موجودة حتى الآن") كانت دقيقة وقت كتابتها (اليوم 6) لكنها أصبحت بالية — عشرات المكوّنات الحقيقية موجودة الآن (`CategoryCard`, `ProductCard`, `ProductOptions`, `CheckoutForm`, `OrderRow`, `MerchantLoginForm`, `AdminLoginForm`, `AdminMerchantRow`, `Header`)، كلها تتّبع RTL عبر Flexbox القياسي (`justify-between` يعكس ترتيب العناصر تلقائياً مع `dir="rtl"` بلا حاجة لـ`flex-row-reverse` صريح — مُتحقَّق منه حياً في `Header.tsx`، أول مكوّن تنقّل موحّد عبر كل صفحات `(reef)`). Mobile-first كتوجه عام (§32.3) يبقى غير مُختبَر صراحة على مقاسات شاشة متعددة حتى الآن — لا يزال `OPEN_QUESTION` عملياً، لا `IMPLEMENTED`.
+Next.js مُعَدّ باتجاه RTL افتراضي (`SALSABIL_CONSTITUTION.md §9`). **تصحيح (اليوم 14-16):** الجملة السابقة هنا ("لا مكونات واجهة حقيقية موجودة حتى الآن") كانت دقيقة وقت كتابتها (اليوم 6) لكنها أصبحت بالية — عشرات المكوّنات الحقيقية موجودة الآن (`CategoryCard`, `ProductCard`, `ProductOptions`, `CheckoutForm`, `OrderRow`, `MerchantLoginForm`, `AdminLoginForm`, `AdminMerchantRow`, `Header`)، كلها تتّبع RTL عبر Flexbox القياسي (`justify-between` يعكس ترتيب العناصر تلقائياً مع `dir="rtl"` بلا حاجة لـ`flex-row-reverse` صريح — مُتحقَّق منه حياً في `Header.tsx`، أول مكوّن تنقّل موحّد عبر كل صفحات `(reef)`). Mobile-first كتوجه عام (§32.3) يبقى غير مُختبَر صراحة على مقاسات شاشة متعددة حتى الآن — لا يزال `OPEN_QUESTION` عملياً، لا `IMPLEMENTED`. **تحديث (اليوم 26):** أول تحقُّق حي فعلي على Viewport موبايل حقيقي (390×844، `scripts/day26-feed-header-verify.ts`) — الصفحة الرئيسية تعمل صحيحاً على هذا المقاس تحديداً (RTL، تمرير أفقي فعلي لـ`HorizontalShelf`، `sticky` للتبويبات). **هذا لا يُغلِق الـ`OPEN_QUESTION`** — مقاس واحد فقط اختُبِر، لا "مقاسات شاشة متعددة" كما يتطلب النص الأصلي (تابلت/ديسكتوب/شاشات موبايل أصغر لم تُختبَر بعد).
 
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: خارطة الطريق
 status: ACTIVE
-version: 1.20
+version: 1.21
 last_updated: 2026-09-05
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTION.md §23 (الخطة الأصلية + تصحيح 14→18 يوماً)
@@ -61,6 +61,7 @@ source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTI
 | 23 | بيان (Bayan) — الباك-إند: `posts`/`post_media`/`post_products` + `bayan.repository.ts`/`bayan.service.ts` (BAYAN-HOME-FEED-001) | `DONE` — DDL يدوي عبر SQL Editor، RLS بالنمط 1 (قراءة عامة للمنشور فقط)، تحقُّق حي 8/8 (قفل RLS للمسودة، محاولات إدراج فاشلة FK×2+CHECK، حذف متسلسل). 20 اختباراً وحدة جديدة، المجموع 103 وحدة/140 إجمالاً. لا واجهة بعد — راجع `ADR-021` |
 | 24 | بيان (Bayan) — لوحة إدارة المنشورات: `src/app/admin/posts/` (قائمة/إنشاء/تعديل) + `PostForm.tsx` (BAYAN-HOME-FEED-001) | `DONE` — أول نموذج إنشاء متعدد الحقول في التطبيق (صفوف صور ديناميكية بمنتقي رابط none/product/recipe + بانِ وصفة متداخل، + إدارة الرف الأفقي `post_products` مستقلة تماماً — أُضيفت لاحقاً بنفس اليوم رداً على سؤال مؤسس صريح لسد فجوة كانت ستظهر عند اليوم 27)، `actions.ts`+Zod+row-component (`AdminPostRow.tsx`) بنفس نمط `OrderRow.tsx`/`AdminMerchantRow.tsx`. 11 اختباراً وحدة جديدة، المجموع 114 وحدة/151 إجمالاً. تحقُّق حي كامل عبر متصفح حقيقي + Supabase حقيقي (`scripts/day24-bayan-admin-posts-verify.ts`، 14/14). راجع `docs/CHANGELOG.md` |
 | 25 | بيان (Bayan) — مكوّنات مشتركة: `HorizontalShelf.tsx`، `BottomSheet.tsx` (BAYAN-HOME-FEED-001) | `DONE` — بناء + تحقُّق حي معزول فقط (تأكيد مؤسس صريح — لا ربط ببيانات حقيقية بعد، مؤجَّل لليومين 26-27). مكوّنان عامّان: `HorizontalShelf` (رف تمرير أفقي بعنوان/رسالة فراغ اختياريين، يخدم رف `post_products` ورفوف "اشتريت مؤخراً"/"الأكثر مبيعاً" `CONSTITUTION §7.1` بنفس الـAPI)، `BottomSheet` (نافذة سفلية منزلقة عامة بلا محتوى محدد سلفاً، تُغلَق بالزر/النقر على الخلفية/`Escape`). تحقُّق حي عبر صفحة معاينة مؤقتة + سكربت Playwright مؤقت، كلاهما حُذف بعد التأكد (10/10) — لا أثر دائم بخلاف المكوّنين أنفسهما. راجع `docs/CHANGELOG.md` |
+| 26 | بيان (Bayan) — إعادة هيكلة ترويسة العميل: `FeedTopBar.tsx`، `StoryBar.tsx`، `FeedTabBar.tsx` (BAYAN-HOME-FEED-001) | `DONE` — طبقة بصرية غالباً ثابتة أعلى المحتوى القائم في `src/app/(reef)/page.tsx` بلا لمسه (الخلاصة الفعلية تستبدله لاحقاً، اليوم 27). مبدّل عوالم (بصري فقط، منطق فعلي مؤجَّل لليوم 29)، عنوان بعناوين وهمية عبر `BottomSheet`، أيقونتا باركود/بحث بتنبيه "قريباً" مؤقت، `StoryBar` (`HorizontalShelf`) فوق الأحياء الحقيقية، `FeedTabBar` كحالة عميل عبر رابط الصفحة (`?tab=`) تُغذّي استعلام الخلاصة لاحقاً. `lucide-react` مؤكَّد كمكتبة الأيقونات الفعلية (`docs/UI_UX_SYSTEM.md §6`). تحقُّق حي كامل على Viewport موبايل حقيقي (390×844، `scripts/day26-feed-header-verify.ts`، 14/14: RTL، توكنز لونية حية لا Hex، تمرير أفقي فعلي، `sticky` تبويبات، حالة الرابط). راجع `docs/CHANGELOG.md` |
 
 > **بند مستقبلي صريح (2026-09-05) — بعد إتمام بيان (الأيام 23-32):** لوحة إدارة عالم الأعمال
 > (نموذج أولي: عيادات/مراكز طبية) — أول تطبيق حقيقي لعالم الأعمال في Context Engine (`worlds`/
