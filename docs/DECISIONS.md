@@ -1,7 +1,7 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.12
+version: 1.13
 last_updated: 2026-09-04
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف
@@ -574,6 +574,65 @@ Related Documents: docs/DATABASE.md §3 (worlds/user_personas)، docs/DOMAIN_MAP
           src/core/kernel/khalil/service.test.ts، src/core/modules/orders/orders.integration.test.ts،
           src/core/modules/orders/orders.service.test.ts، src/core/e2e/reef-city-journey.integration
           .test.ts، src/core/modules/admin/admin.integration.test.ts
+```
+
+---
+
+## ADR-020
+```
+Title: اليوم 22 (تمهيدي) — سياسة حذف صريحة على user_personas.user_id: ON DELETE RESTRICT لا
+          CASCADE، معالجة الجذر لا الأعراض فقط بعد اكتشاف ADR-019
+Status: ACCEPTED — طُبِّق ومُتحقَّق منه حياً (DDL يدوي عبر SQL Editor، نفس نمط اليوم 19)
+Date: 2026-09-04 (اليوم 22)
+Decision: `user_personas.user_id references users(id)` أصبحت صراحة `on delete restrict` — لا
+          `cascade`. القيد الفعلي **لم يتغيّر سلوكياً** (الافتراضي السابق بلا `ON DELETE` صريح كان
+          `NO ACTION`، يتصرف مطابقاً تماماً لـ`RESTRICT` هنا لأن القيد غير `DEFERRABLE`) — هذا توضيح
+          نية صريحة موثَّق، لا إصلاح سلوك فعلي مختلف؛ القرار بتطبيقه فعلياً (بدل الاكتفاء بتوثيق ADR
+          فقط) تُرِك لتقدير Claude التقني بتفويض صريح من المؤسس، واختير التطبيق لأن أي قارئ مستقبلي
+          لملف `scripts/day19-context-engine-schema.sql` مباشرة (بلا رجوع لهذا الـADR) كان سيرى قيداً
+          عارياً بلا أي إشارة لنية الحذف. راجع `scripts/day22-user-personas-fk-policy.sql` (منفصل
+          عمداً عن `scripts/day19-context-engine-schema.sql` الأصلي، بطلب المؤسس صراحة — لا تُعدَّل
+          ملفات Migration سابقة بعد تطبيقها).
+          **تحقُّق حي (لا افتراضي) بعد التطبيق:** مستخدم اختباري مؤقت + شخصية في عالم `individuals` —
+          محاولة حذف المستخدم مباشرة رُفضت فعلياً بكود `23503` بالضبط، المستخدم بقي موجوداً فعلياً بعد
+          الرفض (لا نجاح صامت رغم رسالة خطأ)، ثم التنظيف الصحيح (الشخصية أولاً، فالمستخدم) نجح بلا أي
+          أثر متبقٍ. القاعدة عادت لحالتها المستقرة تماماً بعد الاختبار: 5 عملاء / 5 شخصيات / عالم واحد.
+Context: `ADR-019` (اليوم 21) أصلح **عرَض** المشكلة (ترتيب الحذف في 4 ملفات اختبار كان يفشل بصمت
+          بقيد FK)، لكن لم يحسم **الجذر**: ما هي السياسة المقصودة فعلياً عند حذف مستخدم حقيقي له
+          شخصيات؟ لا واجهة تحذف مستخدمين اليوم إطلاقاً (لا استعجال فعلي)، لكن ترك القيد بسلوك
+          افتراضي ضمني غير مقصود (بدل قرار صريح موثَّق) يخالف انضباط هذا المستودع — كل قيد FK آخر في
+          `scripts/day19-context-engine-schema.sql`/`scripts/schema-setup.sql` إما `on delete
+          cascade` صريح (`cart_items.cart_id`, `order_items.order_id`, `order_status_history.
+          order_id`) أو موثَّق بلا `ON DELETE` عمداً لسبب مذكور — لا قيد "منسي" بلا قرار.
+Alternatives: (أ) **`ON DELETE CASCADE`** — حذف `users` يحذف شخصياته تلقائياً وصامتاً. **رُفض**: يخالف
+          روح `SALSABIL_CONSTITUTION.md §4` بند 5 ("كل تحوّل... يُسجَّل في سجل تدقيق") — `worlds`/
+          `user_personas` بيانات **هوية وصلاحيات** (`docs/DATABASE.md §4` تحذير التسمية، `ADR-018`)،
+          لا بيانات مشتقة يمكن تحمّل فقدانها الصامت كـ`cart_items` عند حذف سلة (حيث `CASCADE` مبرَّر
+          فعلاً لأن السلة والبنود كيان واحد منطقياً). فقدان شخصية مستخدم بصمت عند أي عملية حذف
+          مستقبلية (بما فيها خطأ تشغيلي) بلا أي أثر — يناقض بالضبط الميزة التي بُنيت من أجلها هذه
+          الجداول أصلاً (سياق هوية موثوق). (ب) ترك القيد بلا `ON DELETE` صريح كما هو (الوضع الحالي
+          فعلياً) — رُفض: نفس النقد الذي طرحه المؤسس بالضبط — "سلوك افتراضي ضمني غير مقصود" لا يُعتبر
+          قراراً معمارياً موثَّقاً، حتى لو كان سلوكه مطابقاً لـRESTRICT عملياً؛ صراحة النص التوثيقي جزء
+          من قيمة القرار نفسه (يمنع مطوّراً مستقبلياً — بشرياً أو ذكاءً اصطناعياً — من افتراض
+          `CASCADE` خطأً لعدم رؤية عكس ذلك مكتوباً). (ج) `ON DELETE SET NULL` — غير ممكن أصلاً:
+          `user_personas.user_id` معرَّف `not null` (شخصية بلا مالك لا معنى لها) — رُفض بداهةً، غير
+          مطروح فعلياً كخيار حقيقي.
+Why: قرار المؤسس المباشر — طلب تقييماً صريحاً بين الخيارين مع تبرير، لا تنفيذاً بلا نقاش. الاختيار
+          هنا (`RESTRICT`) امتداد مباشر لنمط قرارات سابقة في هذا المستودع تفضّل الفشل الصريح على
+          النجاح الصامت (`ADR-009` رفض تعدد التجار صراحة بدل طلب خاطئ صامت، `ensureIndividualPersona`
+          نفسها في `ADR-019` ترمي خطأً صريحاً بدل `try/catch` صامت).
+Consequences: **لا تأثير تشغيلي فوري** — لا كود يحذف صفوف `users` اليوم (لا واجهة، لا Server Action).
+          أي ميزة مستقبلية "حذف حساب مستخدم" **يجب** أن تتعامل صراحة مع `user_personas` أولاً (حذف
+          شخصياته، أو نقلها، أو رفض الحذف كلياً وعرض ذلك للمستخدم كسبب واضح) — `RESTRICT` يفرض هذا
+          القرار وقت الحاجة الفعلية، لا يسمح بتجاهله. **مرتبط مباشرة بـ`docs/DATABASE.md §7`
+          (`OPEN_QUESTION`: Soft Delete مقابل Hard Delete للمستخدمين عموماً)** — هذا الـADR يحسم جزءاً
+          ضيقاً منه فقط (سياسة FK الفنية لـ`user_personas` تحديداً)، **لا** يحسم السؤال الأشمل
+          (Soft/Hard Delete لجدول `users` نفسه، أو لأي جدول آخر) الذي يبقى `OPEN_QUESTION` صراحة كما
+          هو. لم يُلمَس `world_id` (لا `user_personas.world_id`، ولا `sessions.active_persona_id`) —
+          خارج نطاق طلب المؤسس المحدَّد (`user_id` تحديداً)، ولا مبرر عملي اليوم (لا كود يحذف `worlds`
+          أو `user_personas` إطلاقاً بعد) — قد يحتاج قراراً مشابهاً منفصلاً عند ظهور حاجة فعلية.
+Related Documents: docs/DATABASE.md §3 (user_personas)، §7 (OPEN_QUESTION Soft/Hard Delete)، ADR-018،
+          ADR-019، SALSABIL_CONSTITUTION.md §4 بند 5، scripts/day22-user-personas-fk-policy.sql
 ```
 
 ---

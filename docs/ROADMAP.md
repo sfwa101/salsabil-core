@@ -1,7 +1,7 @@
 ---
 title: خارطة الطريق
 status: ACTIVE
-version: 1.13
+version: 1.14
 last_updated: 2026-09-04
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTION.md §23 (الخطة الأصلية + تصحيح 14→18 يوماً)
@@ -50,6 +50,9 @@ source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTI
 | 19 | Context Engine — Migration `worlds`/`user_personas` على Supabase (dev) | `DONE` — DDL يدوي عبر SQL Editor (`scripts/day19-context-engine-schema.sql`)، RLS بالنمط 2 (قفل كامل)، seed صف `individuals`، backfill لـ5 مستخدمين `customer` حاليين، تحقُّق حي 9/9 بمحاولات إدراج فاشلة متعمَّدة (`scripts/day19-context-engine-seed-and-verify.ts`). لا مستهلك كود بعد (`types.ts`/`khalil.repository.ts` مؤجَّلان لليوم 20 صراحة). راجع `ADR-018`، `CONFLICT-006`، `docs/DIWAN_VISION.md` |
 | 20 | Context Engine — `types.ts` (`World`/`UserPersona`) + `khalil.repository.ts` (4 دوال جديدة) | `DONE` — إضافي بحت، بلا لمس أي دالة/نوع قائم. 10 اختبارات وحدة جديدة (`khalil.repository.test.ts`، تموّه `supabaseAdmin` مباشرة — أول ملف بهذا النمط في المستودع). المجموع الآن 114. لا تعديل على `service.ts` — مؤجَّل لليوم 21 صراحة |
 | 21 | Context Engine — ربط `service.ts` (`ensureIndividualPersona` + `findOrCreateCustomerByPhone`) | `DONE` — Checkout الحقيقي ينشئ user+persona معاً الآن، مُتحقَّق منه حياً (اختبار تكامل جديد + idempotency). **اكتشاف حي مهم أثناء التنفيذ:** تسرّب بيانات حقيقي في 4 ملفات اختبار قائمة (ترتيب حذف `users`/`user_personas` الخاطئ يفشل بصمت بقيد FK) — اكتُشف، نُظِّف (8 صفوف)، وأُصلِح في كل الملفات الأربعة. المجموع الآن 120. راجع `ADR-019` للتفصيل الكامل |
+| 22 | Context Engine — سياسة حذف صريحة (`ON DELETE RESTRICT`) + إغلاق نهائي | `DONE` — معالجة جذر اكتشاف اليوم 21 (لا فقط عرَضه): `user_personas.user_id` أصبح `ON DELETE RESTRICT` صريحاً (`scripts/day22-user-personas-fk-policy.sql`، DDL يدوي)، مرتبط صراحة بـ`OPEN_QUESTION` Soft/Hard Delete في `docs/DATABASE.md §7` (يحسم جزءاً ضيقاً فقط). تحقُّق حي: حذف مستخدم اختباري له شخصية رُفض فعلياً بكود `23503`. راجع `ADR-020` |
+
+> **✅ إغلاق Context Engine (الأيام 19-22، 2026-09-04):** أول خلية فعلية (لا نظرية) من `ideas/CONTEXTUAL_WORLDS_RFC.md` — بوابة القرار محسومة (`CONFLICT-006`)، المخطط حي على Supabase (`ADR-018`)، أول مستهلك كود عبر Checkout الحقيقي (`ADR-019`)، سياسة حذف صريحة موثَّقة (`ADR-020`). **النطاق الفعلي المكتمل ضيق جداً عمداً:** عالم واحد فقط (`individuals`)، شخصية واحدة تلقائية لكل عميل عند Checkout، لا واجهة تبديل شخصية، لا تكيّف لأي محرك نواة آخر (بيان/حكيم/برق/تيسير جميعها لا تزال `PROPOSED` بلا كود). راجع `docs/DIWAN_VISION.md → "الحالة الحالية مقابل الرؤية"` للمسافة الكاملة بين هذا وبين الرؤية بعيدة المدى. هذا **لا يُنهي** "Phase 2 Preparation" أعلاه ولا يعني بدء بناء عوالم إضافية — خطوة أولى موثَّقة فقط.
 
 **تفاصيل كل يوم (الترقيم الأصلي 0-14، مع الإزاحات والتمديد حتى اليوم 18):** راجع `SALSABIL_CONSTITUTION.md §23`، القسم الفرعي **"تصحيح تاريخي: من 14 إلى 18 يوماً"**.
 

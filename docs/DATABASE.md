@@ -1,7 +1,7 @@
 ---
 title: مرجع قاعدة البيانات
 status: ACTIVE
-version: 1.7
+version: 1.8
 last_updated: 2026-09-04
 owner: المؤسس (أبوحتاب) + Claude
 source_of_truth: Supabase Project الفعلي (للجداول المنفَّذة) + هذا الملف (للتخطيط)
@@ -325,6 +325,12 @@ create unique index user_personas_one_default_uidx
   on user_personas (user_id) where is_default = true;
 
 alter table sessions add column active_persona_id uuid references user_personas(id);
+
+-- اليوم 22 (ADR-020) — توضيح نية صريح، لا تغيير سلوك (الافتراضي بلا ON DELETE هو NO ACTION، مطابق
+-- عملياً لـRESTRICT هنا). راجع scripts/day22-user-personas-fk-policy.sql — IMPLEMENTED، مُتحقَّق منه حياً.
+alter table user_personas drop constraint if exists user_personas_user_id_fkey;
+alter table user_personas add constraint user_personas_user_id_fkey
+  foreign key (user_id) references users(id) on delete restrict;
 ```
 
 **الحالة:** `IMPLEMENTED` — كان `CONCEPTUAL` بانتظار بوابة قرار RFC (`docs/DECISIONS.md → CONFLICT-006`)، بُني فعلياً
@@ -353,6 +359,10 @@ SQL Editor** (`scripts/day19-context-engine-schema.sql`، نفس عُرف كل �
   لـ`sessions.active_persona_id` افتراضياً واحداً لا لبس فيه. يُحذَف وحده عند تخفيف القاعدة مستقبلاً، الأول يبقى.
 - **`sessions.active_persona_id` قابل لـ`NULL` عمداً** — لا مستهلك فعلي له بعد (لا واجهة تبديل شخصية، لا كود
   يقرأه أو يكتبه خارج هذا الـMigration). بنية تحتية دنيا فقط، بانضباط `SALSABIL_CONSTITUTION.md §1`.
+- **`user_personas.user_id` → `on delete restrict` صريح (اليوم 22، `ADR-020`، `IMPLEMENTED` ومُتحقَّق
+  منه حياً)** — توضيح نية لا تغيير سلوك فعلي (كان `NO ACTION` ضمنياً، يتصرف مطابقاً). تحقُّق حي: محاولة
+  حذف مستخدم اختباري له شخصية رُفضت فعلياً بكود `23503`. مرتبط بـ`docs/DATABASE.md §7` (`OPEN_QUESTION`
+  Soft/Hard Delete للمستخدمين عموماً) — يحسم جزءاً ضيقاً فقط، لا السؤال الأشمل.
 
 ---
 
@@ -411,6 +421,8 @@ SQL Editor** (`scripts/day19-context-engine-schema.sql`، نفس عُرف كل �
 ## 7. Soft Delete — Evidence: `OPEN_QUESTION`
 
 غير محسوم بعد هل سلسبيل تعتمد Soft Delete (`deleted_at` عمود) أم Hard Delete مع `audit_log`. الأقرب لروح الدستور (§26، تدقيق كامل) هو Soft Delete + Audit، لكن **لم يُتَّخذ قرار صريح — `OPEN_QUESTION`**.
+
+**جزء ضيق محسوم (اليوم 22، `ADR-020`):** سياسة FK الفنية لِـ`user_personas.user_id` تحديداً — `ON DELETE RESTRICT` صريح (لا `CASCADE`)، مُطبَّق ومُتحقَّق منه حياً (راجع §3 أدناه). هذا **لا يحسم** السؤال الأشمل أعلاه (Soft/Hard Delete لجدول `users` نفسه أو أي جدول آخر) — يبقى `OPEN_QUESTION` كما هو، لكنه يضمن أن أي حذف مستقبلي لمستخدم له شخصية يُواجَه بقرار صريح وقتها، لا بفقدان صامت.
 
 ---
 
