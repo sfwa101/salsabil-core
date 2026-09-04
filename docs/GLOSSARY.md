@@ -1,8 +1,8 @@
 ---
 title: قاموس المصطلحات
 status: ACTIVE
-version: 1.0
-last_updated: 2026-09-01
+version: 1.1
+last_updated: 2026-09-05
 owner: مرجع مشترك
 source_of_truth: هذا الملف (منقول من SALSABIL_CONSTITUTION.md §37 دون حذفه من الدستور — راجع ملاحظة أدناه)
 ---
@@ -33,3 +33,4 @@ source_of_truth: هذا الملف (منقول من SALSABIL_CONSTITUTION.md §3
 | Landed Cost | التكلفة الكاملة لمنتج مستورد حتى الباب (سعر + شحن + جمارك + ضرائب) — مصطلح من محادثة الاستيراد الدولي، خارج الدستور v1.2 |
 | Risk Transfer | تحويل مخاطرة التحقق من آلاف الموردين إلى جهة وسيطة واحدة موثوقة مسؤولة تعاقدياً |
 | Evidence Level | تصنيف إلزامي لكل معلومة (CONSTITUTION/IMPLEMENTED/PROPOSED/...) — راجع docs/DOCUMENTATION_RULES.md §3 |
+| خليل (Khalil) | محرك الهوية والسياق (Identity/Context Engine) **القائم فعلياً** — `src/core/kernel/khalil/`، جداول `users`/`sessions`/`worlds`/`user_personas` (راجع `docs/DOMAIN_MAP.md`، `CONSTITUTION §7.10`). **⚠️ حجز اسم صريح (2026-09-05):** أرشيف قديم منفصل (~سنة، راجع `docs/DIWAN_VISION.md → Addendum 7`) يستخدم "خليل" لمعنى مختلف تماماً (تطوير شخصي/لياقة/عادات كنطاق قائم بذاته). **أي استخدام مستقبلي لذلك المفهوم المختلف يجب أن يحمل اسماً آخر كلياً — لا يُعاد استخدام اسم "خليل" تحت أي ظرف**، تفادياً لالتباس مع محرك الهوية/السياق القائم فعلياً في الكود. |
