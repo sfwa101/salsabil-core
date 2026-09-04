@@ -6,7 +6,17 @@
 // ADR-007). صفحة الخلاصة نفسها تبقى data-world="reef" دائماً — راجع docs/DATABASE.md §4 لنفس التمييز
 // المُطبَّق على worlds/user_personas.
 
-export type PostType = 'post' | 'reel' | 'product_highlight' | 'offer';
+// نفس نمط ORDER_STATUSES/ORDER_STATUS_LABELS_AR في src/core/modules/orders/types.ts —
+// مصدر واحد للقيم المسموحة (يطابق posts_post_type_check في قاعدة البيانات) وتسمياتها العربية
+export const POST_TYPES = ['post', 'reel', 'product_highlight', 'offer'] as const;
+export type PostType = (typeof POST_TYPES)[number];
+
+export const POST_TYPE_LABELS_AR: Record<PostType, string> = {
+  post: 'منشور',
+  reel: 'ريل',
+  product_highlight: 'إبراز منتج',
+  offer: 'عرض',
+};
 
 // خيار خيارات ربط الصورة — نفس نمط ProductOption (SizeOption | AddonOption) من اليوم 3
 export interface ProductLink {
@@ -86,6 +96,13 @@ export interface CreatePostMediaInput {
   postId: string;
   imageUrl: string;
   displayOrder: number;
+  link: PostMediaLink;
+}
+
+// صف صورة بلا postId/displayOrder بعد — لوحة إدارة بيان (اليوم 24) تجمع مصفوفة منها ثم
+// تُرسِلها دفعة واحدة لـ replacePostMedia (postId معروف، displayOrder = ترتيب المصفوفة)
+export interface PostMediaDraft {
+  imageUrl: string;
   link: PostMediaLink;
 }
 

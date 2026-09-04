@@ -16,6 +16,7 @@ import type {
   CreatePostInput,
   UpdatePostInput,
   CreatePostMediaInput,
+  PostMediaDraft,
 } from './types';
 
 interface PostRow {
@@ -190,6 +191,18 @@ export class BayanRepository {
   async deletePostMedia(id: string): Promise<void> {
     const { error } = await supabaseAdmin.from('post_media').delete().eq('id', id);
     if (error) throw error;
+  }
+
+  // نفس نمط replacePostProducts (حذف كامل ثم إدراج) — لوحة إدارة بيان (اليوم 24) ترسل دائماً
+  // القائمة الكاملة الحالية للصور عند التعديل، لا فروقاً جزئية
+  async replacePostMedia(postId: string, media: PostMediaDraft[]): Promise<void> {
+    const { error: deleteError } = await supabaseAdmin.from('post_media').delete().eq('post_id', postId);
+    if (deleteError) throw deleteError;
+
+    if (media.length === 0) return;
+    const rows = media.map((m, index) => ({ post_id: postId, image_url: m.imageUrl, display_order: index, link: m.link }));
+    const { error: insertError } = await supabaseAdmin.from('post_media').insert(rows);
+    if (insertError) throw insertError;
   }
 
   async replacePostProducts(postId: string, productIds: string[]): Promise<void> {

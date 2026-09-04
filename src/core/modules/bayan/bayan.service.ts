@@ -12,6 +12,7 @@ import type {
   CreatePostInput,
   UpdatePostInput,
   CreatePostMediaInput,
+  PostMediaDraft,
   ListFeedOptions,
   FeedPage,
   RecipeLink,
@@ -105,6 +106,10 @@ export class BayanService {
 
   async removePostMedia(id: string): Promise<void> {
     return bayanRepository.deletePostMedia(id);
+  }
+
+  async replacePostMedia(postId: string, media: PostMediaDraft[]): Promise<void> {
+    return bayanRepository.replacePostMedia(postId, media);
   }
 
   async setPostProducts(postId: string, productIds: string[]): Promise<void> {

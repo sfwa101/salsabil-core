@@ -1,7 +1,7 @@
 ---
 title: سجل التغييرات
 status: ACTIVE
-version: 1.11
+version: 1.12
 last_updated: 2026-09-05
 owner: Claude (تلقائي مع كل مهمة كبيرة)
 source_of_truth: هذا الملف + Git log
@@ -12,6 +12,42 @@ source_of_truth: هذا الملف + Git log
 > يُسجَّل هنا فقط التغييرات المهمة (معمارية، قواعد أعمال، قاعدة بيانات، أمان، UX، قرارات، خارطة طريق) — لا كل commit صغير.
 
 ---
+
+## 2026-09-05 (اليوم 24) — بيان (Bayan): لوحة إدارة المنشورات (BAYAN-HOME-FEED-001)
+
+- **توثيق تحضيري سابق (المرحلة 1، قبل استئناف اليوم 24):** ثماني رؤى استراتيجية مؤجَّلة من محادثات
+  حديثة وُثِّقت بدون كود — راجع `docs/PRODUCT_ENGINE.md §4` (مثال أحياء الأسماك)، `docs/BUSINESS_RULES.md`
+  (`BR-017` PROPOSED)، `docs/DIWAN_VISION.md` (`Addendum 4/5/6`)، `docs/DECISIONS.md` (تعديل توضيحي على
+  `ADR-015`)، `docs/ROADMAP.md` (بند لوحة إدارة عالم الأعمال). commit منفصل قبل بدء الكود أدناه.
+- `src/app/admin/posts/` (جديد) — لوحة فرعية كاملة لإدارة محتوى بيان: `page.tsx` (قائمة كل المنشورات،
+  منشورة ومسودات معاً)، `new/page.tsx` (إنشاء)، `[id]/page.tsx` (تعديل)، `actions.ts` (Server Actions:
+  `createPostAction`/`updatePostAction`/`togglePublishAction`/`deletePostAction`، Zod كامل بما فيه
+  اتحاد تمييزي لـ`PostMediaLink`). تُستهلَك عبر `bayanService`/`catalogService` الموجودين فعلياً —
+  لا جدول/نطاق جديد.
+- `src/components/PostForm.tsx` (جديد) — **أول نموذج إنشاء متعدد الحقول في التطبيق:** حقول أساسية
+  (الحي، النوع، الوصف، الأولوية، مفتاح النشر) + صفوف صور ديناميكية غير محدودة العدد، كل صف يحمل
+  منتقي نوع رابط (`بلا رابط`/`منتج`/`وصفة`) — اختيار "وصفة" يفتح بانِ وصفة متداخلاً بالكامل (اسم،
+  أساس عدد أفراد العائلة، قائمة مكوّنات ديناميكية بمنتقي منتج وكمية لكل مكوّن). `src/components/
+  AdminPostRow.tsx` (جديد) — صف القائمة (تعديل/نشر-إلغاء نشر/حذف)، نفس نمط `AdminMerchantRow.tsx`/
+  `OrderRow.tsx` المؤكَّد سابقاً حرفياً، بلا نمط جديد مخترَع.
+- إضافتان صغيرتان داعمتان (لا لمس لأي دالة قائمة): `catalogRepository.findAllProducts()` +
+  `catalogService.listAllProducts()` (منتقي المنتج في النموذج، بلا فلتر تصنيف — الكتالوج صغير جداً
+  اليوم، `OPEN_QUESTION` أداء مؤجَّل لنمو فعلي)؛ `bayanRepository.replacePostMedia()` +
+  `bayanService.replacePostMedia()` (حذف كامل ثم إدراج، نفس نمط `replacePostProducts` من اليوم 23 —
+  التعديل يرسل دائماً القائمة الكاملة الحالية للصور، لا فروقاً جزئية). `POST_TYPES`/`POST_TYPE_LABELS_AR`
+  جديدان في `bayan/types.ts` (نفس نمط `ORDER_STATUSES`/`ORDER_STATUS_LABELS_AR`).
+- 11 اختباراً وحدة جديدة (`src/app/admin/posts/actions.test.ts`، يموّه `getAdminSession`/
+  `bayanService` بالكامل) — المجموع: 103 → **114** وحدة (151 إجمالياً مع التكامل). `typecheck`/
+  `arch:check` نظيفان (106 وحدة/312 اعتماداً بلا مخالفة).
+- **تحقُّق حي كامل عبر متصفح حقيقي + Supabase حقيقي** (`scripts/day24-bayan-admin-posts-verify.ts`،
+  نفس منهجية `scripts/test-first-real-purchase.e2e.ts`/`scripts/day23-bayan-seed-and-verify.ts`):
+  تسجيل دخول `platform_admin` حقيقي → إنشاء منشور حقيقي (صف صورة برابط منتج) → نشر → تحقُّق مباشر
+  من `posts`/`post_media` عبر `service_role` → تعديل (صفحة `[id]` تحمّل القيم الحالية مسبقاً بشكل
+  صحيح، تغيير الأولوية ينعكس فعلياً) → إلغاء نشر → حذف (يتحقق من الحذف المتسلسل الفعلي لـ`post_media`
+  بلا صف يتيم) — **12/12 خطوة نجحت**، صفر أخطاء Console، ذاتي التنظيف بالكامل (لا أثر متبقٍ في القاعدة).
+- `docs/DOMAIN_MAP.md` (قسم Admin) محدَّث بامتداد اليوم 24 كإضافة بحتة على نطاق Admin الموجود، لا
+  إعادة تصميم. **لا إدارة لـ`post_products` (الرف الأفقي)** في هذه اللوحة — خارج نطاق اليوم صراحة.
+- commit: (يُضاف بعد commit هذا التحديث نفسه).
 
 ## 2026-09-05 (اليوم 23) — بيان (Bayan): الباك-إند (BAYAN-HOME-FEED-001)
 

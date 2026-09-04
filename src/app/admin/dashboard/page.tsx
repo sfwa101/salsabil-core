@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import { getAdminSession } from '@/core/modules/admin/admin-session';
 import { adminService } from '@/core/modules/admin/admin.service';
 import { ordersService } from '@/core/modules/orders/orders.service';
@@ -29,6 +30,13 @@ export default async function AdminDashboardPage() {
           </button>
         </form>
       </div>
+
+      <Link
+        href="/admin/posts"
+        className="self-start rounded-xl border border-border px-4 py-3 text-sm font-medium text-foreground transition hover:bg-muted"
+      >
+        إدارة منشورات بيان ←
+      </Link>
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-medium text-foreground">التجار ({merchants.length})</h2>

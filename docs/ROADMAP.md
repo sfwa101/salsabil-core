@@ -1,7 +1,7 @@
 ---
 title: خارطة الطريق
 status: ACTIVE
-version: 1.17
+version: 1.18
 last_updated: 2026-09-05
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTION.md §23 (الخطة الأصلية + تصحيح 14→18 يوماً)
@@ -59,6 +59,7 @@ source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTI
 > فصاعداً لكل يوم من هذه السلسلة.
 
 | 23 | بيان (Bayan) — الباك-إند: `posts`/`post_media`/`post_products` + `bayan.repository.ts`/`bayan.service.ts` (BAYAN-HOME-FEED-001) | `DONE` — DDL يدوي عبر SQL Editor، RLS بالنمط 1 (قراءة عامة للمنشور فقط)، تحقُّق حي 8/8 (قفل RLS للمسودة، محاولات إدراج فاشلة FK×2+CHECK، حذف متسلسل). 20 اختباراً وحدة جديدة، المجموع 103 وحدة/140 إجمالاً. لا واجهة بعد — راجع `ADR-021` |
+| 24 | بيان (Bayan) — لوحة إدارة المنشورات: `src/app/admin/posts/` (قائمة/إنشاء/تعديل) + `PostForm.tsx` (BAYAN-HOME-FEED-001) | `DONE` — أول نموذج إنشاء متعدد الحقول في التطبيق (صفوف صور ديناميكية بمنتقي رابط none/product/recipe + بانِ وصفة متداخل)، `actions.ts`+Zod+row-component (`AdminPostRow.tsx`) بنفس نمط `OrderRow.tsx`/`AdminMerchantRow.tsx`. 11 اختباراً وحدة جديدة، المجموع 114 وحدة/151 إجمالاً. تحقُّق حي كامل عبر متصفح حقيقي + Supabase حقيقي (`scripts/day24-bayan-admin-posts-verify.ts`، 12/12). راجع `docs/CHANGELOG.md` |
 
 > **بند مستقبلي صريح (2026-09-05) — بعد إتمام بيان (الأيام 23-32):** لوحة إدارة عالم الأعمال
 > (نموذج أولي: عيادات/مراكز طبية) — أول تطبيق حقيقي لعالم الأعمال في Context Engine (`worlds`/

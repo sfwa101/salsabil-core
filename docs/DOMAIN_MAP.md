@@ -1,7 +1,7 @@
 ---
 title: خريطة النطاقات
 status: ACTIVE (يحتوي OPEN_QUESTION-ين جوهريَّين)
-version: 1.12
+version: 1.13
 last_updated: 2026-09-05
 owner: المؤسس (أبوحتاب) + Claude (معماري)
 source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md §6-§8 (المصدر الأصلي)
@@ -258,6 +258,24 @@ source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md �
 | لا يحق له | تعديل عمولة تاجر أو حذفه، تسجيل تاجر جديد، إدارة عملاء، أي عملية خارج (تفعيل/تعطيل تاجر + رؤية/تحكم طلبات + سجل تدقيق) — محدَّدات هندسية صريحة من المؤسس |
 | يستخدمه | لوحة الإدارة (`src/app/admin/`، اليوم 11) حصراً |
 | الحالة | `PARTIALLY_IMPLEMENTED` — `admin.service.ts` (`loginByPhone`, `listMerchants`, `setMerchantActiveStatus`)، `admin-session.ts` (كوكي `sb_admin_session` مستقل + فحص `role === 'platform_admin'` صريح — ضروري لأن `tenantId` جلسات الإدارة `null` دائماً فلا يحميها فحص "tenantId موجود؟" الضمني الذي يحمي جلسات التاجر). مُختبَر (وحدة + تكامل حي بما فيه اختبارات أمنية سلبية: رفض هاتف تاجر، رفض جلسة تاجر حقيقية كجلسة إدارة) ومتصفح حقيقي (بما فيه تأكيد أن جلسة تاجر نشطة لا تفتح `/admin/dashboard`). موثَّق في `ADR-013` وSpec كامل في `specs/admin/SPEC.md`. **لا يزال:** بلا كلمة مرور/تحقق ثانٍ (نفس فئة `ADR-012`، أشد حساسية) |
+
+**اليوم 24 — امتداد إضافي بحت (لا تعديل على ما سبق):** `src/app/admin/posts/` — لوحة فرعية لإدارة
+محتوى بيان (`قائمة`/`إنشاء`/`تعديل`)، تستهلك `bayanService`/`catalogService` الموجودين فعلياً (لا
+جدول/نطاق جديد، نفس دور Admin كنطاق تجميع فقط). أول نموذج إنشاء متعدد الحقول في التطبيق
+(`src/components/PostForm.tsx`) — حقول أساسية (الحي/النوع/الوصف/الأولوية/مفتاح النشر) + صفوف صور
+ديناميكية، كل صف يحمل منتقي نوع رابط (`none`/`product`/`recipe`) مع منتقي منتج أو بانِ وصفة متداخل
+(قائمة مكوّنات ديناميكية). `src/app/admin/posts/actions.ts` (Server Actions: `createPostAction`،
+`updatePostAction`، `togglePublishAction`، `deletePostAction`) — نفس نمط `actions.ts`+Zod+
+row-component المؤكَّد سابقاً (`OrderRow.tsx`/`AdminMerchantRow.tsx` → `AdminPostRow.tsx` هنا)، بلا
+نمط جديد مخترَع. إضافتان صغيرتان لدعم منتقي المنتج: `catalogRepository.findAllProducts()`/
+`catalogService.listAllProducts()` (بلا فلتر تصنيف — الكتالوج صغير جداً اليوم)، و`bayanRepository
+.replacePostMedia()`/`bayanService.replacePostMedia()` (حذف كامل ثم إدراج، نفس نمط
+`replacePostProducts` الموجود من اليوم 23) لاستبدال كل صور المنشور دفعة واحدة عند التعديل. مُختبَر
+وحدياً (`src/app/admin/posts/actions.test.ts`، يموّه `getAdminSession`/`bayanService`) ومتحقَّق منه
+حياً بالكامل (`scripts/day24-bayan-admin-posts-verify.ts`، Playwright + تحقُّق مباشر عبر
+`service_role`: إنشاء → نشر → تعديل → إلغاء نشر → حذف، 12/12 خطوة، حذف متسلسل نظيف بلا صف يتيم).
+**لا إدارة لـ`post_products` (الرف الأفقي أسفل المنشور)** في هذه اللوحة — خارج نطاق اليوم 24 صراحة
+(لم يُطلَب، `bayanService.setPostProducts` يبقى بلا مستهلك واجهة حتى الآن).
 
 ---
 

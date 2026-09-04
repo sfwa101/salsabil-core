@@ -73,6 +73,14 @@ export class CatalogRepository {
     return (data as ProductRow[]).map(toProduct);
   }
 
+  // بلا فلتر — لمنتقي المنتج في لوحة إدارة بيان (اليوم 24). لا خطر أداء اليوم (كتالوج صغير جداً،
+  // قسم تجريبي واحد) — يُعاد تقييمه (تصفح/بحث) عند نمو الكتالوج فعلياً.
+  async findAllProducts(): Promise<Product[]> {
+    const { data, error } = await supabase.from('products').select('*').eq('is_active', true);
+    if (error) throw error;
+    return (data as ProductRow[]).map(toProduct);
+  }
+
   async findProductsByTenant(tenantId: string): Promise<Product[]> {
     const { data, error } = await supabase.from('products').select('*').eq('tenant_id', tenantId);
     if (error) throw error;

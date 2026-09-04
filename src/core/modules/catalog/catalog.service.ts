@@ -17,6 +17,10 @@ export class CatalogService {
     return catalogRepository.findProductsByCategory(categoryId);
   }
 
+  async listAllProducts(): Promise<Product[]> {
+    return catalogRepository.findAllProducts();
+  }
+
   async getProductById(id: string): Promise<Product | null> {
     return catalogRepository.findProductById(id);
   }
