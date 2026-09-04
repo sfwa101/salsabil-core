@@ -1,8 +1,8 @@
 ---
 title: مرجع قاعدة البيانات
 status: ACTIVE
-version: 1.5
-last_updated: 2026-09-03
+version: 1.6
+last_updated: 2026-09-04
 owner: المؤسس (أبوحتاب) + Claude
 source_of_truth: Supabase Project الفعلي (للجداول المنفَّذة) + هذا الملف (للتخطيط)
 ---
@@ -302,6 +302,13 @@ create index audit_log_created_at_idx on audit_log (created_at desc);
 | `stores` | Tenant (طبقة فرعية تحت `merchants`) | غير مجدوَل بعد | `CONCEPTUAL` |
 | `users.national_id`, `users.is_verified` (أعمدة جديدة على `users`، لا جدول منفصل) | Identity — Phase 2 من نموذج الهوية المرحلي (`ADR-015`) | يُبنى عند بدء نطاق تاجر جديد/شركاء النجاح/تيسير تحديداً — غير مجدوَل بعد | `CONCEPTUAL` — توثيق هوية إجباري فقط عند تلك الخدمات، لا للتصفح/الشراء العادي |
 | `product_variant`, `sku`, `barcode`, `packaging` | Catalog (العمق الكامل) | غير مجدوَل بعد — أُجِّل لصالح Vertical Slice أولاً | `CONCEPTUAL` |
+| `worlds`, `user_personas` (+ `sessions.active_persona_id` جديد، `nullable`) | خليل (Khalil) — Context Engine، امتداد لِـ`ideas/CONTEXTUAL_WORLDS_RFC.md` | اليوم 19 — راجع `docs/DECISIONS.md → CONFLICT-006` لبوابة القرار | `CONCEPTUAL` (قيد الجدولة لليوم 19) |
+
+**⚠️ تحذير تسمية صريح — `worlds` (هذا الجدول) ≠ `WorldSlug`/`WORLD_THEMES` (`src/config/theme-registry.ts`):**
+المفهومان يحملان اسماً متشابهاً بالصدفة، ولا علاقة بنيوية بينهما:
+- `WorldSlug`/`WORLD_THEMES` (`ADR-007`, `IMPLEMENTED` منذ اليوم 6): تعداد ثابت في الكود (`'diwan' | 'reef' | 'asrab' | ...`) لثيمات CSS **بصرية** فقط — أي لون/رمز يُطبَّق عبر `data-world="<slug>"`. لا صلة له بهوية المستخدم أو صلاحياته.
+- `worlds` (هذا الجدول، `CONCEPTUAL`): صفوف بيانات في Supabase تمثّل **سياقات هوية** (Context Packages بحسب RFC) — مثال: صف `individuals` (الأفراد) وحده مُقرَّر لليوم 19 (لا صف "أعمال" أو غيره بعد، `CONFLICT-006`). يرتبط بـ`user_personas` (شخصية نشطة لكل مستخدم داخل عالم معيّن) و`sessions.active_persona_id`.
+- عالم بصري واحد (مثال: `reef`) قد يُستهلَك من أكثر من صف `worlds` مستقبلاً (فرد يتصفح ريف بشخصية "فرد" مقابل شخصية "تاجر جملة")، والعكس أيضاً وارد نظرياً — **لا افتراض تطابق واحد-لواحد بين الاثنين**. أي كود مستقبلي يخلط بينهما (مثال: افتراض أن `WorldSlug` يكفي لتحديد صلاحيات المستخدم) خطأ معماري يجب رفضه.
 
 ---
 
