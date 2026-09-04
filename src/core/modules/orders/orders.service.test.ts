@@ -63,10 +63,19 @@ vi.mock('../cart/cart.repository', () => ({
 
 const testUser: User = { id: 'user-1', fullName: 'زبون اختبار', phone: '01099999999', role: 'customer', createdAt: new Date().toISOString() };
 
+// اليوم 21 (ADR-019): khalilService.findOrCreateCustomerByPhone (الحقيقي، غير مموَّه هنا) يستدعي
+// الآن ensureIndividualPersona أيضاً — يحتاج الـmock الثلاثة أدناه بقيم افتراضية معقولة، وإلا
+// يفشل كل اختبار يمر بـ Checkout بخطأ "is not a function" بلا علاقة بمنطق الطلبات نفسه.
+const testWorld = { id: 'world-1', slug: 'individuals', name: 'الأفراد', isActive: true, createdAt: new Date().toISOString() };
+const testPersona = { id: 'persona-1', userId: testUser.id, worldId: testWorld.id, isDefault: true, createdAt: new Date().toISOString() };
+
 vi.mock('../../kernel/khalil/khalil.repository', () => ({
   khalilRepository: {
     findUserByPhoneAdmin: vi.fn(async () => null),
     createUser: vi.fn(async () => testUser),
+    findWorldBySlug: vi.fn(async () => testWorld),
+    findPersonaByUserAndWorld: vi.fn(async () => null),
+    createPersona: vi.fn(async () => testPersona),
   },
 }));
 

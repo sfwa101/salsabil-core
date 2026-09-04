@@ -134,6 +134,9 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
       await supabaseAdmin.from('carts').delete().eq('id', visitorCartId);
     }
     if (customerUserId) {
+      // اليوم 21 (ADR-019): checkout ينشئ شخصية فردية أيضاً الآن — تُحذَف أولاً (بلا cascade على
+      // user_personas.user_id)، وإلا يفشل حذف users بقيد FK بصمت.
+      await supabaseAdmin.from('user_personas').delete().eq('user_id', customerUserId);
       await supabaseAdmin.from('users').delete().eq('id', customerUserId);
     }
     for (const token of tokensToClean) {

@@ -1,7 +1,7 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.11
+version: 1.12
 last_updated: 2026-09-04
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف
@@ -499,6 +499,81 @@ Consequences: `worlds`/`user_personas`/`sessions.active_persona_id` بيانات
 Related Documents: docs/DATABASE.md §3 (worlds, user_personas, sessions)، docs/DOMAIN_MAP.md → خليل، CONFLICT-006،
           docs/DIWAN_VISION.md، ideas/CONTEXTUAL_WORLDS_RFC.md، ADR-010 (منهجية التحقُّق الحي)، ADR-012 (نمط
           الجلسات)، scripts/day19-context-engine-schema.sql، scripts/day19-context-engine-seed-and-verify.ts
+```
+
+---
+
+## ADR-019
+```
+Title: اليوم 21 — ربط Context Engine بـservice.ts: ensureIndividualPersona عبر
+          findOrCreateCustomerByPhone، واكتشاف/إصلاح تسرّب بيانات حي في 4 ملفات اختبار موجودة مسبقاً
+Status: ACCEPTED
+Date: 2026-09-04 (اليوم 21)
+Decision: (أ) `KhalilService.ensureIndividualPersona(userId)` جديدة — تبحث عن عالم `individuals`
+          (`findWorldBySlug`)، ثم عن شخصية المستخدم فيه (`findPersonaByUserAndWorld`)، تُنشئ واحدة
+          افتراضية فقط عند عدم الوجود (`createPersona`، `isDefault: true`). ترمي خطأً صريحاً إن لم
+          يوجد عالم `individuals` أصلاً (لا فشل صامت — نفس فلسفة كل فحص `if (error) throw error`
+          في المشروع).
+          (ب) `findOrCreateCustomerByPhone` (اليوم 8، `ADR-009`) مُعدَّلة الآن — بعد إيجاد/إنشاء
+          المستخدم، تستدعي `ensureIndividualPersona(user.id)` قبل الإرجاع، لكل من العميل الموجود
+          مسبقاً والعميل الجديد على حدٍّ سواء (دفاعي للأول: Backfill اليوم 19 يفترض تغطيته، لكن
+          التحقق لا يكلّف شيئاً حقيقياً بفضل الفهرس الجزئي). التوقيع (`Promise<User>`) لم يتغيّر —
+          `orders.service.ts.checkout` (المستدعي الوحيد) لم يحتَج أي تعديل.
+          (ج) **⚠️ اكتُشف حياً أثناء التنفيذ (لا افتراضياً) تسرّب بيانات حقيقي** في أربعة ملفات
+          اختبار قائمة مسبقاً: `orders.integration.test.ts` (موضعان)، `reef-city-journey.integration
+          .test.ts`، `admin.integration.test.ts`. كلها تحذف صف `users` بعد الاختبار عبر
+          `supabaseAdmin.from('users').delete()...` **بلا فحص `error`** — والآن، بما أن Checkout
+          الحقيقي ينشئ صف `user_personas` أيضاً (بلا `on delete cascade` على `user_id`)، فشل حذف
+          `users` بقيد مفتاح أجنبي (`23503`) **بصمت تام** (لا رمي، لا فشل اختبار ظاهر) — تحقَّقتُ
+          حياً بتشغيل `orders.integration.test.ts` بعد الربط مباشرة: تسرَّب 8 صفوف `users`/
+          `user_personas` حقيقية فعلياً على Supabase قبل ملاحظة المشكلة، نُظِّفت يدوياً بعد التأكد
+          أنها من تشغيل الاختبار لا بيانات مؤسس حقيقية (بصمة `created_at` متطابقة زمنياً مع وقت
+          التشغيل، بمعزل تام عن الخمسة عملاء الحقيقيين من Backfill اليوم 19).
+          (د) الإصلاح: حذف `user_personas` بمفتاح `user_id` قبل حذف `users` في كل الأماكن الأربعة —
+          لا تغيير في فلسفة "بلا فحص خطأ" القائمة أصلاً لكود التنظيف في هذا المشروع (نفس نمط باقي
+          أسطر `afterAll` المجاورة)، فقط ترتيب الحذف الصحيح احتراماً لقيد FK جديد.
+          (هـ) اختبار تكامل حي جديد في `orders.integration.test.ts` يثبت مباشرة أن **Checkout
+          الحقيقي** (لا استدعاء `khalilService` منعزلاً) ينشئ `user`+`persona` معاً، بما فيه تحقُّق
+          idempotency حي (Checkout ثانٍ بنفس الهاتف لا يُنشئ شخصية مكرَّرة — الفهرس الجزئي من
+          `ADR-018` يعمل عملياً، لا نظرياً فقط). استدعى إعادة هيكلة `createdOrderId`/`createdUserId`
+          المفردين في نفس الوصف (`describe`) إلى مصفوفات `orderIdsToClean`/`userIdsToClean` — متغير
+          مفرد يُعاد تعيينه في اختبارين كان سيُسرِّب بيانات الاختبار الأول بصمت (نفس فئة الخلل في (ج)
+          تماماً، لو لم يُلاحَظ الآن).
+          (و) `orders.service.test.ts` (وحدة، يموّه `khalil.repository.ts`) احتاج تحديث كائن الـmock
+          بإضافة `findWorldBySlug`/`findPersonaByUserAndWorld`/`createPersona` بقيم افتراضية — بلا
+          ذلك، كل اختبار يمر عبر Checkout الحقيقي (غير المموَّه، لأن الـmock هنا على مستوى
+          `repository` لا `service`) كان سيفشل بـ"is not a function" بلا علاقة بمنطق الطلبات المُختبَر
+          فعلياً.
+Context: طلب المؤسس ربط `service.ts` بالضبط بالدالتين المحدَّدتين + اختبار تكامل حي يثبت Checkout
+          ينشئ user+persona معاً. عند تنفيذ الاختبار الحي فعلياً (لا افتراضاً) لأول مرة بعد الربط،
+          ظهر الخلل في (ج) مباشرة كتسرّب بيانات حقيقي على Supabase — تحقُّق حي كشف ما كان سيبقى غير
+          مكتشَف لو اكتُفي بقراءة الكود دون تشغيله فعلياً ضد قاعدة بيانات حقيقية.
+Alternatives: (أ) `ON DELETE CASCADE` على `user_personas.user_id` بدل حذف يدوي مرتَّب في كل ملف
+          اختبار — رُفض: يغيّر تعريف عمود FK فعلي في مخطط حي (`ADR-018`) لمجرد راحة كود اختبار، بلا
+          مبرر لسلوك الإنتاج نفسه (حذف مستخدم حقيقي لا يجب أن يحذف شخصياته صامتاً في سياق تشغيلي —
+          قرار حذف مستخدم كامل خارج نطاق اليوم 21 أصلاً). (ب) ترك التسرّبات الثمانية كما هي (بيانات
+          اختبار غير ضارة على بيئة dev) — رُفض: يخالف انضباط "بيئة الاختبار نظيفة دائماً" المتَّبع في
+          كل ملف اختبار سابق في هذا المشروع؛ التنظيف اليدوي فوري ورخيص، لا مبرر لتركها. (ج) تجاهل
+          تحديث `orders.service.test.ts` والاكتفاء بالتحقق أن اختبارات التكامل تعمل — رُفض: كان سيترك
+          اختبار وحدة قائم يفشل بخطأ مضلِّل ("is not a function") لا علاقة له بالتغيير الحقيقي، يخالف
+          مبدأ ترك المجموعة الكاملة خضراء دائماً.
+Why: قرار المؤسس المباشر بربط `service.ts`. اكتشاف وإصلاح التسرّب والـmock الناقص كلاهما نتيجة مباشرة
+          لالتزام بند الدستور "تحقُّق حي لا افتراضي" (`SALSABIL_CONSTITUTION.md` §22-24) — لم يُطلَبا
+          صراحة، لكن تركهما بلا إصلاح كان سيناقض جوهر طلب المؤسس نفسه ("اختبار تكامل حي يثبت...").
+Consequences: أي دالة مستقبلية تُنشئ `user_personas` (لا `findOrCreateCustomerByPhone` وحدها) يجب أن
+          يتذكر أي كود تنظيف/حذف مستخدمين مرتبط بها هذا الترتيب (`user_personas` قبل `users`) — خطر
+          تكراره في ملفات اختبار مستقبلية يبقى قائماً ما لم يُضَف `ON DELETE CASCADE` صراحة لاحقاً
+          بقرار مؤسس منفصل (راجع Alternatives أ). `ensureIndividualPersona` يُحمِّل الآن Checkout
+          اعتماداً جديداً على وجود صف `worlds` بـslug `individuals` — إن حُذف هذا الصف يدوياً من
+          Supabase مستقبلاً (لا مبرر لذلك اليوم)، **يتعطَّل Checkout بالكامل** لا شخصية المستخدم فقط
+          (يرمي `ensureIndividualPersona` قبل أي إنشاء طلب). فجوة معروفة، مقبولة الآن لعالم واحد لا
+          يُتوقَّع حذفه، غير مؤمَّنة دفاعياً (لا try/catch يُسقِط هذا التحقق بصمت — قرار متعمَّد: فشل
+          صريح أفضل من نجاح Checkout بلا شخصية متسقة).
+Related Documents: docs/DATABASE.md §3 (worlds/user_personas)، docs/DOMAIN_MAP.md → خليل، ADR-018،
+          ADR-009 (findOrCreateCustomerByPhone الأصلية)، src/core/kernel/khalil/service.ts،
+          src/core/kernel/khalil/service.test.ts، src/core/modules/orders/orders.integration.test.ts،
+          src/core/modules/orders/orders.service.test.ts، src/core/e2e/reef-city-journey.integration
+          .test.ts، src/core/modules/admin/admin.integration.test.ts
 ```
 
 ---

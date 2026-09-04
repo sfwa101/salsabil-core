@@ -197,6 +197,9 @@ describe('Admin orders integration (Supabase حقيقي، اليوم 11)', () =>
       await supabaseAdmin.from('carts').delete().eq('id', cartId);
     }
     for (const userId of userIdsToClean) {
+      // اليوم 21 (ADR-019): checkout ينشئ شخصية فردية أيضاً الآن — تُحذَف أولاً (بلا cascade على
+      // user_personas.user_id)، وإلا يفشل حذف users بقيد FK بصمت.
+      await supabaseAdmin.from('user_personas').delete().eq('user_id', userId);
       await supabaseAdmin.from('users').delete().eq('id', userId);
     }
     await supabaseAdmin.from('inventory').update({ quantity_available: 10 }).eq('product_id', productId);

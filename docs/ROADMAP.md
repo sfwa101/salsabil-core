@@ -1,7 +1,7 @@
 ---
 title: خارطة الطريق
 status: ACTIVE
-version: 1.12
+version: 1.13
 last_updated: 2026-09-04
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTION.md §23 (الخطة الأصلية + تصحيح 14→18 يوماً)
@@ -49,6 +49,7 @@ source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTI
 | 18 | الإطلاق الحي (Live Launch) | `DONE` — تحقُّق حي أن `staging.reefam.com` يعمل بنفس الكود (إصلاح `/cart` يعمل هناك فعلياً)، `scripts/test-first-real-purchase.e2e.ts` (سكربت رحلة شراء كامل، مُتحقَّق منه ضد dev لا staging — راجع ملاحظة الدقة أعلاه)، إرشادات يدوية مُسلَّمة للمؤسس. المجموع يبقى 104. راجع `ADR-017` |
 | 19 | Context Engine — Migration `worlds`/`user_personas` على Supabase (dev) | `DONE` — DDL يدوي عبر SQL Editor (`scripts/day19-context-engine-schema.sql`)، RLS بالنمط 2 (قفل كامل)، seed صف `individuals`، backfill لـ5 مستخدمين `customer` حاليين، تحقُّق حي 9/9 بمحاولات إدراج فاشلة متعمَّدة (`scripts/day19-context-engine-seed-and-verify.ts`). لا مستهلك كود بعد (`types.ts`/`khalil.repository.ts` مؤجَّلان لليوم 20 صراحة). راجع `ADR-018`، `CONFLICT-006`، `docs/DIWAN_VISION.md` |
 | 20 | Context Engine — `types.ts` (`World`/`UserPersona`) + `khalil.repository.ts` (4 دوال جديدة) | `DONE` — إضافي بحت، بلا لمس أي دالة/نوع قائم. 10 اختبارات وحدة جديدة (`khalil.repository.test.ts`، تموّه `supabaseAdmin` مباشرة — أول ملف بهذا النمط في المستودع). المجموع الآن 114. لا تعديل على `service.ts` — مؤجَّل لليوم 21 صراحة |
+| 21 | Context Engine — ربط `service.ts` (`ensureIndividualPersona` + `findOrCreateCustomerByPhone`) | `DONE` — Checkout الحقيقي ينشئ user+persona معاً الآن، مُتحقَّق منه حياً (اختبار تكامل جديد + idempotency). **اكتشاف حي مهم أثناء التنفيذ:** تسرّب بيانات حقيقي في 4 ملفات اختبار قائمة (ترتيب حذف `users`/`user_personas` الخاطئ يفشل بصمت بقيد FK) — اكتُشف، نُظِّف (8 صفوف)، وأُصلِح في كل الملفات الأربعة. المجموع الآن 120. راجع `ADR-019` للتفصيل الكامل |
 
 **تفاصيل كل يوم (الترقيم الأصلي 0-14، مع الإزاحات والتمديد حتى اليوم 18):** راجع `SALSABIL_CONSTITUTION.md §23`، القسم الفرعي **"تصحيح تاريخي: من 14 إلى 18 يوماً"**.
 

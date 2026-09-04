@@ -2,9 +2,15 @@
 // اختبارات وحدة — تُموّه khalilRepository فقط؛ منطق khalil.service.ts نفسه حقيقي
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Session, User } from './types';
+import type { Session, User, World, UserPersona } from './types';
 
 const user: User = { id: 'user-1', fullName: 'تاجر', phone: '01000000000', role: 'merchant_owner', createdAt: new Date().toISOString() };
+
+const customer: User = { id: 'user-2', fullName: 'زبون', phone: '01099999999', role: 'customer', createdAt: new Date().toISOString() };
+
+const individualsWorld: World = { id: 'world-1', slug: 'individuals', name: 'الأفراد', isActive: true, createdAt: new Date().toISOString() };
+
+const persona: UserPersona = { id: 'persona-1', userId: 'user-2', worldId: 'world-1', isDefault: true, createdAt: new Date().toISOString() };
 
 const validSession: Session = {
   userId: 'user-1',
@@ -25,6 +31,9 @@ vi.mock('./khalil.repository', () => ({
     createSession: vi.fn(),
     findSessionByToken: vi.fn(),
     deleteSession: vi.fn(),
+    findWorldBySlug: vi.fn(),
+    findPersonaByUserAndWorld: vi.fn(),
+    createPersona: vi.fn(),
   },
 }));
 
@@ -109,5 +118,65 @@ describe('KhalilService.canAccessTenant', () => {
 
   it('يسمح لتاجر بالوصول لنفس مستأجره', () => {
     expect(khalilService.canAccessTenant(validSession, 'merchant-1')).toBe(true);
+  });
+});
+
+// اليوم 21 (ADR-019) — worlds/user_personas عبر service.ts لأول مرة
+describe('KhalilService.ensureIndividualPersona', () => {
+  it('يعيد الشخصية الموجودة بلا إنشاء جديدة إن وُجدت مسبقاً', async () => {
+    vi.mocked(khalilRepository.findWorldBySlug).mockResolvedValue(individualsWorld);
+    vi.mocked(khalilRepository.findPersonaByUserAndWorld).mockResolvedValue(persona);
+
+    const result = await khalilService.ensureIndividualPersona('user-2');
+
+    expect(result).toEqual(persona);
+    expect(khalilRepository.createPersona).not.toHaveBeenCalled();
+  });
+
+  it('ينشئ شخصية افتراضية جديدة إن لم توجد', async () => {
+    vi.mocked(khalilRepository.findWorldBySlug).mockResolvedValue(individualsWorld);
+    vi.mocked(khalilRepository.findPersonaByUserAndWorld).mockResolvedValue(null);
+    vi.mocked(khalilRepository.createPersona).mockResolvedValue(persona);
+
+    const result = await khalilService.ensureIndividualPersona('user-2');
+
+    expect(khalilRepository.createPersona).toHaveBeenCalledWith({ userId: 'user-2', worldId: 'world-1', isDefault: true });
+    expect(result).toEqual(persona);
+  });
+
+  it('يرمي خطأً واضحاً إن لم يوجد عالم individuals أصلاً (يجب أن يكون مزروعاً منذ اليوم 19)', async () => {
+    vi.mocked(khalilRepository.findWorldBySlug).mockResolvedValue(null);
+
+    await expect(khalilService.ensureIndividualPersona('user-2')).rejects.toThrow('individuals');
+    expect(khalilRepository.findPersonaByUserAndWorld).not.toHaveBeenCalled();
+  });
+});
+
+describe('KhalilService.findOrCreateCustomerByPhone', () => {
+  it('لعميل موجود مسبقاً: يعيده كما هو، ويضمن له شخصية فردية دون إعادة إنشائها إن وُجدت', async () => {
+    vi.mocked(khalilRepository.findUserByPhoneAdmin).mockResolvedValue(customer);
+    vi.mocked(khalilRepository.findWorldBySlug).mockResolvedValue(individualsWorld);
+    vi.mocked(khalilRepository.findPersonaByUserAndWorld).mockResolvedValue(persona);
+
+    const result = await khalilService.findOrCreateCustomerByPhone(customer.fullName, customer.phone);
+
+    expect(result).toEqual(customer);
+    expect(khalilRepository.createUser).not.toHaveBeenCalled();
+    expect(khalilRepository.createPersona).not.toHaveBeenCalled();
+    expect(khalilRepository.findPersonaByUserAndWorld).toHaveBeenCalledWith(customer.id, individualsWorld.id);
+  });
+
+  it('لعميل جديد: ينشئ المستخدم ثم يضمن له شخصية فردية جديدة معاً', async () => {
+    vi.mocked(khalilRepository.findUserByPhoneAdmin).mockResolvedValue(null);
+    vi.mocked(khalilRepository.createUser).mockResolvedValue(customer);
+    vi.mocked(khalilRepository.findWorldBySlug).mockResolvedValue(individualsWorld);
+    vi.mocked(khalilRepository.findPersonaByUserAndWorld).mockResolvedValue(null);
+    vi.mocked(khalilRepository.createPersona).mockResolvedValue(persona);
+
+    const result = await khalilService.findOrCreateCustomerByPhone(customer.fullName, customer.phone);
+
+    expect(khalilRepository.createUser).toHaveBeenCalledWith({ fullName: customer.fullName, phone: customer.phone, role: 'customer' });
+    expect(khalilRepository.createPersona).toHaveBeenCalledWith({ userId: customer.id, worldId: individualsWorld.id, isDefault: true });
+    expect(result).toEqual(customer);
   });
 });

@@ -2,18 +2,41 @@
 // منطق الأعمال الخاص بخليل — لا استدعاء لقاعدة بيانات هنا مباشرة، فقط عبر khalilRepository
 
 import { khalilRepository } from './khalil.repository';
-import type { User, Session, UserRole } from './types';
+import type { User, Session, UserRole, UserPersona } from './types';
+
+// اليوم 19 (ADR-018) — الصف الوحيد المزروع في worlds حتى الآن. راجع docs/DECISIONS.md → CONFLICT-006
+// لسبب حصر النطاق (لا عالم "أعمال" أو غيره بعد).
+const INDIVIDUALS_WORLD_SLUG = 'individuals';
 
 export class KhalilService {
   /**
    * يبحث عن مستخدم بالهاتف أو ينشئ واحداً جديداً (دور customer دائماً) — Checkout بلا تسجيل
    * دخول حقيقي (اليوم 8). لا يُحدَّث الاسم إن وُجد مستخدم مطابق مسبقاً (لا نستبدل بياناً
    * صحيحة بخطأ إملائي محتمل في النموذج).
+   *
+   * اليوم 21 (ADR-019): يضمن الآن أيضاً وجود شخصية افتراضية في عالم "الأفراد" لهذا المستخدم —
+   * لعميل موجود مسبقاً (Backfill اليوم 19 يفترض تغطيته، لكن التحقق دفاعي لا مكلف) ولعميل جديد
+   * على حدٍّ سواء.
    */
   async findOrCreateCustomerByPhone(fullName: string, phone: string): Promise<User> {
     const existing = await khalilRepository.findUserByPhoneAdmin(phone);
+    const user = existing ?? (await khalilRepository.createUser({ fullName, phone, role: 'customer' }));
+    await this.ensureIndividualPersona(user.id);
+    return user;
+  }
+
+  /**
+   * يضمن أن يملك المستخدم شخصية افتراضية في عالم "الأفراد" (individuals) — يبحث أولاً، ينشئ
+   * فقط عند عدم الوجود (idempotent، نفس عُرف findOrCreateCustomerByPhone). اليوم 21 (ADR-019).
+   */
+  async ensureIndividualPersona(userId: string): Promise<UserPersona> {
+    const world = await khalilRepository.findWorldBySlug(INDIVIDUALS_WORLD_SLUG);
+    if (!world) {
+      throw new Error(`عالم "${INDIVIDUALS_WORLD_SLUG}" غير موجود في worlds — راجع scripts/day19-context-engine-schema.sql`);
+    }
+    const existing = await khalilRepository.findPersonaByUserAndWorld(userId, world.id);
     if (existing) return existing;
-    return khalilRepository.createUser({ fullName, phone, role: 'customer' });
+    return khalilRepository.createPersona({ userId, worldId: world.id, isDefault: true });
   }
 
   /**

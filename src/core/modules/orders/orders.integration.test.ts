@@ -13,8 +13,11 @@ describe('Orders/Checkout integration (Supabase حقيقي)', () => {
   let productId: string;
   let tenantId: string | null;
   const testPhone = `0109${Math.floor(1000000 + Math.random() * 8999999)}`;
-  let createdOrderId: string | undefined;
-  let createdUserId: string | undefined;
+  // اليوم 21 (ADR-019): مصفوفات لا متغيرات مفردة — هذا الوصف يحتوي الآن أكثر من اختبار ينشئ
+  // طلباً/مستخدماً، ومتغير مفرد يُعاد تعيينه في كل اختبار كان سيُسرِّب بيانات الاختبار الأول
+  // بصمت (afterAll يعمل مرة واحدة فقط بعد كل الاختبارات، لا بعد كل واحد على حدة).
+  const orderIdsToClean: string[] = [];
+  const userIdsToClean: string[] = [];
   const cartIdsToClean: string[] = [];
 
   beforeAll(async () => {
@@ -28,14 +31,18 @@ describe('Orders/Checkout integration (Supabase حقيقي)', () => {
   });
 
   afterAll(async () => {
-    if (createdOrderId) {
-      await supabaseAdmin.from('orders').delete().eq('id', createdOrderId); // order_items تُحذف تلقائياً (cascade)
+    for (const orderId of orderIdsToClean) {
+      await supabaseAdmin.from('orders').delete().eq('id', orderId); // order_items تُحذف تلقائياً (cascade)
     }
     for (const cartId of cartIdsToClean) {
       await supabaseAdmin.from('carts').delete().eq('id', cartId);
     }
-    if (createdUserId) {
-      await supabaseAdmin.from('users').delete().eq('id', createdUserId);
+    for (const userId of userIdsToClean) {
+      // اليوم 21 (ADR-019): checkout ينشئ الآن شخصية فردية أيضاً (user_personas.user_id بلا
+      // on delete cascade) — يجب حذفها أولاً، وإلا يفشل حذف users بقيد FK (23503) بصمت (لا خطأ
+      // مُتحقَّق منه هنا أصلاً، فيبقى المستخدم/الشخصية متسرّبين للأبد دون أي فشل ظاهر في الاختبار).
+      await supabaseAdmin.from('user_personas').delete().eq('user_id', userId);
+      await supabaseAdmin.from('users').delete().eq('id', userId);
     }
     await supabaseAdmin.from('inventory').update({ quantity_available: 10 }).eq('product_id', productId);
   });
@@ -52,8 +59,8 @@ describe('Orders/Checkout integration (Supabase حقيقي)', () => {
       customerPhone: testPhone,
       deliveryAddress: { line1: 'شارع الاختبار', city: 'القاهرة' },
     });
-    createdOrderId = order.id;
-    createdUserId = order.userId;
+    orderIdsToClean.push(order.id);
+    userIdsToClean.push(order.userId);
 
     expect(order.total).toBe(100);
     expect(order.tenantId).toBe(tenantId);
@@ -66,6 +73,62 @@ describe('Orders/Checkout integration (Supabase حقيقي)', () => {
 
     const summaryAfter = await cartService.getSummary(cart.id);
     expect(summaryAfter.lines).toHaveLength(0); // السلة أُفرغت بعد نجاح الطلب
+  });
+
+  // اليوم 21 (ADR-019) — يثبت حياً أن Checkout الحقيقي (لا استدعاء khalilService منعزل) ينشئ
+  // user + شخصية فردية معاً على نفس قاعدة البيانات، لا نظرياً فقط
+  it('ينشئ Checkout حقيقي شخصية افتراضية في عالم individuals لنفس المستخدم الجديد', async () => {
+    const sessionToken = randomUUID();
+    const cart = await cartService.getOrCreateCart({ sessionToken });
+    cartIdsToClean.push(cart.id);
+    await cartService.addItem(cart.id, { productId, quantity: 1, selection: { sizeId: 'small' } });
+
+    const personaPhone = `0109${Math.floor(1000000 + Math.random() * 8999999)}`;
+    const order = await ordersService.checkout({
+      identity: { sessionToken },
+      customerName: 'زبون اختبار الشخصية',
+      customerPhone: personaPhone,
+      deliveryAddress: { line1: 'شارع اختبار الشخصية', city: 'القاهرة' },
+    });
+    orderIdsToClean.push(order.id);
+    userIdsToClean.push(order.userId);
+
+    const { data: world, error: worldError } = await supabaseAdmin.from('worlds').select('id').eq('slug', 'individuals').single();
+    if (worldError) throw worldError;
+
+    const { data: persona, error: personaError } = await supabaseAdmin
+      .from('user_personas')
+      .select('*')
+      .eq('user_id', order.userId)
+      .eq('world_id', world.id)
+      .maybeSingle();
+    if (personaError) throw personaError;
+
+    expect(persona).not.toBeNull();
+    expect(persona!.is_default).toBe(true);
+
+    // idempotency حية: خليل نفسه يمنع التكرار (الفهرس الجزئي، ADR-018) — Checkout ثانٍ بنفس
+    // الهاتف يجب ألا يُنشئ شخصية ثانية ولا يفشل
+    const secondSessionToken = randomUUID();
+    const secondCart = await cartService.getOrCreateCart({ sessionToken: secondSessionToken });
+    cartIdsToClean.push(secondCart.id);
+    await cartService.addItem(secondCart.id, { productId, quantity: 1, selection: { sizeId: 'small' } });
+    const secondOrder = await ordersService.checkout({
+      identity: { sessionToken: secondSessionToken },
+      customerName: 'زبون اختبار الشخصية',
+      customerPhone: personaPhone, // نفس الهاتف — نفس المستخدم بالضبط
+      deliveryAddress: { line1: 'شارع اختبار الشخصية', city: 'القاهرة' },
+    });
+    orderIdsToClean.push(secondOrder.id);
+    expect(secondOrder.userId).toBe(order.userId); // نفس المستخدم، لا مستخدم مكرَّر
+
+    const { data: personasAfterSecond, error: countError } = await supabaseAdmin
+      .from('user_personas')
+      .select('id')
+      .eq('user_id', order.userId)
+      .eq('world_id', world.id);
+    if (countError) throw countError;
+    expect(personasAfterSecond).toHaveLength(1); // لا تكرار
   });
 
   it('ترفض Checkout عند نفاد المخزون الحقيقي بين الإضافة للسلة والتنفيذ', async () => {
@@ -112,6 +175,8 @@ describe('Orders lifecycle integration (Supabase حقيقي، اليوم 9)', ()
       await supabaseAdmin.from('carts').delete().eq('id', cartId);
     }
     for (const userId of userIdsToClean) {
+      // نفس ملاحظة الوصف أعلاه (ADR-019) — user_personas قبل users دائماً.
+      await supabaseAdmin.from('user_personas').delete().eq('user_id', userId);
       await supabaseAdmin.from('users').delete().eq('id', userId);
     }
     await supabaseAdmin.from('inventory').update({ quantity_available: 10 }).eq('product_id', productId);

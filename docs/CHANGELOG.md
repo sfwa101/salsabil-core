@@ -1,7 +1,7 @@
 ---
 title: سجل التغييرات
 status: ACTIVE
-version: 1.8
+version: 1.9
 last_updated: 2026-09-04
 owner: Claude (تلقائي مع كل مهمة كبيرة)
 source_of_truth: هذا الملف + Git log
@@ -12,6 +12,31 @@ source_of_truth: هذا الملف + Git log
 > يُسجَّل هنا فقط التغييرات المهمة (معمارية، قواعد أعمال، قاعدة بيانات، أمان، UX، قرارات، خارطة طريق) — لا كل commit صغير.
 
 ---
+
+## 2026-09-04 (اليوم 21) — Context Engine: ربط `service.ts` + اكتشاف/إصلاح تسرّب بيانات حي
+
+> **الحدث الأهم في هذا اليوم ليس الربط نفسه، بل ما كشفه التحقُّق الحي منه.** راجع `ADR-019` للتفصيل
+> الكامل — هذا ملخَّص فقط.
+
+- `KhalilService.ensureIndividualPersona(userId)` (جديدة) + `findOrCreateCustomerByPhone` معدَّلة
+  لاستدعائها — Checkout الحقيقي (`orders.service.ts`، لا كود اختباري) ينشئ الآن `user`+`persona`
+  معاً، لأول مرة تصل بيانات `worlds`/`user_personas` (اليوم 19) لمستهلك كود فعلي.
+- اختبار تكامل حي جديد (`orders.integration.test.ts`) يثبت هذا مباشرة: شخصية افتراضية تُنشأ فعلياً،
+  و**idempotency حي**: Checkout ثانٍ بنفس رقم الهاتف لا يُنشئ شخصية مكرَّرة (الفهرس الجزئي من
+  `ADR-018` يعمل عملياً، لا نظرياً).
+- **⚠️ اكتُشف حياً (لا افتراضياً) تسرّب بيانات حقيقي على Supabase:** بما أن `user_personas.user_id`
+  بلا `on delete cascade`، حذف صف `users` بعد اختبار (بلا فحص `error` في كود التنظيف، كما في كل
+  الملفات المشابهة) صار يفشل **بصمت** بقيد مفتاح أجنبي (`23503`) — 8 مستخدمين اختباريين وشخصياتهم
+  تسرَّبوا فعلياً قبل ملاحظة السبب. نُظِّفوا يدوياً (تأكَّدت أولاً أنهم ليسوا من الخمسة عملاء
+  الحقيقيين من Backfill اليوم 19)، وأُصلِح ترتيب الحذف (`user_personas` قبل `users`) في **4 ملفات**:
+  `orders.integration.test.ts` (موضعان)، `reef-city-journey.integration.test.ts`،
+  `admin.integration.test.ts`.
+- `orders.service.test.ts` (وحدة) — أُضيفت 3 دوال مموَّهة جديدة لـ`khalilRepository` (`findWorldBySlug`
+  إلخ) كانت ناقصة، تسبّبت في فشل "is not a function" غير متعلّق بمنطق الطلبات نفسه.
+- المجموع: 114 → **120** اختباراً (5 وحدة جديدة في `service.test.ts` + 1 تكامل جديد). `typecheck`/
+  `arch:check` نظيفان. تحقَّق حي نهائي بعد كل الإصلاحات: بالضبط 5 عملاء/5 شخصيات/1 عالم في القاعدة
+  — صفر تسرّب متبقٍ.
+- commit: (يُضاف بعد commit هذا التحديث نفسه).
 
 ## 2026-09-04 (اليوم 20) — Context Engine: `types.ts` + `khalil.repository.ts` (4 دوال جديدة، إضافي بحت)
 
