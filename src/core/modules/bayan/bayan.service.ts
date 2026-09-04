@@ -88,6 +88,16 @@ export class BayanService {
     return bayanRepository.findPostMediaByPostId(postId);
   }
 
+  /**
+   * منتجات الرف الأفقي المرتبط بمنشور واحد، بترتيبها — يعيد استخدام findPostProductsByPostIds
+   * الجماعية الموجودة أصلاً لـlistFeed (اليوم 23)، لا دالة repository جديدة. آمن للاستدعاء على
+   * مسودة (post_products بلا عمود is_published خاص به، RLS النمط 1 العام أصلاً — ADR-021).
+   */
+  async getPostProducts(postId: string): Promise<string[]> {
+    const links = await bayanRepository.findPostProductsByPostIds([postId]);
+    return links.map((l) => l.productId);
+  }
+
   async createPost(input: CreatePostInput): Promise<Post> {
     return bayanRepository.createPost(input);
   }

@@ -43,6 +43,9 @@ const postFieldsSchema = z.object({
   priority: z.number().int('الأولوية يجب أن تكون رقماً صحيحاً'),
   isPublished: z.boolean(),
   media: z.array(postMediaRowSchema),
+  // الرف الأفقي (post_products) — مستقل تماماً عن روابط الصور الفردية أعلاه (media[].link.type
+  // === 'product'). بالترتيب المُختار.
+  productIds: z.array(uuidSchema),
 });
 
 export type PostFormInput = z.infer<typeof postFieldsSchema>;
@@ -77,6 +80,9 @@ export async function createPostAction(input: PostFormInput): Promise<ActionResu
 
     if (parsed.data.media.length > 0) {
       await bayanService.replacePostMedia(post.id, parsed.data.media);
+    }
+    if (parsed.data.productIds.length > 0) {
+      await bayanService.setPostProducts(post.id, parsed.data.productIds);
     }
     if (parsed.data.isPublished) {
       await bayanService.updatePost(post.id, { isPublished: true });
@@ -114,6 +120,7 @@ export async function updatePostAction(postId: string, input: PostFormInput): Pr
       isPublished: parsed.data.isPublished,
     });
     await bayanService.replacePostMedia(idParsed.data, parsed.data.media);
+    await bayanService.setPostProducts(idParsed.data, parsed.data.productIds);
 
     revalidatePath('/admin/posts');
     revalidatePath(`/admin/posts/${idParsed.data}`);

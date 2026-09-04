@@ -89,7 +89,17 @@ async function main() {
     await page.locator('input[type="url"]').nth(0).fill(testImageUrl);
     await page.locator('select').nth(2).selectOption({ label: 'منتج' }); // linkType الصف الأول
     await page.locator('select').nth(3).selectOption({ index: 1 }); // أول منتج فعلي في القائمة
-    record('4) تعبئة النموذج (حقول أساسية + صف صورة برابط منتج)', true, `منتج: ${testProduct.name}`);
+
+    // 4.5) إضافة نفس المنتج للرف الأفقي (post_products) — مستقل تماماً عن رابط الصورة أعلاه
+    await page.locator('select').nth(4).selectOption({ index: 1 }); // منتقي "إضافة منتج للرف"
+    await page.locator('button', { hasText: /^\+ إضافة$/ }).click(); // مطابقة كاملة — يتجنب "+ إضافة صورة"
+    const shelfListedOnce = await page.locator('li', { hasText: testProduct.name }).count();
+
+    record(
+      '4) تعبئة النموذج (حقول أساسية + صف صورة برابط منتج + منتج في الرف الأفقي)',
+      shelfListedOnce > 0,
+      `منتج: ${testProduct.name}`
+    );
 
     // 5) الإرسال
     await page.locator('button', { hasText: 'إنشاء المنشور' }).click();
@@ -117,6 +127,13 @@ async function main() {
         media?.link?.productId === testProduct.id
     );
 
+    const { data: shelfRows, error: shelfError } = await admin.from('post_products').select('*').eq('post_id', createdPostId);
+    if (shelfError) throw shelfError;
+    record(
+      '7.5) الرف الأفقي في post_products مطابق (منتج واحد، productId صحيح)',
+      shelfRows?.length === 1 && shelfRows[0]?.product_id === testProduct.id
+    );
+
     // 8) إلغاء النشر عبر الواجهة
     const row = page.locator('li', { hasText: testCaption });
     await row.locator('button', { hasText: 'إلغاء النشر' }).click();
@@ -128,16 +145,26 @@ async function main() {
     await page.goto(`${BASE_URL}/admin/posts/${createdPostId}`, { waitUntil: 'networkidle' });
     const prefilledPriority = await page.locator('input[type="number"]').nth(0).inputValue();
     const prefilledImageUrl = await page.locator('input[type="url"]').nth(0).inputValue();
+    const shelfPrefilled = await page.locator('li', { hasText: testProduct.name }).count();
     record(
-      '8.5أ) صفحة التعديل تحمّل القيم الحالية مسبقاً (priority + صورة الوسائط)',
-      prefilledPriority === '7' && prefilledImageUrl === testImageUrl
+      '8.5أ) صفحة التعديل تحمّل القيم الحالية مسبقاً (priority + صورة الوسائط + الرف الأفقي)',
+      prefilledPriority === '7' && prefilledImageUrl === testImageUrl && shelfPrefilled > 0
     );
+
+    // إزالة المنتج من الرف (زر "إزالة" داخل صف الرف تحديداً — لا زر "حذف الصورة" المجاور)
+    await page
+      .locator('li', { hasText: testProduct.name })
+      .locator('button', { hasText: 'إزالة' })
+      .click();
 
     await page.locator('input[type="number"]').nth(0).fill('42');
     await page.locator('button', { hasText: 'حفظ التعديلات' }).click();
     await page.waitForURL('**/admin/posts', { timeout: 10000 });
     const { data: afterEdit } = await admin.from('posts').select('priority').eq('id', createdPostId).maybeSingle();
     record('8.5ب) التعديل عبر الواجهة (تغيير الأولوية) ينعكس فعلياً في Supabase', afterEdit?.priority === 42);
+
+    const { data: shelfAfterRemoval } = await admin.from('post_products').select('id').eq('post_id', createdPostId);
+    record('8.5ج) إزالة منتج من الرف عبر الواجهة تمسحه فعلياً من post_products', (shelfAfterRemoval?.length ?? 0) === 0);
 
     // 9) الحذف عبر الواجهة (dialog.accept() مُسجَّل أعلاه) — row لا يزال يصف نفس <li> رغم التنقّل
     await row.locator('button', { hasText: 'حذف' }).click();

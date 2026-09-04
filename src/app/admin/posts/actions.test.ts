@@ -16,6 +16,7 @@ vi.mock('@/core/modules/bayan/bayan.service', () => ({
     updatePost: vi.fn(),
     deletePost: vi.fn(),
     replacePostMedia: vi.fn(),
+    setPostProducts: vi.fn(),
   },
 }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
@@ -46,6 +47,7 @@ function baseInput(overrides: Partial<PostFormInput> = {}): PostFormInput {
     priority: 5,
     isPublished: false,
     media: [],
+    productIds: [],
     ...overrides,
   };
 }
@@ -73,7 +75,7 @@ describe('createPostAction', () => {
     expect(bayanService.createPost).not.toHaveBeenCalled();
   });
 
-  it('ينشئ المنشور بعالم individuals، ولا يستدعي replacePostMedia/updatePost عند عدم الحاجة', async () => {
+  it('ينشئ المنشور بعالم individuals، ولا يستدعي replacePostMedia/setPostProducts/updatePost عند عدم الحاجة', async () => {
     vi.mocked(getAdminSession).mockResolvedValue(adminSession);
     vi.mocked(bayanService.getIndividualsWorldId).mockResolvedValue(WORLD_ID);
     vi.mocked(bayanService.createPost).mockResolvedValue({
@@ -99,10 +101,11 @@ describe('createPostAction', () => {
       priority: 5,
     });
     expect(bayanService.replacePostMedia).not.toHaveBeenCalled();
+    expect(bayanService.setPostProducts).not.toHaveBeenCalled();
     expect(bayanService.updatePost).not.toHaveBeenCalled();
   });
 
-  it('ينشئ الصور المرفقة وينشر فوراً عند طلب isPublished=true', async () => {
+  it('ينشئ الصور المرفقة، يضبط الرف الأفقي (post_products)، وينشر فوراً عند طلب isPublished=true', async () => {
     vi.mocked(getAdminSession).mockResolvedValue(adminSession);
     vi.mocked(bayanService.getIndividualsWorldId).mockResolvedValue(WORLD_ID);
     vi.mocked(bayanService.createPost).mockResolvedValue({
@@ -122,6 +125,7 @@ describe('createPostAction', () => {
         priority: 0,
         isPublished: true,
         media: [{ imageUrl: 'https://example.com/a.jpg', link: { type: 'product', productId: PRODUCT_ID } }],
+        productIds: [PRODUCT_ID],
       })
     );
 
@@ -129,6 +133,7 @@ describe('createPostAction', () => {
     expect(bayanService.replacePostMedia).toHaveBeenCalledWith(POST_ID, [
       { imageUrl: 'https://example.com/a.jpg', link: { type: 'product', productId: PRODUCT_ID } },
     ]);
+    expect(bayanService.setPostProducts).toHaveBeenCalledWith(POST_ID, [PRODUCT_ID]);
     expect(bayanService.updatePost).toHaveBeenCalledWith(POST_ID, { isPublished: true });
   });
 
@@ -152,7 +157,7 @@ describe('createPostAction', () => {
 });
 
 describe('updatePostAction', () => {
-  it('يحدّث الحقول ويستبدل كل الصور دفعة واحدة', async () => {
+  it('يحدّث الحقول، يستبدل كل الصور دفعة واحدة، ويستبدل الرف الأفقي دائماً (حتى لو فارغاً — لمسح تحديد سابق)', async () => {
     vi.mocked(getAdminSession).mockResolvedValue(adminSession);
     vi.mocked(bayanService.updatePost).mockResolvedValue({
       id: POST_ID,
@@ -176,6 +181,7 @@ describe('updatePostAction', () => {
       isPublished: true,
     });
     expect(bayanService.replacePostMedia).toHaveBeenCalledWith(POST_ID, []);
+    expect(bayanService.setPostProducts).toHaveBeenCalledWith(POST_ID, []);
   });
 
   it('يرفض معرّف منشور غير صحيح', async () => {

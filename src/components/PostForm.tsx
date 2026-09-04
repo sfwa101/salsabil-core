@@ -36,6 +36,7 @@ interface PostFormInitial {
   priority: number;
   isPublished: boolean;
   media: { imageUrl: string; link: PostMediaLink }[];
+  productIds: string[]; // الرف الأفقي (post_products) — مستقل عن روابط الصور الفردية أعلاه
 }
 
 interface PostFormProps {
@@ -80,8 +81,20 @@ export function PostForm({ mode, postId, categories, products, initial }: PostFo
   const [media, setMedia] = useState<MediaFormRow[]>(
     initial?.media.map((m) => ({ key: newKey(), imageUrl: m.imageUrl, ...mediaLinkToRow(m.link) })) ?? []
   );
+  const [productIds, setProductIds] = useState<string[]>(initial?.productIds ?? []);
+  const [productToAdd, setProductToAdd] = useState('');
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
+
+  function addShelfProduct() {
+    if (!productToAdd || productIds.includes(productToAdd)) return;
+    setProductIds((ids) => [...ids, productToAdd]);
+    setProductToAdd('');
+  }
+
+  function removeShelfProduct(productId: string) {
+    setProductIds((ids) => ids.filter((id) => id !== productId));
+  }
 
   function updateRow(key: string, patch: Partial<MediaFormRow>) {
     setMedia((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -146,6 +159,7 @@ export function PostForm({ mode, postId, categories, products, initial }: PostFo
       priority: Number(priority) || 0,
       isPublished,
       media: media.map((row) => ({ imageUrl: row.imageUrl, link: buildLink(row) })),
+      productIds,
     };
 
     const result = mode === 'create' ? await createPostAction(input) : await updatePostAction(postId!, input);
@@ -365,6 +379,64 @@ export function PostForm({ mode, postId, categories, products, initial }: PostFo
             )}
           </div>
         ))}
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-2xl border border-border p-4">
+        <h3 className="font-medium text-foreground">المنتجات المرتبطة (الرف الأفقي أسفل المنشور)</h3>
+        <p className="text-sm text-muted-foreground">
+          مستقل عن روابط الصور أعلاه — منتجات تُعرَض في رف تمرير أفقي أسفل المنشور في الخلاصة.
+        </p>
+
+        <div className="flex items-end gap-2">
+          <div className="flex flex-1 flex-col gap-1">
+            <label className="text-sm font-medium text-muted-foreground">إضافة منتج للرف</label>
+            <select
+              value={productToAdd}
+              onChange={(e) => setProductToAdd(e.target.value)}
+              className="rounded-xl border border-border bg-card p-3 text-foreground"
+            >
+              <option value="">اختر منتجاً</option>
+              {products
+                .filter((p) => !productIds.includes(p.id))
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={addShelfProduct}
+            disabled={!productToAdd}
+            className="rounded-xl border border-border px-3 py-3 text-sm font-medium text-foreground transition hover:bg-muted disabled:opacity-50"
+          >
+            + إضافة
+          </button>
+        </div>
+
+        {productIds.length === 0 ? (
+          <p className="text-sm text-muted-foreground">لا توجد منتجات في الرف بعد</p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {productIds.map((id, index) => {
+              const product = products.find((p) => p.id === id);
+              return (
+                <li
+                  key={id}
+                  className="flex items-center justify-between rounded-xl border border-border bg-muted/40 p-2 text-sm"
+                >
+                  <span className="text-foreground">
+                    {index + 1}. {product?.name ?? id}
+                  </span>
+                  <button type="button" onClick={() => removeShelfProduct(id)} className="text-destructive underline">
+                    إزالة
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
 
       <button

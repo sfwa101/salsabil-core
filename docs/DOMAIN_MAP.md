@@ -1,7 +1,7 @@
 ---
 title: خريطة النطاقات
 status: ACTIVE (يحتوي OPEN_QUESTION-ين جوهريَّين)
-version: 1.13
+version: 1.14
 last_updated: 2026-09-05
 owner: المؤسس (أبوحتاب) + Claude (معماري)
 source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md §6-§8 (المصدر الأصلي)
@@ -273,9 +273,18 @@ row-component المؤكَّد سابقاً (`OrderRow.tsx`/`AdminMerchantRow.ts
 `replacePostProducts` الموجود من اليوم 23) لاستبدال كل صور المنشور دفعة واحدة عند التعديل. مُختبَر
 وحدياً (`src/app/admin/posts/actions.test.ts`، يموّه `getAdminSession`/`bayanService`) ومتحقَّق منه
 حياً بالكامل (`scripts/day24-bayan-admin-posts-verify.ts`، Playwright + تحقُّق مباشر عبر
-`service_role`: إنشاء → نشر → تعديل → إلغاء نشر → حذف، 12/12 خطوة، حذف متسلسل نظيف بلا صف يتيم).
-**لا إدارة لـ`post_products` (الرف الأفقي أسفل المنشور)** في هذه اللوحة — خارج نطاق اليوم 24 صراحة
-(لم يُطلَب، `bayanService.setPostProducts` يبقى بلا مستهلك واجهة حتى الآن).
+`service_role`: إنشاء → نشر → تعديل → إلغاء نشر → حذف، 14/14 خطوة، حذف متسلسل نظيف بلا صف يتيم).
+
+**تصحيح لاحق في نفس اليوم (سؤال المؤسس صريح — راجع `docs/CHANGELOG.md`):** الرف الأفقي
+(`post_products`) **مُدار الآن فعلياً** في نفس `PostForm.tsx` — قسم منفصل تماماً عن روابط الصور
+الفردية أعلاه (منتقي "إضافة منتج للرف" + قائمة مرتَّبة بأزرار إزالة). أُضيفت `bayanService
+.getPostProducts(postId)` (قراءة، تُستخدَم في صفحة التعديل لتحميل الرف الحالي مسبقاً — تُعيد
+استخدام `findPostProductsByPostIds` الجماعية الموجودة أصلاً لـ`listFeed`، لا دالة repository
+جديدة) إلى جانب `setPostProducts` الموجودة من اليوم 23. `createPostAction`/`updatePostAction`
+يقبلان الآن `productIds: string[]` — الإنشاء يستدعي `setPostProducts` فقط عند وجود عناصر، التعديل
+يستدعيها دائماً (حتى بمصفوفة فارغة، لمسح أي تحديد سابق — نفس منطق `replacePostMedia` الإلزامي).
+لا `post_products` بلا مستهلك واجهة بعد الآن — الفجوة التي كانت ستظهر عند اليوم 27 (Feed rendering)
+أُغلِقت هنا بدل تأجيلها.
 
 ---
 

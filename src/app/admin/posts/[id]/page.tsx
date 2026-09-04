@@ -17,9 +17,10 @@ export default async function EditPostPage({ params }: { params: Promise<{ id: s
     notFound();
   }
 
-  const [post, media, categories, products] = await Promise.all([
+  const [post, media, productIds, categories, products] = await Promise.all([
     bayanService.getPostById(parsedId.data),
     bayanService.getPostMedia(parsedId.data),
+    bayanService.getPostProducts(parsedId.data),
     catalogService.listCategories(),
     catalogService.listAllProducts(),
   ]);
@@ -45,6 +46,7 @@ export default async function EditPostPage({ params }: { params: Promise<{ id: s
           media: media
             .sort((a, b) => a.displayOrder - b.displayOrder)
             .map((m) => ({ imageUrl: m.imageUrl, link: m.link })),
+          productIds,
         }}
       />
     </main>
