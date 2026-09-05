@@ -1,7 +1,7 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.17
+version: 1.18
 authority: Security & Correctness (قسم DECISION DEBT REGISTRY) + Engineering Decision Log (باقي الملف)
 last_updated: 2026-09-05
 last_verified: 2026-09-05
@@ -1051,6 +1051,32 @@ Review by: قبل إضافة أي Server Action/صفحة إدارية جديدة
 Blocking: NO — لا خطر فعلي نشط اليوم (تاجر واحد)، لكنه نمط معماري يستحق قراراً صريحاً قبل التوسّع
 Status: OPEN
 Related: INV-TEN-001 (INVARIANTS.md)، docs/DOMAIN_MAP.md → Admin/Orders، ADR-022 بند د
+```
+
+### DD-007
+```
+Decision: لا قرار معلَّق — توثيق واقعة تكليف مكتملة، لا مسألة تحتاج حسماً مستقبلياً. بتاريخ 2026-09-05،
+          المؤسس كلَّف صراحة بتعديل docs/DOCUMENTATION_RULES.md §5.1 ضمن مهمة
+          BATCH1-GUARDIAN-REMEDIATION-001، خارج نطاق الأربعة ملفات الأصلي لـBatch 1
+          (SALSABIL_CONSTITUTION.md، AGENTS.md، INVARIANTS.md، docs/DECISIONS.md).
+Reason: هذا التكليف صادر من محادثة المؤسس مع المستشار المعماري (Claude Web)، لا من قرار ذاتي للوكيل
+          المنفِّذ داخل جلسة Claude Code. مراجعة Guardian الثانية (BATCH1-SECOND-PASS-GUARDIAN-001، بندها
+          3/5) رصدت أن هذا التكليف كان موثَّقاً فقط داخل وصف الوكيل لعمله (Task Report الخاص به) — بلا أي
+          أثر مستقل في المستودع نفسه يثبت أن التوسيع خارج الأربعة ملفات جاء بتفويض حقيقي من المؤسس، لا
+          باجتهاد ذاتي من الوكيل. هذا السجل هو ذلك الأثر المستقل المطلوب.
+Risk: بلا هذا السجل، الاستثناء الإجرائي في docs/DOCUMENTATION_RULES.md §5.1 (وأي توسيع نطاق مشابه
+          مستقبلاً بنفس الآلية) كان يعتمد فقط على وصف الوكيل لنفسه كدليل — وهو تحديداً نوع الادعاء غير
+          الموثوق الذي تمنعه هذه الوثائق نفسها (راجع SALSABIL_CONSTITUTION.md §4.1، Evidence Model:
+          "وجود التوثيق لا يُصحِّح كوداً/ادعاءً خاطئاً"). غياب مصدر مستقل يُضعف مصداقية أي استثناء لاحق
+          يستند لنفس الشرط الإجرائي.
+Owner: Founder
+Created: 2026-09-05
+Review by: N/A — سجل توثيقي مكتمل بذاته (هو الدليل المطلوب، لا قراراً معلَّقاً ينتظر مراجعة لاحقة)
+Blocking: NO
+Status: RESOLVED — بمجرد كتابة هذا السجل نفسه؛ هذا هو الشرط الرابع المُضاف الآن في
+          docs/DOCUMENTATION_RULES.md §5.1 (أول تطبيق فعلي مطابق له)
+Related: docs/DOCUMENTATION_RULES.md §5.1، SALSABIL_CONSTITUTION.md v1.3، BATCH1-GUARDIAN-REMEDIATION-001،
+          BATCH1-SECOND-PASS-GUARDIAN-001
 ```
 
 ---
