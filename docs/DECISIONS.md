@@ -1,8 +1,10 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.16
+version: 1.17
+authority: Security & Correctness (قسم DECISION DEBT REGISTRY) + Engineering Decision Log (باقي الملف)
 last_updated: 2026-09-05
+last_verified: 2026-09-05
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف
 ---
@@ -917,3 +919,151 @@ Related Documents: ideas/CONTEXTUAL_WORLDS_RFC.md، docs/DIWAN_VISION.md (جدي
           إليها RFC العوالم السياقية كجزء تنفيذي أول منها فقط)، docs/DATABASE.md §3/§4، docs/DOMAIN_MAP.md → خليل،
           ADR-018 (التنفيذ الفعلي)
 ```
+
+### CONFLICT-007
+```
+بين: SALSABIL_CONSTITUTION.md §4 بند 5 ("كل تحوّل مخزون أو عملية مالية يُسجَّل في سجل تدقيق (Audit
+          Log) — من فعل ماذا، متى، ولماذا") مقابل التنفيذ الفعلي في src/core/modules/orders/orders.service.ts
+          وsrc/core/modules/inventory/inventory.repository.ts
+الوصف: الادعاء الدستوري أوسع من الواقع الحالي، مُتحقَّق منه بقراءة مباشرة للكود (2026-09-05). الخصم
+          الناجح للمخزون (InventoryRepository.decrementIfAvailable) والاسترجاع الناجح (restore) لا يُكتبان
+          في أي سجل تدقيق مباشرة — يُستدَل على الخصم فقط بشكل غير مباشر عبر order_items (حين يرتبط بطلب
+          ناجح)، والاسترجاع الناجح لا يترك أي أثر تدقيقي إطلاقاً. فقط فشل الاسترجاع التعويضي يُسجَّل فعلياً
+          في audit_log (orders.service.ts، action: 'inventory.release_failed'، إضافة commit fe12608). لا
+          قيد قاعدة بيانات ولا كود يمنع هذا التباين — فجوة تغطية حقيقية، لا خطأ توثيقي بسيط.
+التأثير: أي تحليل مستقبلي لتاريخ حركة مخزون كاملة (خصوصاً استرجاعات ناجحة بعد فشل دفع/طلب) لن يجد سجلاً
+          مباشراً لها في audit_log — يعتمد على استنتاج غير مباشر أضعف من سجل صريح. راجع INVARIANTS.md →
+          INV-AUDIT-001 للتفصيل الكامل وتصنيف الحالة (VIOLATED جزئياً بالنسبة لحرفية النص الدستوري).
+يحتاج قراراً من: المؤسس — هل order_items/order_status_history كافيان كسجل تدقيق غير مباشر لحركة المخزون
+          المرتبطة بطلب (الحالة الشائعة)، أم يُبنى سجل inventory_audit صريح لكل حركة (خصم/استرجاع، ناجحة
+          أو فاشلة) بصرف النظر عن ربطها بطلب؟
+الحالة: OPEN — مُسجَّل أيضاً كـ DD-003 أدناه (DECISION DEBT REGISTRY) لأنه يمثل خطراً حقيقياً على اكتمال
+          التدقيق المالي/المخزوني المُدَّعى دستورياً، لا فجوة تافهة.
+```
+
+---
+
+## DECISION DEBT REGISTRY — إضافة 2026-09-05 (`CONSTITUTION-V2-BATCH1-GOVERNANCE-KERNEL`)
+
+> نفس منهجية CONFLICT LOG أعلاه، لكن لمخاطر/فجوات لا تحتاج بالضرورة تعارضاً بين مصدرين — تحتاج قراراً
+> بشرياً، أو إصلاحاً لاحقاً، أو تمثّل خطراً معمارياً/أمنياً/تشغيلياً حقيقياً، أو تمنع قراراً/مرحلة لاحقة.
+> لا يُحوَّل كل `UNKNOWN`/`PARTIAL` في `INVARIANTS.md` تلقائياً إلى Decision Debt — راجع "DECISION DEBT
+> QUALIFICATION RULE" في `INVARIANTS.md` وقائمة "مراجَع ولم يُحوَّل" أسفل هذا القسم للأمثلة المُستثناة
+> صراحة مع تبريرها.
+
+### DD-001
+```
+Decision: هل يُبنى تحقق هوية أقوى (كلمة مرور/OTP/Supabase Auth كاملة) لتسجيل دخول التاجر/الإدارة قبل
+          تسجيل تاجر ثانٍ حقيقي أو حساب platform_admin ثانٍ؟
+Reason: تسجيل الدخول اليوم بالهاتف وحده (MerchantService.loginOwnerByPhone/AdminService.loginByPhone) —
+          أي طرف يعرف هاتف تاجر/إدارة نشط يستطيع انتحاله بالكامل. مقبول صراحة (ADR-012/ADR-013) لمرحلة
+          تاجر/إدارة تجريبيَين واحدَين فقط، بشرط صريح مسجَّل: يُغلَق قبل توسّع حقيقي.
+Risk: انتحال هوية تاجر/إدارة كاملة (لا قراءة فقط — تغيير حالة طلبات، تفعيل/تعطيل تجار) لأي طرف يعرف رقم
+          هاتف نشط. الخطر يتضاعف مع كل تاجر/حساب إدارة جديد يُضاف بنفس الآلية.
+Owner: Founder
+Created: 2026-09-05
+Review by: قبل إنشاء أي حساب merchant_owner أو platform_admin ثانٍ حقيقي (شرط، لا تاريخ ثابت)
+Blocking: YES — يمنع توسّع آمن لعدد التجار/حسابات الإدارة
+Status: OPEN
+Related: INV-AUTHN-001 (INVARIANTS.md)، ADR-012، ADR-013، docs/SECURITY.md OPEN_QUESTIONS بند 7
+```
+
+### DD-002
+```
+Decision: هل يُستبدَل القفلان في-الذاكرة (rate-limit.ts وinFlightCheckouts) بقفل موزَّع (Supabase عبر
+          قيد UNIQUE مؤقت، أو Redis عند نضج البنية التحتية) قبل أي نشر إنتاج متعدد الخوادم؟
+Reason: كلا القفلين Map في عملية Node واحدة — لا يُشارَكان بين نسخ خادم متعددة (Serverless/multi-instance)،
+          ولا ينجوان من إعادة تشغيل الخادم. مقبولان حصراً لمرحلة خادم واحد الحالية (dev/staging.reefam.com).
+Risk: على إنتاج حقيقي متعدد الخوادم (reefam.com، لا staging) بلا هذا الإصلاح: تكرار Checkout فعلي على
+          نفس السلة عبر نسخ خادم مختلفة (idempotency مكسورة)، ومحاولات دخول غير محدودة فعلياً عبر توزيع
+          الطلبات على نسخ مختلفة (rate limiting مكسور). كلاهما موثَّق كـBLOCKER بخطورة HIGH في
+          docs/ROADMAP.md (2026-09-05).
+Owner: Engineering
+Created: 2026-09-05
+Review by: قبل أي تفعيل حقيقي لإنتاج متعدد الخوادم على reefam.com (شرط، لا تاريخ)
+Blocking: YES — BLOCKER صريح مسجَّل مسبقاً في docs/ROADMAP.md
+Status: OPEN
+Related: INV-ORD-002، INV-RATE-001 (INVARIANTS.md)، ADR-014، ADR-022، docs/ROADMAP.md (بند BLOCKER الموحَّد)
+```
+
+### DD-003
+```
+Decision: هل order_items/order_status_history كافيان كسجل تدقيق غير مباشر لحركة المخزون المرتبطة بطلب،
+          أم يُبنى سجل inventory_audit صريح لكل حركة خصم/استرجاع (ناجحة أو فاشلة) بصرف النظر عن ربطها بطلب؟
+Reason: راجع CONFLICT-007 أعلاه — الادعاء الدستوري ("كل تحوّل مخزون يُسجَّل") أوسع من التنفيذ الفعلي.
+Risk: غياب سجل تدقيق مباشر لاسترجاعات مخزون ناجحة يُضعف أي تحقيق مستقبلي في تباين كميات مخزون فعلية
+          (مثال: خلاف مع تاجر حول كمية مُتاحة، أو تحقيق في نمط بيع غير طبيعي).
+Owner: Founder
+Created: 2026-09-05
+Review by: قبل أي ادعاء مستقبلي بـ"سجل تدقيق مخزون كامل" في أي وثيقة أو تواصل خارجي
+Blocking: NO — لا يمنع تشغيلاً حالياً، لكنه يمنع ادعاء اكتمال تدقيقي دقيقاً
+Status: OPEN
+Related: INV-AUDIT-001 (INVARIANTS.md)، CONFLICT-007، SALSABIL_CONSTITUTION.md §4 بند 5
+```
+
+### DD-004
+```
+Decision: هل تُبنى اختبارات وحدة مخصَّصة لـ CatalogService.calculatePrice()/validateSelection() (حالات
+          حدّية: خيارات غير موجودة، إضافات مرفوضة، أحجام متعددة معاً) بمعزل عن مسار checkout الكامل؟
+Reason: لا ملف src/core/modules/catalog/*.test.ts في المستودع (تحقَّق منه بحثاً مباشراً، 2026-09-05،
+          صفر نتائج) — منطق حساب السعر (Financial logic) مُغطَّى فقط بشكل غير مباشر عبر سيناريو checkout
+          واحد في orders.integration.test.ts.
+Risk: تغيير مستقبلي في CatalogService (إضافة نوع خيار جديد، تعديل منطق الإضافات) قد يكسر حساب سعر صحيحاً
+          اليوم بلا أي اختبار يكتشف ذلك قبل الإنتاج — خطر متزايد مع توسّع الكتالوج في Phase 2.
+Owner: Engineering
+Created: 2026-09-05
+Review by: قبل أي توسيع فعلي لأنواع خيارات المنتج (Phase 2 — توسيع أحياء ريف، docs/ROADMAP.md)
+Blocking: NO — لا يمنع العمل الحالي، لكنه فجوة حقيقية على منطق مالي (Guardian Matrix: DEEP)
+Status: OPEN
+Related: INV-SEC-001 (INVARIANTS.md)
+```
+
+### DD-005
+```
+Decision: هل يُبنى نظام Migrations رسمي (Supabase CLI migrations أو مكافئه) بدل SQL يدوي عبر SQL Editor؟
+Reason: OPEN_QUESTION قائم منذ docs/DATABASE.md §8 (اليوم 12/17)، مؤجَّل مرتين صراحة (اليوم 13 كمرشَّح، ثم
+          Day 17 كأول خطوة جزئية فقط عبر scripts/schema-setup.sql — ليس نظام Migrations رسمياً بعد).
+Risk: لا تتبع نُسخ Schema، لا rollback، تنفيذ يدوي عرضة لخطأ بشري على قاعدة حية بلا مراجعة قبل التنفيذ.
+          docs/DATABASE.md §8 نفسه يقر: "يجب الانتقال لـMigrations رسمية قبل أي عمل فريق متعدد أو قبل
+          الإنتاج."
+Owner: Engineering
+Created: 2026-09-05
+Review by: قبل أي عمل فريق هندسي متعدد الأشخاص، أو قبل أي Migration إنتاجية إضافية بعد هذه الدفعة
+Blocking: YES — لعمل فريق متعدد/إنتاج حقيقي (بحسب توثيق DATABASE.md §8 نفسه)؛ NO لعمل مؤسس منفرد حالي
+Status: OPEN
+Related: docs/DATABASE.md §8، ADR-017
+```
+
+### DD-006
+```
+Decision: هل تُبنى فحوصات تفويض داخلية (Authorization checks) داخل طبقة service.ts نفسها لدوال القوائم
+          الجماعية (OrdersService.getOrdersForTenant/getAllOrders، MerchantService.listAll)، بدل الاعتماد
+          حصرياً على طبقة Server Action المستدعية للتحقق من الجلسة/الدور أولاً؟
+Reason: هذه الدوال لا تحقق صلاحية داخلياً بتصميم مقصود (موثَّق صراحة في docs/DOMAIN_MAP.md → Admin:
+          "لا تحقق صلاحية داخل merchantService نفسها — مسؤولية المستدعي") — بخلاف دوال المعرّف الواحد
+          (getOrderWithItems/getStatusHistory/transitionStatus) التي تحمل الآن assertActorCanAccessOrder
+          إلزامياً في التوقيع نفسه (ADR-022 بند د).
+Risk: طبقة دفاع وحيدة (Server Action) بلا دفاع ثانٍ عند طبقة الخدمة لدوال القوائم — خطر منخفض اليوم (تاجر
+          حقيقي واحد، سطح Server Action صغير)، يتصاعد مع كل Server Action/صفحة إدارية جديدة تُضاف مستقبلاً.
+Owner: Engineering
+Created: 2026-09-05
+Review by: قبل إضافة أي Server Action/صفحة إدارية جديدة تستدعي هذه الدوال، أو قبل تسجيل تاجر ثانٍ حقيقي
+Blocking: NO — لا خطر فعلي نشط اليوم (تاجر واحد)، لكنه نمط معماري يستحق قراراً صريحاً قبل التوسّع
+Status: OPEN
+Related: INV-TEN-001 (INVARIANTS.md)، docs/DOMAIN_MAP.md → Admin/Orders، ADR-022 بند د
+```
+
+---
+
+### مراجَع ولم يُحوَّل إلى Decision Debt (مع التبرير)
+
+- **BR-016 (الحد الأدنى لقيمة الطلب، `docs/BUSINESS_RULES.md`):** `OPEN_QUESTION` قائم، لكن التنفيذ
+  الحالي (Checkout بلا حد أدنى) هو بالضبط ما وافق عليه المؤسس صراحة وقت البناء ("التنفيذ بلا القيد +
+  TODO... هو ما سُمح به صراحة، فلا تعارض" — نص BUSINESS_RULES.md نفسه). لا خطر تشغيلي حقيقي ينتظر
+  قراراً عاجلاً، ولا يمنع أي قرار/مرحلة لاحقة — يبقى موثَّقاً في `BUSINESS_RULES.md` فقط.
+- **INV-INV-002 (كمية مخزون سالبة، `INVARIANTS.md`):** حالته `UNKNOWN` (لا Live Verification مباشر لقيد
+  CHECK نفسه في هذه الجلسة) — لكن `INV-INV-001` (ENFORCED) يمنع الوصول لمسار الخصم الذي قد ينتج عنه قيمة
+  سالبة أصلاً، فالخطر الفعلي منخفض جداً عملياً. لا يحتاج قراراً بشرياً ولا إصلاحاً — مجرد تحديث `UNKNOWN`
+  إلى `ENFORCED` يتطلب فقط تشغيل فحص حي بسيط لاحقاً، لا قراراً معمارياً. يبقى موثَّقاً في `INVARIANTS.md` فقط.
+- **CONFLICT-002 (رقم إصدار قديم في السطر الختامي للدستور):** خطأ توثيقي تجميلي بلا أثر وظيفي، مسجَّل
+  ومُعرَّف مسبقاً بوضوح — لا يستوفي "خطراً معمارياً/أمنياً/تشغيلياً حقيقياً". يبقى `CONFLICT-002` كما هو.
