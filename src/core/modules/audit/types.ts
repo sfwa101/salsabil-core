@@ -7,7 +7,14 @@ import type { UserRole } from '../../kernel/khalil/types';
 export type AuditActorRole = UserRole | 'system' | 'anonymous';
 
 // نص حر منضبط عبر union type لا enum SQL — يتجنب هجرة ALTER TYPE عند كل عملية حساسة جديدة
-export type AuditAction = 'merchant.activated' | 'merchant.deactivated' | 'auth.login_success' | 'auth.login_failed';
+// CRITICAL-FIXES-FROM-AUDIT-001/GUARDIAN-FINDINGS-REMEDIATION-001 — فشل استرجاع تعويضي حقيقي
+// لمخزون خُصم أثناء checkout() ثم لزم إعادته بعد فشل خطوة لاحقة (orders.service.ts.performCheckout)
+export type AuditAction =
+  | 'merchant.activated'
+  | 'merchant.deactivated'
+  | 'auth.login_success'
+  | 'auth.login_failed'
+  | 'inventory.release_failed';
 
 export interface AuditLogEntry {
   id: string;

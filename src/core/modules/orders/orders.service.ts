@@ -6,6 +6,7 @@ import { cartService } from '../cart/cart.service';
 import { catalogService } from '../catalog/catalog.service';
 import { inventoryService } from '../inventory/inventory.service';
 import { khalilService } from '../../kernel/khalil/service';
+import { auditService } from '../audit/audit.service';
 import { cashOnDeliveryProvider } from '../payments/cash-on-delivery.provider';
 import { ordersRepository } from './orders.repository';
 import {
@@ -56,6 +57,14 @@ export class OrdersService {
     return promise;
   }
 
+  // GUARDIAN-FINDINGS-REMEDIATION-001، بند 3 — تبرير موثَّق لتجاوز حد الـ50 سطراً (Complexity
+  // Budget، AGENTS.md §4): الطول هنا تسلسل خطوات Checkout الطبيعي الواحدة تلو الأخرى (تحقق سلة →
+  // تحقق نشاط المنتج → تحقق تاجر واحد → خصم مخزون ذرّي لكل بند → عميل → دفع → إنشاء طلب → بنود →
+  // تفريغ سلة → سجل تدقيق)، كل خطوة سطر أو اثنان فقط، بلا تفرّع منطقي معقَّد (لا حلقات متداخلة، لا
+  // شروط متشابكة) — تقسيمها لدوال فرعية متعددة يُشتِّت قراءة تسلسل معاملة واحدة منطقياً (Checkout)
+  // بلا فائدة حقيقية لا في الاختبار (كل خطوة مُختبَرة عبر مسارات checkout() الكاملة أصلاً، لا
+  // منعزلة) ولا في القراءة (القارئ يحتاج التسلسل الكامل لفهم حدود التعويض في catch أدناه على أي
+  // حال). هذا استثناء مبرَّر موثَّق، لا تجاهلاً صامتاً للحد — راجع ADR-022 للتفصيل الكامل.
   private async performCheckout(cartId: string, input: CheckoutInput): Promise<Order> {
     const summary = await cartService.getSummary(cartId);
 
@@ -140,11 +149,36 @@ export class OrdersService {
       // orders وorder_items — لا حاجة لبناء معاملات موزعة كاملة لأجل هذا، تعويض تطبيقي صريح كافٍ
       // عند هذا الحجم). لو نجح خصم مخزون بند واحد أو أكثر ثم فشلت أي خطوة لاحقة (بند آخر غير
       // متوفر، فشل دفع COD نظري، فشل إنشاء الطلب نفسه) — يُعاد كل ما خُصم في هذه المحاولة بالذات
-      // فوراً، قبل رمي الخطأ الأصلي للمتصل. فشل الاسترجاع نفسه (شبكة، إلخ) يُستبدَل الخطأ الأصلي
-      // به عمداً — فقدان صامت لكمية مخزون حقيقية أخطر من إخفاء رسالة "غير متوفر" الأصلية،
-      // ويحتاج انتباهاً فورياً (نفس فلسفة "فشل صريح لا نجاح صامت" في ADR-020/ADR-009).
+      // فوراً، قبل رمي الخطأ الأصلي للمتصل.
+      //
+      // GUARDIAN-FINDINGS-REMEDIATION-001، بند 4 — فشل الاسترجاع نفسه (شبكة، إلخ) **لا يُستبدَل
+      // به الخطأ الأصلي بعد الآن** (تصحيح: النسخة السابقة كانت تترك Promise.all يرمي فيستبدل خطأ
+      // العميل الحقيقي — "غير متوفر" مثلاً — برسالة داخلية غامضة عن فشل الاسترجاع، أسوأ تجربة لا
+      // أفضل). كل عنصر فشل استرجاعه يُسجَّل تحديداً في audit_log (productId + quantity + سبب
+      // الفشل) — فقدان صامت لكمية مخزون حقيقية أخطر من عدم تسجيله، لكن العميل يجب أن يرى سبب فشل
+      // طلبه الحقيقي دائماً، لا عطلاً داخلياً غير ذي صلة (نفس فلسفة "فشل صريح لا نجاح صامت" في
+      // ADR-020/ADR-009، مطبَّقة هنا على *ما يُسجَّل* لا *ما يُرمى للمتصل*).
       if (reservations.length > 0) {
-        await Promise.all(reservations.map((r) => inventoryService.release(r.productId, r.quantity)));
+        await Promise.all(
+          reservations.map(async (r) => {
+            try {
+              await inventoryService.release(r.productId, r.quantity);
+            } catch (releaseError) {
+              await auditService
+                .log({
+                  actorRole: 'system',
+                  action: 'inventory.release_failed',
+                  entityType: 'inventory',
+                  entityId: r.productId,
+                  metadata: {
+                    quantity: r.quantity,
+                    reason: releaseError instanceof Error ? releaseError.message : String(releaseError),
+                  },
+                })
+                .catch(() => {}); // تسجيل التدقيق نفسه لا يجوز أن يُسقِط أو يستبدل الخطأ الأصلي أدناه
+            }
+          })
+        );
       }
       throw e;
     }
