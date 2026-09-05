@@ -1,8 +1,8 @@
 ---
 title: مرجع الأمن
 status: ACTIVE
-version: 1.4
-last_updated: 2026-09-03
+version: 1.5
+last_updated: 2026-09-05
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md §4, §26 (المبدأ)
 ---
@@ -31,13 +31,13 @@ Supabase يصدر JWT تلقائياً عبر Auth. **لم يُستخدَم فع
 
 راجع `DATABASE.md §6` للجدول الكامل. يوجد نمطان مطبَّقان فعلياً، لكل منهما استخدام مختلف تماماً — **لا تخلط بينهما:**
 
-**النمط 1 — قراءة عامة، مفتاح `anon`:** `categories`, `products`, `inventory`. RLS يسمح بالقراءة للجميع (بيانات كتالوج عامة بطبيعتها). **سياسات الكتابة (Insert/Update/Delete) على هذه الجداول لا تزال غير موجودة/موثَّقة — `OPEN_QUESTION`.**
+**النمط 1 — قراءة عامة، مفتاح `anon`:** `categories`, `products`, `inventory`. RLS يسمح بالقراءة للجميع (بيانات كتالوج عامة بطبيعتها). **سياسات الكتابة (Insert/Update/Delete) على `categories`/`products` لا تزال غير موجودة/موثَّقة — `OPEN_QUESTION`.** **`inventory` مُستثناة الآن (2026-09-05، `ADR-022`):** أول كتابة فعلية عليه (`InventoryRepository.decrementIfAvailable`/`restore`، خصم/استرجاع مخزون Checkout) تمر عبر `service_role` (`supabaseAdmin`) لا `anon` — يتجاوز RLS بالكامل، نفس نمط `merchants`/`carts`/`orders` لأي جدول بلا سياسة كتابة `anon` موثَّقة. لا حاجة لسياسة كتابة جديدة على النمط 1 نفسه.
 
 **النمط 2 — قفل كامل، مفتاح `service_role` (اليوم 7، `ADR-008`؛ توسَّع لليوم 8، `ADR-009`):** `merchants`, `carts`, `cart_items`, `orders`, `order_items`, `order_status_history`, `sessions`, **`audit_log`** (اليوم 12، `ADR-014`). RLS مفعَّل **بلا أي policy إطلاقاً** — هذا يمنع `anon`/`authenticated` تماماً، بما في ذلك القراءة. كل وصول (قراءة وكتابة) يمر حصرياً عبر `src/core/kernel/database/supabase-admin-client.ts` (مفتاح `service_role`، خادم فقط، محمي بحزمة `server-only` لمنع تسرّبه لأي Client Component). **متى يُستخدَم هذا النمط:** عندما يكتب بيانات مستخدم غير مُصادَق عليه حقيقياً (سلة الزائر عبر `session_token`) — RLS مسموح لـ`anon` في هذه الحالة لا يوفر حماية فعلية أصلاً، لأن مفتاح `anon` نفسه علني ولا يميّز بين طالب شرعي وآخر يخمّن معرّفات (كان سيخالف §2 أدناه). **قاعدة القرار لأي جدول جديد:** بيانات قراءتها عامة وآمنة للجميع ← النمط 1. بيانات خاصة بصاحبها ولا مصادقة حقيقية تحميها ← النمط 2، لا نمط وسط "RLS مفتوح لـanon باعتماد على صعوبة تخمين معرّف" (غير آمن، راجع `DECISIONS.md → ADR-008` للنقاش الكامل).
 
 **⚠️ مراجعة RLS شاملة (اليوم 12، `ADR-014`) — النتيجة: بلا تغيير معماري، إصلاح واحد فقط.** الأنماط أعلاه صحيحة ومقصودة على كل الجداول القائمة (لا حاجة لإعادة بناء). ثلاث نقاط وُثِّقت صراحة بدل تصحيحها بلا داعٍ:
 1. **سياسة `users` (`auth.uid() = id`) معطَّلة عملياً** — لا Supabase Auth حقيقية بعد، فـ`auth.uid()` لا يُطابِق شيئاً. غير خطيرة (فشل آمن — تمنع بدل أن تسمح خطأً)، تُفعَّل تلقائياً عند بناء Auth حقيقية لاحقاً.
-2. **سياسات الكتابة المفقودة على `categories`/`products`/`inventory` (النمط 1) ليست خطراً فعلياً اليوم** — تحقُّق حي أكَّد عدم وجود أي كود كتابة عليها إطلاقاً حتى الآن (`catalog.repository.ts`/`inventory.repository.ts` قراءة فقط). القرار: تُحسَم عند بناء أول ميزة كتابة فعلية على هذه الجداول، لا مسبقاً.
+2. **سياسات الكتابة المفقودة على `categories`/`products` (النمط 1) ليست خطراً فعلياً اليوم** — تحقُّق حي أكَّد عدم وجود أي كود كتابة عليها إطلاقاً حتى الآن (`catalog.repository.ts` قراءة فقط). القرار: تُحسَم عند بناء أول ميزة كتابة فعلية عليها، لا مسبقاً. **`inventory` مُستثناة من هذه النقطة منذ 2026-09-05 (`ADR-022`)** — أول ميزة كتابة فعلية عليه بُنيت (خصم/استرجاع مخزون Checkout)، والقرار حُسم وقتها: `service_role` لا سياسة `anon` جديدة، راجع §5 أعلاه.
 3. **ثغرة IDOR حقيقية أُصلِحت** — `cartService.removeItem` (`src/core/modules/cart/cart.service.ts`) كان يحذف `itemId` بلا التحقق من انتمائه لـ`cartId` المُمرَّر. أُصلِح بنفس نمط `updateItemQuantity` المجاور (فحص الملكية عبر `findItems` قبل الحذف). مُختبَر حياً (`cart.integration.test.ts` → "Cart IDOR").
 
 ## 6. Server-Side Validation — Evidence: `IMPLEMENTED` (في Catalog)
@@ -125,7 +125,7 @@ OPEN_QUESTIONS أدناه.
 
 ## قائمة OPEN_QUESTIONS الأمنية المجمَّعة
 
-1. سياسات RLS للكتابة على `users`/`categories`/`products`/`inventory` (النمط 1، قراءة عامة) — لا تزال غير موجودة. **محسومة بالفعل لـ`merchants`/`carts`/`cart_items`/`orders`/`order_items`/`order_status_history`/`sessions`/`audit_log` (النمط 2، قفل كامل + service_role) منذ اليوم 7. مراجعة اليوم 12 (`ADR-014`) أكَّدت حياً: لا كود كتابة إطلاقاً على `categories`/`products`/`inventory` حتى الآن — لا خطر فعلي، القرار يُحسَم عند بناء أول ميزة كتابة عليها.**
+1. سياسات RLS للكتابة على `users`/`categories`/`products` (النمط 1، قراءة عامة) — لا تزال غير موجودة، لا كود كتابة عليها حتى الآن، لا خطر فعلي. **محسومة بالفعل لـ`merchants`/`carts`/`cart_items`/`orders`/`order_items`/`order_status_history`/`sessions`/`audit_log` (النمط 2، قفل كامل + service_role) منذ اليوم 7، ولـ`inventory` تحديداً منذ 2026-09-05 (`ADR-022`، service_role — راجع §5 أعلاه).** الباقي (`users`/`categories`/`products`) يُحسَم عند بناء أول ميزة كتابة فعلية عليهم، لا مسبقاً.
 2. من يملك حق إنشاء `users` جديد (Auth مباشرة أم service مخصص؟) — لا يزال `OPEN_QUESTION` عاماً؛ **مُطبَّق فعلياً لسياق Checkout تحديداً منذ اليوم 8** (`KhalilService.findOrCreateCustomerByPhone()` عبر `service_role`، راجع `ADR-009`)، لا حلاً شاملاً لبقية المسارات (تسجيل تاجر، دخول حقيقي)
 3. ~~Rate limiting — لا رقم ولا آلية محددة~~ **محسومة اليوم 12 (`ADR-014`) — راجع §12 أعلاه، نطاق محدود (الدخول فقط) بعدّاد في-الذاكرة.**
 4. Soft Delete مقابل Hard Delete — غير محسوم (`DATABASE.md §7`)

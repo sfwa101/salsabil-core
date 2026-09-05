@@ -1,7 +1,7 @@
 ---
 title: مرجع قاعدة البيانات
 status: ACTIVE
-version: 1.10
+version: 1.11
 last_updated: 2026-09-05
 owner: المؤسس (أبوحتاب) + Claude
 source_of_truth: Supabase Project الفعلي (للجداول المنفَّذة) + هذا الملف (للتخطيط)
@@ -471,7 +471,7 @@ Supabase SQL Editor (`scripts/day23-bayan-schema.sql`، نفس قيد عدم و�
 | `users` | قراءة الذات فقط (`auth.uid() = id`) — **معطَّلة عملياً، راجع الملاحظة أدناه** | `IMPLEMENTED` (بلا أثر فعلي بعد) |
 | `categories` | قراءة عامة للأقسام النشطة | `IMPLEMENTED` |
 | `products` | قراءة عامة للمنتجات النشطة | `IMPLEMENTED` |
-| `inventory` | قراءة عامة | `IMPLEMENTED` |
+| `inventory` | قراءة عامة (RLS)؛ الكتابة (خصم/استرجاع) عبر `service_role` يتجاوز RLS — لا سياسة `anon` جديدة (`ADR-022`) | `IMPLEMENTED` |
 | `merchants` | بلا أي policy — قفل كامل، وصول حصري عبر `service_role` (اليوم 10، `ADR-012` — كانت قراءة عامة إلى اليوم 9، راجع الملاحظة الأمنية أدناه) | `IMPLEMENTED` |
 | `carts`, `cart_items` | بلا أي policy — قفل كامل لـ`anon`/`authenticated`، وصول حصري عبر `service_role` (اليوم 7، `ADR-008`) | `IMPLEMENTED` |
 | `orders`, `order_items`, `order_status_history` | بلا أي policy — نفس نمط القفل الكامل (اليوم 8، `ADR-009`؛ الثالث اليوم 9، `ADR-010`) | `IMPLEMENTED` (دورة حياة كاملة) |
@@ -481,7 +481,9 @@ Supabase SQL Editor (`scripts/day23-bayan-schema.sql`، نفس قيد عدم و�
 | `posts` | قراءة عامة للمنشورات المنشورة فقط (`is_published = true`) — النمط 1، لا النمط 2 (اليوم 23، `ADR-021`) | `IMPLEMENTED` |
 | `post_media`, `post_products` | قراءة عامة كاملة (`using (true)`) — استبعاد محتوى المسودات مسؤولية `bayan.service.ts`، لا RLS (اليوم 23، `ADR-021`) | `IMPLEMENTED` |
 
-**سياسات الكتابة (Insert/Update/Delete) لا تزال غير موجودة/موثَّقة على `users`/`categories`/`products`/`inventory` — `OPEN_QUESTION` صريح. مراجعة اليوم 12 تحقَّقت حياً: لا كود كتابة إطلاقاً على `categories`/`products`/`inventory` حتى الآن (`catalog.repository.ts`/`inventory.repository.ts` قراءة فقط) — لا خطر فعلي اليوم. **قاعدة القرار المعتمدة لأي كتابة مستقبلية على هذه الجداول** (مثال: بوابة تاجر تضيف منتجاً): يُحسَم عندها تحديداً بين نقل الجدول لعميل `service_role` (نمط ب) أو سياسة كتابة مقيَّدة بالدور — لا يُقرَّر مسبقاً بلا حاجة فعلية (نفس منهج `ADR-008`).**
+**سياسات الكتابة (Insert/Update/Delete) لا تزال غير موجودة/موثَّقة على `users`/`categories`/`products` — `OPEN_QUESTION` صريح. لا كود كتابة إطلاقاً على `categories`/`products` حتى الآن (`catalog.repository.ts` قراءة فقط) — لا خطر فعلي اليوم. **قاعدة القرار المعتمدة لأي كتابة مستقبلية على هذه الجداول** (مثال: بوابة تاجر تضيف منتجاً): يُحسَم عندها تحديداً بين نقل الجدول لعميل `service_role` (نمط ب) أو سياسة كتابة مقيَّدة بالدور — لا يُقرَّر مسبقاً بلا حاجة فعلية (نفس منهج `ADR-008`).**
+
+**`inventory` مُستثناة من `OPEN_QUESTION` أعلاه منذ 2026-09-05 (`ADR-022`):** أول كتابة فعلية عليه (`InventoryRepository.decrementIfAvailable`/`restore` — خصم/استرجاع مخزون عند Checkout، يحل سباق TOCTOU كان قائماً بين فحص `isAvailable()` والقرار المنفصل) تمر عبر `service_role` (`supabaseAdmin`)، بنفس القاعدة المذكورة أعلاه بالضبط — لا سياسة كتابة `anon` جديدة على جدول النمط 1 نفسه.
 
 **ملاحظة أمنية (اليوم 12، `ADR-014`): سياسة `users` ميتة فعلياً.** `auth.uid() = id` لا تُطابِق شيئاً أبداً لأنه لا Supabase Auth حقيقية في المشروع بعد — الدخول بالكامل عبر جدول `sessions` المخصَّص بكوكي عشوائي، لا JWT حقيقي بمعرّف مستخدم (`specs/identity/SPEC.md`). **غير خطيرة** (تمنع القراءة بدل أن تسمح بها خطأً — فشل آمن) لكنها كانت موثَّقة سابقاً هنا وكأنها فعّالة. تبقى في مكانها بلا تغيير SQL — ستُفعَّل تلقائياً عند بناء Supabase Auth حقيقية مستقبلاً.
 
