@@ -100,6 +100,18 @@ export interface OrderStatusHistoryEntry {
   createdAt: string;
 }
 
+// CRITICAL-FIXES-FROM-AUDIT-001، بند 4 — سياق الفاعل الإلزامي لأي قراءة تفصيلية على طلب واحد
+// بمعرّفه (getOrderWithItems/getStatusHistory). إلزامي في نوع TypeScript نفسه لا تعليقاً تحذيرياً
+// فقط — أي استدعاء مستقبلي بلا هذا السياق يفشل وقت الترجمة، لا وقت التشغيل فقط. نفس شكل
+// tenantId/role في TransitionOrderStatusInput أدناه لأن نفس منطق التخويل (TENANT_SCOPED_ACTOR_ROLES)
+// يُعاد استخدامه حرفياً لكلا الاتجاهين (تغيير الحالة، والقراءة التفصيلية).
+export interface OrderActorContext {
+  role: OrderActorRole;
+  // إلزامي لأدوار التاجر (merchant_owner/manager/employee) — يُقارَن بـ order.tenantId. اختياري
+  // فعلياً لـ'platform_admin' (يرى كل شيء) ولـ'system' (لا يُستخدَم استهلاكياً بعد الإنشاء الأولي).
+  tenantId?: string;
+}
+
 export interface TransitionOrderStatusInput {
   orderId: string;
   toStatus: OrderStatus;

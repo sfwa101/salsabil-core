@@ -13,6 +13,7 @@ import {
   ORDER_TRANSITION_ACTORS,
   type CheckoutInput,
   type Order,
+  type OrderActorContext,
   type OrderActorRole,
   type OrderCustomerView,
   type OrderStatusHistoryEntry,
@@ -24,12 +25,39 @@ import {
 // platform_admin يرى/يُغيّر كل شيء بلا قيد تاجر، system لا يُستخدَم فعلياً بعد الإنشاء الأولي.
 const TENANT_SCOPED_ACTOR_ROLES: readonly OrderActorRole[] = ['merchant_owner', 'merchant_manager', 'employee'];
 
+// CRITICAL-FIXES-FROM-AUDIT-001، بند 1 (Idempotency) — قفل "Single-Flight" في-الذاكرة بمفتاح
+// cartId: طلبان متزامنان فعليان لنفس السلة (تبويبان، إعادة إرسال بعد Timeout ظاهري بينما الطلب
+// الأول ما زال قيد التنفيذ، استدعاء برمجي مكرَّر) يتشاركان نفس الـ Promise قيد التنفيذ فيحصلان
+// على نفس نتيجة الطلب بالضبط، بدل تنفيذ Checkout مرتين فعلياً. اختير هذا بدل "فحص طلب pending
+// حديث بنفس cartId خلال نافذة زمنية" لأن الأخير يترك نافذة سباق فعلية (كلا الطلبين قد ينفّذان
+// الفحص قبل أن يُدرج أي منهما صفه) — لا تُغلَق فعلياً بفحص TOCTOU آخر فوق الأول. الحالة
+// "إعادة محاولة حقيقية بعد نجاح فعلي سابق" (لا تزامن حقيقي، طلب لاحق منفصل تماماً) محمية أصلاً
+// بسلوك قائم: clearCart() في نهاية checkout() تُفرغ السلة، فإعادة محاولة لاحقة على نفس السلة
+// تُقابَل بخطأ "السلة فارغة" الواضح بدل إنشاء طلب مكرَّر — لا حاجة لآلية إضافية لهذه الحالة.
+//
+// قيد معروف (نفس فئة src/core/kernel/security/rate-limit.ts بالضبط): لا ينجو من إعادة تشغيل
+// الخادم أو تعدد النسخ (Serverless/عدة خوادم) — يحمي فعلياً من التزامن داخل نفس العملية فقط، وهو
+// بالضبط ما يغطيه اختبار Promise.all المطلوب. يجب إعادة تقييمه (قفل موزَّع) قبل نشر متعدد الخوادم.
+const inFlightCheckouts = new Map<string, Promise<Order>>();
+
 export class OrdersService {
   // TODO(BR-016): لا حد أدنى لقيمة الطلب مطبَّق بعد — القيمة غير معتمدة رسمياً.
   // راجع docs/BUSINESS_RULES.md → BR-016 (OPEN_QUESTION) قبل الإطلاق.
   async checkout(input: CheckoutInput): Promise<Order> {
     const cart = await cartService.getOrCreateCart(input.identity);
-    const summary = await cartService.getSummary(cart.id);
+
+    const existing = inFlightCheckouts.get(cart.id);
+    if (existing) return existing;
+
+    const promise = this.performCheckout(cart.id, input).finally(() => {
+      inFlightCheckouts.delete(cart.id);
+    });
+    inFlightCheckouts.set(cart.id, promise);
+    return promise;
+  }
+
+  private async performCheckout(cartId: string, input: CheckoutInput): Promise<Order> {
+    const summary = await cartService.getSummary(cartId);
 
     if (summary.lines.length === 0) {
       throw new Error('السلة فارغة');
@@ -38,10 +66,6 @@ export class OrdersService {
     for (const line of summary.lines) {
       if (!line.product.isActive) {
         throw new Error(`المنتج "${line.product.name}" لم يعد متاحاً`);
-      }
-      const available = await inventoryService.isAvailable(line.product.id, line.item.quantity);
-      if (!available) {
-        throw new Error(`الكمية المطلوبة من "${line.product.name}" غير متوفرة في المخزون الآن`);
       }
     }
 
@@ -54,57 +78,87 @@ export class OrdersService {
       throw new Error(`المنتج "${summary.lines[0].product.name}" غير مرتبط بتاجر — لا يمكن إتمام الطلب`);
     }
 
-    const user = await khalilService.findOrCreateCustomerByPhone(input.customerName, input.customerPhone);
-
-    const paymentResult = await cashOnDeliveryProvider.charge(summary.total);
-    if (!paymentResult.success) {
-      throw new Error('فشلت عملية الدفع');
-    }
-
-    const order = await ordersRepository.createOrder({
-      userId: user.id,
-      tenantId,
-      paymentMethod: cashOnDeliveryProvider.method,
-      deliveryAddress: input.deliveryAddress,
-      total: summary.total,
-    });
-
+    // CRITICAL-FIXES-FROM-AUDIT-001، بند 2 — نقطة الاستهلاك الفعلية للمخزون: خصم ذرّي شرطي واحد
+    // لكل بند (لا فحص isAvailable ثم قرار منفصل، ذلك بالضبط ما كان يسمح بسباق TOCTOU/بيع مضاعف).
+    // reservations تتبّع ما نجح خصمه فعلياً في هذه المحاولة بالذات — ضرورية للتعويض أدناه (بند 3)
+    // لو فشلت خطوة لاحقة (دفع/إنشاء طلب/بنود) بعد خصم ناجح لبعض البنود.
+    const reservations: Array<{ productId: string; quantity: number }> = [];
     try {
-      await ordersRepository.createOrderItems(
-        order.id,
-        summary.lines.map((line) => ({
-          productId: line.product.id,
-          quantity: line.item.quantity,
-          selection: line.item.selection,
-          unitPriceSnapshot: line.unitPrice,
-        }))
-      );
+      for (const line of summary.lines) {
+        const reserved = await inventoryService.reserve(line.product.id, line.item.quantity);
+        if (!reserved) {
+          throw new Error(`الكمية المطلوبة من "${line.product.name}" غير متوفرة في المخزون الآن`);
+        }
+        reservations.push({ productId: line.product.id, quantity: line.item.quantity });
+      }
+
+      const user = await khalilService.findOrCreateCustomerByPhone(input.customerName, input.customerPhone);
+
+      const paymentResult = await cashOnDeliveryProvider.charge(summary.total);
+      if (!paymentResult.success) {
+        throw new Error('فشلت عملية الدفع');
+      }
+
+      const order = await ordersRepository.createOrder({
+        userId: user.id,
+        tenantId,
+        paymentMethod: cashOnDeliveryProvider.method,
+        deliveryAddress: input.deliveryAddress,
+        total: summary.total,
+      });
+
+      try {
+        await ordersRepository.createOrderItems(
+          order.id,
+          summary.lines.map((line) => ({
+            productId: line.product.id,
+            quantity: line.item.quantity,
+            selection: line.item.selection,
+            unitPriceSnapshot: line.unitPrice,
+          }))
+        );
+      } catch (e) {
+        await ordersRepository.deleteOrder(order.id);
+        throw e;
+      }
+
+      await cartService.clearCart(cartId);
+
+      // أول قيد في سجل التدقيق — الحالة الابتدائية 'pending' بلا حالة سابقة، فاعلها النظام
+      // نفسه لا مستخدماً بشرياً (CONSTITUTION §4 بند 5: كل تحوّل يُسجَّل من فعله ومتى ولماذا)
+      await ordersRepository.insertStatusHistory({
+        orderId: order.id,
+        fromStatus: null,
+        toStatus: 'pending',
+        actorRole: 'system',
+      });
+
+      return order;
     } catch (e) {
-      await ordersRepository.deleteOrder(order.id);
+      // CRITICAL-FIXES-FROM-AUDIT-001، بند 3 — حدود المعاملة (Transaction Boundaries): لا معاملة
+      // DB ذرّية حقيقية تربط خصم المخزون بإنشاء الطلب (نفس القيد الموثَّق أصلاً في ADR-009 بين
+      // orders وorder_items — لا حاجة لبناء معاملات موزعة كاملة لأجل هذا، تعويض تطبيقي صريح كافٍ
+      // عند هذا الحجم). لو نجح خصم مخزون بند واحد أو أكثر ثم فشلت أي خطوة لاحقة (بند آخر غير
+      // متوفر، فشل دفع COD نظري، فشل إنشاء الطلب نفسه) — يُعاد كل ما خُصم في هذه المحاولة بالذات
+      // فوراً، قبل رمي الخطأ الأصلي للمتصل. فشل الاسترجاع نفسه (شبكة، إلخ) يُستبدَل الخطأ الأصلي
+      // به عمداً — فقدان صامت لكمية مخزون حقيقية أخطر من إخفاء رسالة "غير متوفر" الأصلية،
+      // ويحتاج انتباهاً فورياً (نفس فلسفة "فشل صريح لا نجاح صامت" في ADR-020/ADR-009).
+      if (reservations.length > 0) {
+        await Promise.all(reservations.map((r) => inventoryService.release(r.productId, r.quantity)));
+      }
       throw e;
     }
-
-    await cartService.clearCart(cart.id);
-
-    // أول قيد في سجل التدقيق — الحالة الابتدائية 'pending' بلا حالة سابقة، فاعلها النظام
-    // نفسه لا مستخدماً بشرياً (CONSTITUTION §4 بند 5: كل تحوّل يُسجَّل من فعله ومتى ولماذا)
-    await ordersRepository.insertStatusHistory({
-      orderId: order.id,
-      fromStatus: null,
-      toStatus: 'pending',
-      actorRole: 'system',
-    });
-
-    return order;
   }
 
-  // ⚠️ أمان (اليوم 12، ADR-014): بلا أي فحص تاجر داخلي — عكس transitionStatus عمداً. لا مستهلك
-  // واحد لهذه الدالة في src/app اليوم (فخ كامن لا ثغرة نشطة، راجع docs/DATABASE.md §6). ممنوع
-  // استدعاؤها من أي Server Action/صفحة مستقبلية (مثال: تفاصيل طلب) بلا تمرير tenantId من الجلسة
-  // والتحقق منه أولاً، بنفس نمط transitionStatus.
-  async getOrderWithItems(orderId: string): Promise<OrderWithItems | null> {
+  // CRITICAL-FIXES-FROM-AUDIT-001، بند 4 — كانت هذه الدالة بلا أي فحص تاجر داخلي (فخّ كامن، لا
+  // ثغرة نشطة — لا مستهلك فعلي وُجد في src/app وقت التدقيق، تحقَّقتُ منه مجدداً قبل هذا التعديل
+  // عبر بحث شامل في src/ ولم يتغيّر). التوقيع الآن يتطلب actor: OrderActorContext إلزامياً —
+  // نفس شكل tenantId/role في TransitionOrderStatusInput — بحيث يفشل أي استدعاء مستقبلي بلا سياق
+  // فاعل وقت الترجمة (compile error)، لا وقت التشغيل فقط. راجع assertActorCanAccessOrder أدناه.
+  async getOrderWithItems(actor: OrderActorContext, orderId: string): Promise<OrderWithItems | null> {
     const order = await ordersRepository.findOrderById(orderId);
     if (!order) return null;
+    this.assertActorCanAccessOrder(order, actor);
     const items = await ordersRepository.findOrderItems(orderId);
     return { order, items };
   }
@@ -131,9 +185,25 @@ export class OrdersService {
     return { order, items: itemsWithProductNames };
   }
 
-  // ⚠️ أمان (اليوم 12، ADR-014): نفس تحذير getOrderWithItems أعلاه بالضبط — بلا فحص تاجر داخلي.
-  async getStatusHistory(orderId: string): Promise<OrderStatusHistoryEntry[]> {
+  // CRITICAL-FIXES-FROM-AUDIT-001، بند 4 — نفس إصلاح getOrderWithItems أعلاه بالضبط. يتطلب جلب
+  // الطلب أولاً الآن (استعلام إضافي واحد) لمعرفة tenantId الحقيقي قبل الفحص — لم يكن ذلك ضرورياً
+  // سابقاً لأن لا فحص كان موجوداً أصلاً. طلب غير موجود يرمي خطأً صريحاً (لا مصفوفة فارغة صامتة) —
+  // نفس فلسفة "فشل صريح لا نجاح صامت" المتَّبعة في transitionStatus المجاورة تماماً.
+  async getStatusHistory(actor: OrderActorContext, orderId: string): Promise<OrderStatusHistoryEntry[]> {
+    const order = await ordersRepository.findOrderById(orderId);
+    if (!order) {
+      throw new Error('الطلب غير موجود');
+    }
+    this.assertActorCanAccessOrder(order, actor);
     return ordersRepository.findStatusHistory(orderId);
+  }
+
+  // مشترك بين transitionStatus وgetOrderWithItems وgetStatusHistory — نفس منطق عزل المستأجرين
+  // بالضبط (ADR-012)، لا نسخة ثالثة منه. platform_admin يتجاوز دائماً (يرى/يُغيّر كل شيء).
+  private assertActorCanAccessOrder(order: Order, actor: OrderActorContext): void {
+    if (TENANT_SCOPED_ACTOR_ROLES.includes(actor.role) && actor.tenantId !== order.tenantId) {
+      throw new Error('هذا الطلب لا يخص تاجرك — لا يمكنك الاطلاع عليه');
+    }
   }
 
   // طلبات تاجر واحد فقط — للوحة التاجر (اليوم 10). tenantId يجب أن يأتي من الجلسة، أبداً من
@@ -164,12 +234,10 @@ export class OrdersService {
 
     // عزل المستأجرين (اليوم 10): فاعل تابع لتاجر لا يستطيع لمس طلب تاجر آخر، حتى لو كان
     // الانتقال والدور نفسهما صحيحين لولا هذا القيد — يُفحَص أولاً، قبل حتى صحة الانتقال،
-    // لتفادي تسريب أي معلومة عن حالة طلب لا يملك الفاعل حق رؤيته أصلاً.
-    if (TENANT_SCOPED_ACTOR_ROLES.includes(input.actorRole)) {
-      if (input.tenantId !== order.tenantId) {
-        throw new Error('هذا الطلب لا يخص تاجرك — لا يمكنك تغيير حالته');
-      }
-    }
+    // لتفادي تسريب أي معلومة عن حالة طلب لا يملك الفاعل حق رؤيته أصلاً. نفس الفحص المشترك
+    // المُستخدَم الآن في getOrderWithItems/getStatusHistory (بند 4، CRITICAL-FIXES-FROM-AUDIT-001)
+    // — لا نسخة ثالثة من نفس المنطق.
+    this.assertActorCanAccessOrder(order, { role: input.actorRole, tenantId: input.tenantId });
 
     const allowedNextStatuses = ORDER_TRANSITIONS[order.status];
     if (!allowedNextStatuses.includes(input.toStatus)) {

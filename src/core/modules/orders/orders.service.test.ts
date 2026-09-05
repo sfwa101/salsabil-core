@@ -42,6 +42,11 @@ vi.mock('../catalog/catalog.repository', () => ({
 vi.mock('../inventory/inventory.repository', () => ({
   inventoryRepository: {
     findByProductId: vi.fn(async () => ({ productId: chicken.id, quantityAvailable: 10, updatedAt: new Date().toISOString() })),
+    // CRITICAL-FIXES-FROM-AUDIT-001، بند 2 — checkout() الحقيقي يستدعي الآن reserve() (خصم ذرّي)
+    // بدل isAvailable() فقط عند نقطة الاستهلاك — بلا هذا الـmock، كل اختبار Checkout ناجح كان
+    // سيفشل بـ"غير متوفرة في المخزون" (undefined من دالة غير مموَّهة) بلا علاقة بالمنطق المُختبَر.
+    decrementIfAvailable: vi.fn(async () => true),
+    restore: vi.fn(async () => undefined),
   },
 }));
 
@@ -149,15 +154,24 @@ describe('OrdersService.checkout', () => {
     products[chicken.id] = chicken; // إعادة الحالة لبقية الاختبارات
   });
 
-  it('يرفض عند نقص المخزون', async () => {
+  it('يرفض عند نقص المخزون (decrementIfAvailable يعيد false عند الاستهلاك الفعلي)', async () => {
     const { inventoryRepository } = await import('../inventory/inventory.repository');
-    vi.mocked(inventoryRepository.findByProductId).mockResolvedValueOnce({
-      productId: chicken.id,
-      quantityAvailable: 0,
-      updatedAt: new Date().toISOString(),
-    });
+    vi.mocked(inventoryRepository.decrementIfAvailable).mockResolvedValueOnce(false);
     vi.mocked(cartRepository.findItems).mockResolvedValue([makeItem()]);
     await expect(ordersService.checkout(checkoutInput)).rejects.toThrow(/غير متوفرة في المخزون/);
+    expect(ordersRepository.createOrder).not.toHaveBeenCalled();
+  });
+
+  it('يستعيد (release) كل مخزون خُصم في نفس المحاولة عند فشل خطوة لاحقة (تعويض، بند 3)', async () => {
+    const { inventoryRepository } = await import('../inventory/inventory.repository');
+    vi.mocked(cartRepository.findItems).mockResolvedValue([makeItem({ quantity: 2 })]);
+    // ينجح خصم المخزون، ثم يفشل إنشاء الطلب نفسه (خطأ DB افتراضي) — يجب استرجاع الكمية المخصومة
+    vi.mocked(ordersRepository.createOrder).mockRejectedValueOnce(new Error('فشل DB افتراضي'));
+
+    await expect(ordersService.checkout(checkoutInput)).rejects.toThrow(/فشل DB افتراضي/);
+
+    expect(inventoryRepository.decrementIfAvailable).toHaveBeenCalledWith(chicken.id, 2);
+    expect(inventoryRepository.restore).toHaveBeenCalledWith(chicken.id, 2);
   });
 
   it('يرفض عند تعدد التجار بين بنود السلة', async () => {
@@ -319,6 +333,66 @@ describe('OrdersService.transitionStatus', () => {
     });
 
     expect(order.status).toBe('confirmed');
+  });
+});
+
+// CRITICAL-FIXES-FROM-AUDIT-001، بند 4 — أول اختبار وحدة على الإطلاق لهاتين الدالتين (لم يكن
+// لهما أي اختبار وحدة قبل هذا الإصلاح، فقط تكامل حي). يثبت أن الإصلاح يعمل حتى بلا اتصال Supabase
+// حقيقي — منطق التخويل نفسه (assertActorCanAccessOrder) لا يعتمد على قاعدة البيانات إطلاقاً.
+describe('OrdersService.getOrderWithItems (بند 4 — عزل المستأجرين على القراءة)', () => {
+  it('يرفض فاعل تاجر لا يخص طلبه (tenant-a مقابل tenant-b)', async () => {
+    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
+
+    await expect(
+      ordersService.getOrderWithItems({ role: 'merchant_owner', tenantId: 'tenant-b' }, 'order-1')
+    ).rejects.toThrow(/لا يخص تاجرك/);
+    expect(ordersRepository.findOrderItems).not.toHaveBeenCalled();
+  });
+
+  it('يسمح لفاعل التاجر الصحيح (نفس tenantId الطلب)', async () => {
+    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
+    vi.mocked(ordersRepository.findOrderItems).mockResolvedValue([]);
+
+    const result = await ordersService.getOrderWithItems({ role: 'merchant_owner', tenantId: 'tenant-a' }, 'order-1');
+    expect(result!.order.status).toBe('confirmed');
+  });
+
+  it('يسمح لـplatform_admin بلا حاجة لمطابقة tenantId إطلاقاً', async () => {
+    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
+    vi.mocked(ordersRepository.findOrderItems).mockResolvedValue([]);
+
+    const result = await ordersService.getOrderWithItems({ role: 'platform_admin' }, 'order-1');
+    expect(result!.order.status).toBe('confirmed');
+  });
+
+  it('يعيد null لطلب غير موجود قبل أي فحص تخويل', async () => {
+    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(null);
+    const result = await ordersService.getOrderWithItems({ role: 'merchant_owner', tenantId: 'tenant-b' }, 'missing');
+    expect(result).toBeNull();
+  });
+});
+
+describe('OrdersService.getStatusHistory (بند 4 — عزل المستأجرين على القراءة)', () => {
+  it('يرفض فاعل تاجر لا يخص طلبه', async () => {
+    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
+
+    await expect(
+      ordersService.getStatusHistory({ role: 'merchant_owner', tenantId: 'tenant-b' }, 'order-1')
+    ).rejects.toThrow(/لا يخص تاجرك/);
+    expect(ordersRepository.findStatusHistory).not.toHaveBeenCalled();
+  });
+
+  it('يرمي خطأ صريحاً لطلب غير موجود (لا مصفوفة فارغة صامتة)', async () => {
+    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(null);
+    await expect(ordersService.getStatusHistory({ role: 'platform_admin' }, 'missing')).rejects.toThrow(/غير موجود/);
+  });
+
+  it('يسمح لفاعل التاجر الصحيح ويعيد السجل', async () => {
+    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
+    vi.mocked(ordersRepository.findStatusHistory).mockResolvedValue([]);
+
+    const result = await ordersService.getStatusHistory({ role: 'merchant_owner', tenantId: 'tenant-a' }, 'order-1');
+    expect(result).toEqual([]);
   });
 });
 

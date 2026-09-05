@@ -221,7 +221,7 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
     const cartAfter = await cartService.getSummary(visitorCartId);
     expect(cartAfter.lines).toHaveLength(0); // السلة أُفرغت بعد نجاح الطلب
 
-    const history = await ordersService.getStatusHistory(orderId);
+    const history = await ordersService.getStatusHistory({ role: 'merchant_owner', tenantId: merchantAId! }, orderId);
     expect(history).toHaveLength(1);
     expect(history[0]).toMatchObject({ fromStatus: null, toStatus: 'pending', actorRole: 'system' });
   });
@@ -270,10 +270,21 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
         })
       ).rejects.toThrow(/لا يخص تاجرك/);
 
-      const orderAfterAttempt = await ordersService.getOrderWithItems(orderId);
+      // CRITICAL-FIXES-FROM-AUDIT-001، بند 4 — نفس عزل المستأجرين مفروض الآن أيضاً على القراءة
+      // التفصيلية (getOrderWithItems/getStatusHistory)، لا فقط على تغيير الحالة أعلاه. قبل هذا
+      // الإصلاح لم يكن لهاتين الدالتين أي معامل "فاعل" أصلاً — أي طرف كان يستطيع استدعاءهما
+      // بمعرّف الطلب وحده بلا أي فحص. التحقُّق هنا سلبي (Negative Test) صريح على السلوك الجديد.
+      await expect(
+        ordersService.getOrderWithItems({ role: 'merchant_owner', tenantId: merchantBId! }, orderId)
+      ).rejects.toThrow(/لا يخص تاجرك/);
+      await expect(
+        ordersService.getStatusHistory({ role: 'merchant_owner', tenantId: merchantBId! }, orderId)
+      ).rejects.toThrow(/لا يخص تاجرك/);
+
+      const orderAfterAttempt = await ordersService.getOrderWithItems({ role: 'platform_admin' }, orderId);
       expect(orderAfterAttempt!.order.status).toBe('confirmed'); // لم يتغيّر
 
-      const historyAfterAttempt = await ordersService.getStatusHistory(orderId);
+      const historyAfterAttempt = await ordersService.getStatusHistory({ role: 'platform_admin' }, orderId);
       expect(historyAfterAttempt).toHaveLength(2); // pending + confirmed فقط — لا قيد جديد من المحاولة المرفوضة
 
       // (ب) قراءة التاجر ب لطلبات مستأجره لا تُظهر طلب التاجر أ إطلاقاً
@@ -293,7 +304,7 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
       expect(anonUpdateError).toBeNull();
       expect(anonUpdate ?? []).toHaveLength(0); // RLS تمنع الصف من التأثر — 0 صفوف مُحدَّثة
 
-      const orderStillConfirmed = await ordersService.getOrderWithItems(orderId);
+      const orderStillConfirmed = await ordersService.getOrderWithItems({ role: 'platform_admin' }, orderId);
       expect(orderStillConfirmed!.order.status).toBe('confirmed'); // لم يتأثر بمحاولة anon
     },
     20000
@@ -343,7 +354,7 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
   it('السيناريو 8 — سجل التدقيق الكامل: order_status_history يطابق كل فاعل، audit_log يسجّل الدخول الثلاثة ويبقى خالياً من صفوف الطلب', async () => {
     if (!orderId) throw new Error('الطلب من السيناريو السابق غير موجود');
 
-    const fullHistory = await ordersService.getStatusHistory(orderId);
+    const fullHistory = await ordersService.getStatusHistory({ role: 'platform_admin' }, orderId);
     expect(fullHistory.map((h) => h.toStatus)).toEqual([
       'pending',
       'confirmed',

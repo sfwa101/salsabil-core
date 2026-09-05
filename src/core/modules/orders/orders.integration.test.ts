@@ -67,7 +67,7 @@ describe('Orders/Checkout integration (Supabase حقيقي)', () => {
     expect(order.status).toBe('pending');
     expect(order.paymentMethod).toBe('cash_on_delivery');
 
-    const { items } = (await ordersService.getOrderWithItems(order.id))!;
+    const { items } = (await ordersService.getOrderWithItems({ role: 'merchant_owner', tenantId: tenantId! }, order.id))!;
     expect(items).toHaveLength(1);
     expect(items[0].unitPriceSnapshot).toBe(100);
 
@@ -149,6 +149,111 @@ describe('Orders/Checkout integration (Supabase حقيقي)', () => {
       })
     ).rejects.toThrow(/غير متوفرة في المخزون/);
   });
+
+  // CRITICAL-FIXES-FROM-AUDIT-001، بند 1 — Idempotency: طلبان متزامنان فعليان (Promise.all) لنفس
+  // السلة بالضبط يجب أن يُنتجا نفس الطلب (single-flight)، لا طلبين منفصلين.
+  //
+  // ⚠️ ملاحظة منهجية مهمة (اكتُشفت أثناء كتابة هذا الاختبار، لا افتراضاً مسبقاً): لو استُخدم رقم
+  // هاتف جديد كلياً للعميلَين المتزامنين معاً، يظهر عطل مختلف تماماً — كلا الطلبين يجدان
+  // "لا مستخدم بهذا الهاتف" فيحاولان إنشاء صف users بنفس الرقم معاً، فيفشل الخاسر بخطأ Postgres
+  // خام (duplicate key value violates unique constraint "users_phone_key") بدل إنشاء طلب مكرَّر
+  // — عطل حقيقي أيضاً (رسالة غير مفهومة للعميل) لكنه **ليس** سيناريو "طلبين مكرَّرين" المطلوب هنا.
+  // لعزل سيناريو التكرار الحقيقي (عميل **موجود بالفعل**، وهو الحالة الأشيع عملياً) — يُنشأ
+  // المستخدم أولاً بشكل متسلسل (سلة/طلب تمهيدي منفصل)، ثم يُطلَق التزامن الفعلي على سلة العميل
+  // بنفس هاتفه الموجود مسبقاً.
+  it('لا يُنشئ إلا طلباً واحداً عند طلبين متزامنين فعليين لنفس السلة بالضبط (idempotency)', async () => {
+    // الاختبار السابق مباشرة يُنزِل المخزون الحقيقي إلى صفر عمداً ولا يُعيده إلا في afterAll
+    // الخاص بكل الوصف (describe) — هذا الاختبار لا يعتمد على ترتيب التنفيذ، فيعيد المخزون بنفسه.
+    await supabaseAdmin.from('inventory').update({ quantity_available: 10 }).eq('product_id', productId);
+
+    const idempotencyPhone = `0106${Math.floor(1000000 + Math.random() * 8999999)}`;
+
+    // تمهيد: إنشاء العميل مسبقاً عبر سلة/طلب منفصل تماماً — يعزل اختبار التزامن عن سباق
+    // إنشاء users غير ذي الصلة (الموثَّق أعلاه في التعليق).
+    const setupSessionToken = randomUUID();
+    const setupCart = await cartService.getOrCreateCart({ sessionToken: setupSessionToken });
+    cartIdsToClean.push(setupCart.id);
+    await cartService.addItem(setupCart.id, { productId, quantity: 1, selection: { sizeId: 'small' } });
+    const setupOrder = await ordersService.checkout({
+      identity: { sessionToken: setupSessionToken },
+      customerName: 'زبون اختبار التزامن',
+      customerPhone: idempotencyPhone,
+      deliveryAddress: { line1: 'شارع تمهيدي', city: 'القاهرة' },
+    });
+    orderIdsToClean.push(setupOrder.id);
+    userIdsToClean.push(setupOrder.userId);
+
+    // الاختبار الفعلي: نفس العميل (موجود مسبقاً الآن)، سلة جديدة، طلبان متزامنان فعليان عليها
+    const sessionToken = randomUUID();
+    const cart = await cartService.getOrCreateCart({ sessionToken });
+    cartIdsToClean.push(cart.id);
+    await cartService.addItem(cart.id, { productId, quantity: 1, selection: { sizeId: 'small' } });
+
+    const checkoutOnce = () =>
+      ordersService.checkout({
+        identity: { sessionToken },
+        customerName: 'زبون اختبار التزامن',
+        customerPhone: idempotencyPhone,
+        deliveryAddress: { line1: 'شارع التزامن', city: 'القاهرة' },
+      });
+
+    const [orderA, orderB] = await Promise.all([checkoutOnce(), checkoutOnce()]);
+    orderIdsToClean.push(orderA.id);
+    if (orderB.id !== orderA.id) orderIdsToClean.push(orderB.id); // تنظيف دفاعي لو فشل الإصلاح
+
+    expect(orderB.id).toBe(orderA.id); // نفس الطلب بالضبط — لا تكرار
+  });
+
+  // CRITICAL-FIXES-FROM-AUDIT-001، بند 2 — سباق المخزون (TOCTOU): مخزون = 1، عميلان مختلفان
+  // تماماً (سلتان منفصلتان، هاتفان مختلفان) يطلبان القطعة الأخيرة نفسها في نفس اللحظة فعلياً.
+  // قبل الإصلاح: كلاهما ينجح (بيع مضاعف لوحدة واحدة فقط). بعد الإصلاح: واحد فقط ينجح، والآخر
+  // يُرفَض برسالة واضحة "غير متوفرة"، لا صمتاً ولا بخطأ عام غامض.
+  it('يبيع القطعة الأخيرة لعميل واحد فقط عند طلبين متزامنين فعليين لعميلين مختلفين (سباق المخزون)', async () => {
+    await supabaseAdmin.from('inventory').update({ quantity_available: 1 }).eq('product_id', productId);
+
+    const sessionTokenA = randomUUID();
+    const cartA = await cartService.getOrCreateCart({ sessionToken: sessionTokenA });
+    cartIdsToClean.push(cartA.id);
+    await cartService.addItem(cartA.id, { productId, quantity: 1, selection: { sizeId: 'small' } });
+
+    const sessionTokenB = randomUUID();
+    const cartB = await cartService.getOrCreateCart({ sessionToken: sessionTokenB });
+    cartIdsToClean.push(cartB.id);
+    await cartService.addItem(cartB.id, { productId, quantity: 1, selection: { sizeId: 'small' } });
+
+    const [resultA, resultB] = await Promise.allSettled([
+      ordersService.checkout({
+        identity: { sessionToken: sessionTokenA },
+        customerName: 'زبون سباق أ',
+        customerPhone: `0111${Math.floor(1000000 + Math.random() * 8999999)}`,
+        deliveryAddress: { line1: 'شارع السباق أ', city: 'القاهرة' },
+      }),
+      ordersService.checkout({
+        identity: { sessionToken: sessionTokenB },
+        customerName: 'زبون سباق ب',
+        customerPhone: `0112${Math.floor(1000000 + Math.random() * 8999999)}`,
+        deliveryAddress: { line1: 'شارع السباق ب', city: 'القاهرة' },
+      }),
+    ]);
+
+    for (const result of [resultA, resultB]) {
+      if (result.status === 'fulfilled') {
+        orderIdsToClean.push(result.value.id);
+        userIdsToClean.push(result.value.userId);
+      }
+    }
+
+    const outcomes = [resultA, resultB];
+    const succeeded = outcomes.filter((r) => r.status === 'fulfilled');
+    const failed = outcomes.filter((r) => r.status === 'rejected');
+
+    expect(succeeded).toHaveLength(1); // واحد فقط نجح — لا بيع مضاعف
+    expect(failed).toHaveLength(1);
+    expect((failed[0] as PromiseRejectedResult).reason.message).toMatch(/غير متوفرة في المخزون/);
+
+    const finalInventory = await supabaseAdmin.from('inventory').select('quantity_available').eq('product_id', productId).single();
+    expect(finalInventory.data!.quantity_available).toBe(0); // خُصمت مرة واحدة فقط، لا مرتين ولا صفر مرات
+  });
 });
 
 describe('Orders lifecycle integration (Supabase حقيقي، اليوم 9)', () => {
@@ -201,7 +306,7 @@ describe('Orders lifecycle integration (Supabase حقيقي، اليوم 9)', ()
   it('يسجّل قيد السجل الابتدائي (pending) تلقائياً عند Checkout', async () => {
     const order = await createTestOrder();
 
-    const history = await ordersService.getStatusHistory(order.id);
+    const history = await ordersService.getStatusHistory({ role: 'merchant_owner', tenantId }, order.id);
     expect(history).toHaveLength(1);
     expect(history[0]).toMatchObject({ fromStatus: null, toStatus: 'pending', actorRole: 'system' });
   });
@@ -223,10 +328,10 @@ describe('Orders lifecycle integration (Supabase حقيقي، اليوم 9)', ()
         expect(updated.status).toBe(toStatus);
       }
 
-      const finalOrder = await ordersService.getOrderWithItems(order.id);
+      const finalOrder = await ordersService.getOrderWithItems({ role: 'platform_admin' }, order.id);
       expect(finalOrder!.order.status).toBe('delivered');
 
-      const history = await ordersService.getStatusHistory(order.id);
+      const history = await ordersService.getStatusHistory({ role: 'platform_admin' }, order.id);
       expect(history.map((h) => h.toStatus)).toEqual(['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered']);
       expect(history.map((h) => h.fromStatus)).toEqual([null, 'pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery']);
       expect(history.every((h) => h.actorRole === 'system' || h.actorRole === 'merchant_owner')).toBe(true);
@@ -253,13 +358,13 @@ describe('Orders lifecycle integration (Supabase حقيقي، اليوم 9)', ()
 
   it('ترفض حياً فاعلاً غير مخوَّل (customer)، ولا تُنشئ قيد سجل جديداً', async () => {
     const order = await createTestOrder();
-    const historyBefore = await ordersService.getStatusHistory(order.id);
+    const historyBefore = await ordersService.getStatusHistory({ role: 'merchant_owner', tenantId }, order.id);
 
     await expect(
       ordersService.transitionStatus({ orderId: order.id, toStatus: 'confirmed', actorRole: 'customer' })
     ).rejects.toThrow(/غير مخوَّل/);
 
-    const historyAfter = await ordersService.getStatusHistory(order.id);
+    const historyAfter = await ordersService.getStatusHistory({ role: 'merchant_owner', tenantId }, order.id);
     expect(historyAfter).toHaveLength(historyBefore.length);
   });
 
