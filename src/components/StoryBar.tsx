@@ -15,9 +15,9 @@ export function StoryBar({ categories }: { categories: Category[] }) {
         <Link
           key={category.id}
           href={`/${category.slug}`}
-          className="flex w-20 shrink-0 snap-start flex-col items-center gap-2"
+          className="flex w-20 shrink-0 snap-start flex-col items-center gap-2 md:w-24"
         >
-          <span className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-primary bg-muted text-lg font-semibold text-primary">
+          <span className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-primary bg-muted text-lg font-semibold text-primary md:h-20 md:w-20">
             {category.name.charAt(0)}
           </span>
           <span className="w-full truncate text-center text-xs text-foreground">{category.name}</span>

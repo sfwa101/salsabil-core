@@ -16,11 +16,11 @@ export function HorizontalShelf({ title, children, emptyMessage }: HorizontalShe
 
   return (
     <section className="flex flex-col gap-3">
-      {title && <h2 className="px-1 text-lg font-medium text-foreground">{title}</h2>}
+      {title && <h2 className="px-1 text-lg font-medium text-foreground md:text-xl">{title}</h2>}
       {isEmpty && emptyMessage ? (
         <p className="px-1 text-sm text-muted-foreground">{emptyMessage}</p>
       ) : (
-        <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth px-1 pb-1">
+        <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth px-1 pb-1 md:gap-4">
           {children}
         </div>
       )}

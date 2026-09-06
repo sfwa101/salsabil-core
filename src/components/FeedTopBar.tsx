@@ -1,13 +1,17 @@
 'use client';
 // src/components/FeedTopBar.tsx
-// شريط علوي لخلاصة بيان (اليوم 26، BAYAN-HOME-FEED-001) — مبدّل عوالم (بصري فقط، المنطق الفعلي
-// اليوم 29)، عنوان بعناوين وهمية عبر BottomSheet (اليوم 25) — كما استُثني صراحة تخزين/جلب عناوين
-// حقيقية من نطاق هذه المهمة، وأيقونتا باركود/بحث بتنبيه "قريباً" (لا وظيفة فعلية بعد). كل الألوان
-// عبر توكنز دلالية فقط (ADR-007 §8.1) — بلا أي Hex مباشر هنا.
+// شريط علوي لخلاصة بيان (اليوم 26، BAYAN-HOME-FEED-001) — عنوان بعناوين وهمية عبر BottomSheet
+// (اليوم 25) — كما استُثني صراحة تخزين/جلب عناوين حقيقية من نطاق هذه المهمة، وأيقونتا باركود/بحث
+// بتنبيه "قريباً" (لا وظيفة فعلية بعد). كل الألوان عبر توكنز دلالية فقط (ADR-007 §8.1) — بلا أي Hex
+// مباشر هنا.
+//
+// اليوم 29: مبدّل العوالم الحقيقي (زر Globe الوهمي القديم) استُخرِج إلى WorldSwitcher.tsx المستقل —
+// يقرأ worlds حقيقية الآن بدل توست "قريباً" ثابت.
 
 import { useState } from 'react';
-import { Globe, MapPin, Barcode, Search, ChevronDown } from 'lucide-react';
+import { MapPin, Barcode, Search, ChevronDown } from 'lucide-react';
 import { BottomSheet } from './BottomSheet';
+import { WorldSwitcher } from './WorldSwitcher';
 
 interface FakeAddress {
   id: string;
@@ -39,15 +43,10 @@ export function FeedTopBar() {
 
   return (
     <div className="flex flex-col gap-2 border-b border-border bg-card px-4 py-3">
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={showComingSoonToast}
-          aria-label="تبديل العالم"
-          className="flex shrink-0 items-center justify-center rounded-full border border-border p-2 text-foreground transition hover:bg-muted"
-        >
-          <Globe size={20} />
-        </button>
+      {/* اليوم 31: مقياس العرض الموحَّد على الصف الداخلي فقط — الخلفية/الحدود أعلاه تبقيان كاملتي
+          العرض (نمط شريط تنقّل قياسي: خلفية Full-bleed، محتوى مُمركَز). */}
+      <div className="mx-auto flex w-full max-w-2xl items-center gap-3 md:max-w-4xl xl:max-w-6xl">
+        <WorldSwitcher />
 
         <button
           type="button"
@@ -70,11 +69,13 @@ export function FeedTopBar() {
           >
             <Barcode size={20} />
           </button>
+          {/* اليوم 31: مخفي من lg فصاعداً — شريط البحث مدموج الآن في Header.tsx (HeaderSearchBar)
+              على الشاشات الكبيرة، تفادياً لازدواج نفس الوظيفة في مكانين. */}
           <button
             type="button"
             onClick={showComingSoonToast}
             aria-label="بحث"
-            className="rounded-full border border-border p-2 text-foreground transition hover:bg-muted"
+            className="rounded-full border border-border p-2 text-foreground transition hover:bg-muted lg:hidden"
           >
             <Search size={20} />
           </button>

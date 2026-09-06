@@ -1,7 +1,7 @@
 ---
 title: نظام التصميم (Design System)
-status: PROPOSED (الاتجاه العام + معمارية الثيمات متعددة العوالم §8 ACCEPTED من حيث المبدأ ومُنفَّذة تقنياً لديوان/ريف، القيم الدقيقة للألوان و5 العوالم الأخرى لا تزال PROPOSED؛ محور التفضيل الشخصي §8.6 IMPLEMENTED كبنية تحتية، اليوم 30)
-version: 1.5
+status: PROPOSED (الاتجاه العام + معمارية الثيمات متعددة العوالم §8 ACCEPTED من حيث المبدأ ومُنفَّذة تقنياً لديوان/ريف، القيم الدقيقة للألوان و5 العوالم الأخرى لا تزال PROPOSED؛ محور التفضيل الشخصي §8.6 IMPLEMENTED كبنية تحتية، اليوم 30؛ Responsive §7 IMPLEMENTED لخلاصة بيان تحديداً، اليوم 31)
+version: 1.6
 last_updated: 2026-09-06
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف، SALSABIL_CONSTITUTION.md §21, §30.2 (المصدر الأصلي)
@@ -90,7 +90,9 @@ source_of_truth: هذا الملف، SALSABIL_CONSTITUTION.md §21, §30.2 (ال
 
 ## 7. RTL و Mobile-First — Evidence: `IMPLEMENTED` (الإعداد التقني + مكوّنات حقيقية فعلية منذ اليوم 5)
 
-Next.js مُعَدّ باتجاه RTL افتراضي (`SALSABIL_CONSTITUTION.md §9`). **تصحيح (اليوم 14-16):** الجملة السابقة هنا ("لا مكونات واجهة حقيقية موجودة حتى الآن") كانت دقيقة وقت كتابتها (اليوم 6) لكنها أصبحت بالية — عشرات المكوّنات الحقيقية موجودة الآن (`CategoryCard`, `ProductCard`, `ProductOptions`, `CheckoutForm`, `OrderRow`, `MerchantLoginForm`, `AdminLoginForm`, `AdminMerchantRow`, `Header`)، كلها تتّبع RTL عبر Flexbox القياسي (`justify-between` يعكس ترتيب العناصر تلقائياً مع `dir="rtl"` بلا حاجة لـ`flex-row-reverse` صريح — مُتحقَّق منه حياً في `Header.tsx`، أول مكوّن تنقّل موحّد عبر كل صفحات `(reef)`). Mobile-first كتوجه عام (§32.3) يبقى غير مُختبَر صراحة على مقاسات شاشة متعددة حتى الآن — لا يزال `OPEN_QUESTION` عملياً، لا `IMPLEMENTED`. **تحديث (اليوم 26):** أول تحقُّق حي فعلي على Viewport موبايل حقيقي (390×844، `scripts/day26-feed-header-verify.ts`) — الصفحة الرئيسية تعمل صحيحاً على هذا المقاس تحديداً (RTL، تمرير أفقي فعلي لـ`HorizontalShelf`، `sticky` للتبويبات). **هذا لا يُغلِق الـ`OPEN_QUESTION`** — مقاس واحد فقط اختُبِر، لا "مقاسات شاشة متعددة" كما يتطلب النص الأصلي (تابلت/ديسكتوب/شاشات موبايل أصغر لم تُختبَر بعد).
+Next.js مُعَدّ باتجاه RTL افتراضي (`SALSABIL_CONSTITUTION.md §9`). **تصحيح (اليوم 14-16):** الجملة السابقة هنا ("لا مكونات واجهة حقيقية موجودة حتى الآن") كانت دقيقة وقت كتابتها (اليوم 6) لكنها أصبحت بالية — عشرات المكوّنات الحقيقية موجودة الآن (`CategoryCard`, `ProductCard`, `ProductOptions`, `CheckoutForm`, `OrderRow`, `MerchantLoginForm`, `AdminLoginForm`, `AdminMerchantRow`, `Header`)، كلها تتّبع RTL عبر Flexbox القياسي (`justify-between` يعكس ترتيب العناصر تلقائياً مع `dir="rtl"` بلا حاجة لـ`flex-row-reverse` صريح — مُتحقَّق منه حياً في `Header.tsx`، أول مكوّن تنقّل موحّد عبر كل صفحات `(reef)`). Mobile-first كتوجه عام (§32.3) يبقى غير مُختبَر صراحة على مقاسات شاشة متعددة حتى الآن — لا يزال `OPEN_QUESTION` عملياً، لا `IMPLEMENTED`. **تحديث (اليوم 26):** أول تحقُّق حي فعلي على Viewport موبايل حقيقي (390×844، `scripts/day26-feed-header-verify.ts`) — الصفحة الرئيسية تعمل صحيحاً على هذا المقاس تحديداً (RTL، تمرير أفقي فعلي لـ`HorizontalShelf`، `sticky` للتبويبات). هذا التحديث وحده لم يكن يُغلِق الـ`OPEN_QUESTION` — مقاس واحد فقط اختُبِر وقتها.
+
+**تحديث (اليوم 31، Responsive Pass):** تخطيط `md:`/`xl:` حقيقي (لا Hardcode لمقاس واحد) طُبِّق على كل مكوّنات خلاصة بيان (`Feed`/`PostCard`/`HorizontalShelf`/`BottomSheet`/`WorldSwitcher`/`FeedTopBar`/`FeedTabBar`/`Header`) — عمود واحد على الموبايل، عمودان من `md` (768px)، 3 أعمدة من `xl` (1280px). تحقُّق حي كامل ودائم (`scripts/day31-responsive-verify.ts`، 25/25) على **ثلاثة** أحجام حقيقية (375×667، 768×1024، 1440×900): لا انسكاب أفقي، عدد أعمدة الشبكة صحيح على كل حجم، `BottomSheet`/`WorldSwitcher` يعملان بلا كسر بصري أو تراكب على أي حجم. **هذا يُغلِق الـ`OPEN_QUESTION` جزئياً فقط — لخلاصة بيان (`/`) تحديداً**: بقية صفحات `(reef)` (سلة، Checkout، صفحة منتج، تتبّع طلب، صفحة قسم) لا تزال غير مُختبَرة على مقاسات متعددة، خارج نطاق موجّه اليوم 31 صراحة (`Feed`/`Bayan` فقط). `OPEN_QUESTION` يبقى مفتوحاً لتلك الصفحات تحديداً.
 
 ---
 
