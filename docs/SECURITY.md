@@ -1,27 +1,120 @@
 ---
 title: مرجع الأمن
 status: ACTIVE
-version: 1.5
-last_updated: 2026-09-05
+version: 1.6
+last_updated: 2026-09-06
 owner: المؤسس (أبوحتاب)
-source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md §4, §26 (المبدأ)
+source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md §4, §26 (المبدأ)، INVARIANTS.md (الحالة والدليل الفعلي القابل للتحقق لكل ثابت أمني)
 ---
 
-# مرجع الأمن
+> **تحديث 2026-09-06 (`CONSTITUTION-V2-BATCH2-ARCHITECTURE-SECURITY-DATABASE`):** إضافة §0 "Trust
+> Boundaries"، §0.1 "No Trust in Client"، §0.2 "No Security by UI"، وBLOCKER صريح على تسجيل الدخول
+> بلا كلمة مرور (يربط §1 أدناه). بنود قائمة (§3 Multi-Tenancy تحديداً) اختُصرت لإحالة مباشرة لـ
+> `INVARIANTS.md` بدل تكرار وصف التنفيذ — لا تغيير في الحقائق نفسها، فقط مكان سردها الكامل.
 
 ---
 
-## 1. Authentication — Evidence: `PROPOSED`
+## 0. Trust Boundaries — الحدود الفعلية بين الثقة وعدمها
 
-المزوَّد: Supabase Auth (مخطَّط، غير مفعَّل بعد فعلياً — لا صفحة تسجيل دخول موجودة، اليوم 4 من الخطة).
+Evidence: `IMPLEMENTED` (مُستخرَجة من التنفيذ الفعلي في `src/`، لا افتراضاً نظرياً)
 
-## 2. Authorization / RBAC — Evidence: `PARTIALLY_IMPLEMENTED`
+```
+Browser (Untrusted)
+   │  لا يُوثَق بأي شيء يصل من هنا: مدخلات نموذج، قيمة كوكي، role/tenant_id مُدَّعى، سعر/كمية
+   ▼
+Server Action (src/app/**/actions.ts)
+   │  التحقق الفعلي هنا: شكل/نوع المدخل عبر Zod (`src/core/kernel/validation/schemas.ts` +
+   │  مخططات محلية لكل action) — `egyptianPhoneSchema`, `uuidSchema`، إلخ (`ADR-014`). هذه طبقة
+   │  تحقق شكل (Validation)، لا قرار تفويض (Authorization) — الاثنان منفصلان عمداً.
+   ▼
+Service (core/modules/*/service.ts أو core/kernel/*/service.ts)
+   │  قرار التفويض الفعلي هنا: `assertActorCanAccessOrder()` (orders.service.ts، عزل مستأجرين،
+   │  `ADR-022` بند د)، `MerchantService.canAccessTenant()`/`KhalilService.hasRole()`، فحص دور
+   │  الجلسة صراحة في `transitionOrderAction` (دفاع مضاعف، `ADR-014`). **من هنا تحديداً يأتي كل
+   │  سعر/توفر مخزون/حالة طلب — الخادم يعيد حسابها دائماً، لا يقرأها من مدخل العميل** (`INV-SEC-001`).
+   ▼
+Repository (core/modules/*/repository.ts)
+   │  لا قرار تفويض هنا — طبقة وصول بيانات بحتة (استعلام/إدراج فقط). العزل الفعلي (Tenant/IDOR)
+   │  يجب أن يكون قد تم في طبقة Service قبل الوصول لهنا؛ الاستثناء البنيوي الوحيد الحالي: RLS مقفول
+   │  بالكامل على معظم الجداول (§ RLS في DATABASE.md) يعني أن `anon` لا يصل لهذه الطبقة أصلاً بلا
+   │  `service_role` — لكن `service_role` نفسه يتجاوز RLS بالكامل، فالعزل المنطقي يبقى مسؤولية
+   │  الـService لا الـRepository ولا RLS في هذا النمط.
+   ▼
+Database (Postgres/Supabase)
+   │  آخر خط دفاع بنيوي: قيود `CHECK` (`orders_status_check`، `quantity_available >= 0`)، قيود FK
+   │  (`user_personas.user_id → on delete restrict`)، RLS (نمطان — راجع `docs/DATABASE.md §6`).
+   │  هذه الطبقة لا "تعرف" من الفاعل منطقياً (لا صلاحيات دور) — فقط تفرض اتساق بيانات وعزل وصول خام.
+   ▼
+External Services (Supabase Storage، مستقبلاً: بوابات دفع/توصيل/رسائل)
+      لا خدمة خارجية حقيقية مُستهلَكة اليوم غير Supabase نفسها (`CashOnDeliveryProvider` لا يتصل
+      بأي طرف خارجي — راجع §8 أدناه). أي Adapter مستقبلي (VodafoneCash، Instapay...) يدخل هنا،
+      خلف واجهة `PaymentProvider` (`docs/ARCHITECTURE.md §4`) — لا اتصال مباشر من Service.
+```
 
-الأدوار الخمسة معرَّفة كـ `UserRole` في `khalil/types.ts`: `platform_admin`, `merchant_owner`, `merchant_manager`, `employee`, `customer`. **منطق التحقق موجود** (`KhalilService.hasRole()`) لكن **غير مربوط بأي مسار API أو صفحة فعلية بعد** — لا Middleware يستدعيه حالياً.
+**القاعدة الحاكمة لهذا المخطط:** كل انتقال من طبقة لأخرى أضيق ثقة من التي قبلها. أي كود جديد يتحقق
+من صلاحية/سعر/ملكية **بعد** طبقة Service (في Repository أو أبعد) يعني أن التحقق تأخر عن مكانه
+الصحيح — ليس خطأً بالضرورة (دفاع إضافي مقبول) لكنه لا يجوز أن يكون **الفحص الوحيد**.
 
-## 3. Multi-Tenancy Isolation — Evidence: `PARTIALLY_IMPLEMENTED` (اليوم 4)
+---
 
-المبدأ: `tenant_id` من الجلسة/JWT فقط، أبداً من طلب العميل. `products.tenant_id` **موجود فعلياً** ويُشير إلى `merchants.id` (`DATABASE.md §2-3`)، وعزل القراءة مُختبَر (`CatalogRepository.findProductsByTenant()`). **الفجوة المتبقية:** لا مصادقة حقيقية بعد، فـ`Session.tenantId` الذي يُفترَض أن يأتي من JWT لا يزال نوع TypeScript فقط بلا ربط فعلي بـSupabase Auth (`specs/identity/SPEC.md`) — التحقق منطقي (`MerchantService.canAccessTenant()`) لا مُفعَّل عبر مسار مصادقة حقيقي.
+## 0.1 No Trust in Client — القائمة الصريحة
+
+القيم التالية **دائماً** غير موثوقة عندما تصل من العميل (Browser)، بصرف النظر عمن يرسلها (زائر،
+تاجر مسجَّل دخول، حتى إدارة) — الخادم يعيد حسابها أو التحقق منها مباشرة من قاعدة البيانات، لا يُصدِّق
+القيمة المُرسَلة أبداً:
+
+| القيمة | لماذا غير موثوقة | من يعيد حسابها/التحقق منها | Evidence |
+|---|---|---|---|
+| `role` (دور المستخدم) | العميل قد يدَّعي دوراً لا يملكه | يُقرأ من `sessions` عبر `token` عشوائي فقط، أبداً من مدخل نموذج | `INV-AUTHZ-001` (`INVARIANTS.md`) |
+| `tenant_id` | العميل قد يدَّعي انتماءً لتاجر آخر | يُقرأ من الجلسة (`sessions.tenant_id`)، يُقارَن صراحة قبل أي قراءة/تعديل طلب | `INV-TEN-001` (`INVARIANTS.md`) |
+| السعر (`price`) | تلاعب مباشر بربحية التاجر/المنصة | `CatalogService.calculatePrice()` من الخادم دائماً؛ العميل لا يملك حتى حقلاً لإرساله (`CheckoutInput` بلا حقل سعر) | `INV-SEC-001` (`INVARIANTS.md`) |
+| المخزون (`stock`/توفر) | طلب كمية غير متوفرة فعلياً | `InventoryRepository.decrementIfAvailable()` — قراءة/تحديث ذرّي من الخادم، لا ثقة بادعاء توفر من العميل | `INV-INV-001` (`INVARIANTS.md`) |
+| حالة الطلب (`status`) | تخطي انتقالات آلة الحالة | `ORDER_TRANSITIONS`/`ORDER_TRANSITION_ACTORS` (`orders/types.ts`) تُفرَض في الخادم، مع قيد `CHECK` مطابق في DB كدفاع ثانٍ | `INV-ORD-001` (`INVARIANTS.md`) |
+| أي مُعرِّف مورد فرعي (`itemId`, `orderId`...) | انتحال وصول لمورد لا يملكه الفاعل (IDOR) | فحص انتماء صريح للمعرّف الأب قبل التنفيذ (`cartService.removeItem`)، أو سياق فاعل إلزامي في التوقيع نفسه (`assertActorCanAccessOrder`) | `INV-SEC-002`, `INV-TEN-001` (`INVARIANTS.md`) |
+
+**لا تفصيل تنفيذي إضافي هنا عمداً** — كل قيمة أعلاه تحمل Invariant موثَّقاً بدليله الكامل (كود +
+اختبار + حالة `ENFORCED`/`PARTIAL`/إلخ) في `INVARIANTS.md`؛ هذا الجدول فهرس فقط لضمان عدم نسيان أي
+منها، لا مصدر التفصيل.
+
+---
+
+## 0.2 No Security by UI
+
+**إخفاء عنصر في الواجهة ليس Authorization.** زر مخفي، رابط غير معروض، أو تبويب لا يظهر لدور معيّن —
+كل هذه إجراءات تجربة مستخدم (UX)، لا حماية. **كل عملية حساسة تُحمى في الخادم** (طبقة Service، راجع
+§0 أعلاه)، بصرف النظر عمّا تعرضه الواجهة أو تخفيه. مثال ملموس قائم فعلياً في هذا المشروع:
+`transitionOrderAction` يتحقق صراحة أن دور الجلسة ضمن أدوار التاجر المعروفة (`ADR-014`) **حتى لو**
+لم تعرض الواجهة أصلاً زر انتقال حالة لدور غير مخوَّل — التحقق الخادمي هو الحماية الفعلية الوحيدة،
+لا غياب الزر من الشاشة.
+
+---
+
+## 1. Authentication — Evidence: `PARTIALLY_IMPLEMENTED`
+
+المزوَّد النهائي المخطَّط: Supabase Auth (`PROPOSED`، غير مفعَّل بعد — لا صفحة تسجيل دخول بمعنى
+Auth حقيقية). **الموجود فعلياً اليوم:** تسجيل دخول تاجر/إدارة بالهاتف وحده بلا كلمة مرور
+(`MerchantService.loginOwnerByPhone`/`AdminService.loginByPhone`)، عبر جلسة مخصَّصة (`sessions`،
+`ADR-012`/`ADR-013`) لا Supabase Auth.
+
+> **🚫 BLOCKER صريح — خطورة `HIGH` (لا `OPEN_QUESTION` غامضة):** تسجيل الدخول بلا كلمة مرور
+> (`INV-AUTHN-001` في `INVARIANTS.md`، حالته `WAIVED`) **مقبول حصراً** لتاجر/إدارة تجريبيَّين
+> واحدَين فقط، بشرط صريح موثَّق مسبقاً (`ADR-012`, `ADR-013`): **يجب إغلاقه (كلمة مرور/OTP/Supabase
+> Auth كاملة) قبل تسجيل أي تاجر ثانٍ حقيقي أو حساب `platform_admin` ثانٍ.** بلا هذا الإغلاق، أي
+> طرف يعرف رقم هاتف تاجر/إدارة نشط يستطيع انتحاله بالكامل (تغيير حالة طلبات، تفعيل/تعطيل تجار — لا
+> قراءة فقط). راجع `DD-001` في `docs/DECISIONS.md` (Decision Debt، `Blocking: YES`) — هذا البند
+> **يمنع** توسّع آمن لعدد التجار/حسابات الإدارة، لا مجرد سؤال معلَّق بلا أثر عملي.
+
+## 2. Authorization / RBAC — Evidence: راجع `INV-AUTHZ-001` (`INVARIANTS.md`) للدليل الحالي
+
+الأدوار الخمسة معرَّفة كـ `UserRole` في `khalil/types.ts`: `platform_admin`, `merchant_owner`, `merchant_manager`, `employee`, `customer`. `KhalilService.hasRole()`/`canAccessTenant()` مربوطان فعلياً اليوم بمسارات حقيقية (تسجيل دخول تاجر/إدارة، `assertActorCanAccessOrder`، دفاع الدور الصريح في `transitionOrderAction`) — **لا يزال بلا Middleware مركزي واحد يفرض الدور على كل مسار** (كل نطاق يتحقق بنفسه داخل `service.ts`). راجع `INV-AUTHZ-001` للنطاق الدقيق المُثبَت وغير المُثبَت.
+
+## 3. Multi-Tenancy Isolation — Evidence: راجع `INV-TEN-001` (`INVARIANTS.md`) للتفاصيل والدليل الحالي
+
+المبدأ (`CONSTITUTION §4` بند 3): `tenant_id` من الجلسة فقط، أبداً من طلب العميل — لا يُكرَّر
+تفصيل التنفيذ/الاختبار/الفجوات هنا، **راجع `INV-TEN-001` في `INVARIANTS.md`** لحالته الفعلية
+(`PARTIAL` اليوم — الآلية الأساسية مُثبَتة، دوال القوائم الجماعية غير مغطاة بدليل مباشر، راجع
+`INV-TEN-001` للنطاق الدقيق). الجلسة نفسها (`sessions.token`) عشوائية لا JWT حقيقي بعد — لا Supabase
+Auth مفعَّلة (§1 أعلاه).
 
 ## 4. JWT — Evidence: `PROPOSED`
 
@@ -64,6 +157,12 @@ Supabase يصدر JWT تلقائياً عبر Auth. **لم يُستخدَم فع
 
 لا بيانات حساسة في `metadata` (لا Token جلسة، لا كلمة مرور — غير موجودة أصلاً). راجع `src/core/modules/audit/`.
 
+**⚠️ راجع `INV-AUDIT-001` (`INVARIANTS.md`) — حالته `VIOLATED` جزئياً:** الادعاء الدستوري الحرفي
+("كل تحوّل مخزون... يُسجَّل"، `CONSTITUTION §4` بند 5) أوسع من التنفيذ الفعلي هنا — خصم/استرجاع
+المخزون الناجح لا يُكتب في `audit_log` مباشرة، فقط فشل الاسترجاع التعويضي. مُسجَّل كـ`DD-003` في
+`docs/DECISIONS.md` (قرار مؤسس معلَّق: هل `order_items`/`order_status_history` كافيان كتتبع غير
+مباشر، أم يُبنى `inventory_audit` صريح).
+
 ## 10. حماية البيانات / Secrets — Evidence: `IMPLEMENTED`
 
 مفاتيح Supabase في `.env.local`، مُستثناة من Git عبر `.gitignore` (`.env*.local`) — **تم التحقق فعلياً في اليوم 2.**
@@ -82,6 +181,8 @@ Supabase يصدر JWT تلقائياً عبر Auth. **لم يُستخدَم فع
 **قيد موثَّق صراحة (لا تجاهل صامت):** لا ينجو من إعادة تشغيل الخادم أو تعدد النسخ (Serverless/عدة خوادم) — مقبول
 مؤقتاً لمرحلة تجربة تاجر واحد على خادم واحد. **يجب** إعادة تقييمه (Redis/DB) قبل إنتاج حقيقي متعدد الخوادم — بند
 صريح في `docs/ROADMAP.md`. لا نطاق آخر (السلة، الطلبات، الكتالوج) محمي بتحديد معدل بعد — خارج نطاق اليوم.
+راجع `INV-RATE-001` (`INVARIANTS.md`، حالته `PARTIAL`) و`DD-002` (`docs/DECISIONS.md`، `BLOCKER`
+موحَّد مع قفل `inFlightCheckouts` — راجع `docs/ARCHITECTURE.md §12` مبدأ 7) للدليل والقرار المعلَّق.
 
 ## 13. عدم الثقة في بيانات العميل — Evidence: `CONSTITUTION`, `IMPLEMENTED` جزئياً
 

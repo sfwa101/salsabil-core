@@ -1,11 +1,15 @@
 ---
 title: مرجع قاعدة البيانات
 status: ACTIVE
-version: 1.11
-last_updated: 2026-09-05
+version: 1.12
+last_updated: 2026-09-06
 owner: المؤسس (أبوحتاب) + Claude
 source_of_truth: Supabase Project الفعلي (للجداول المنفَّذة) + هذا الملف (للتخطيط)
 ---
+
+> **تحديث 2026-09-06 (`CONSTITUTION-V2-BATCH2-ARCHITECTURE-SECURITY-DATABASE`):** إضافة §3.1
+> "الجدول المركزي الموسَّع" (تصنيف كل جدول قائم عبر ثمانية أبعاد)، §9 "Schema Change Policy"، §10
+> "Known Indexing Gaps". لا تغيير على أي DDL موجود — توثيقي بحت.
 
 # مرجع قاعدة البيانات
 
@@ -432,6 +436,41 @@ Supabase SQL Editor (`scripts/day23-bayan-schema.sql`، نفس قيد عدم و�
 
 ---
 
+## 3.1 الجدول المركزي الموسَّع — كل جدول `IMPLEMENTED` عبر ثمانية أبعاد
+
+> Evidence: `IMPLEMENTED` (Code Inspection مباشر لـDDL §3 أعلاه، 2026-09-06). **`Data Classification`
+> تستخدم أربع فئات فقط بالتصميم** (`PUBLIC` قراءة عامة آمنة، `TENANT_PRIVATE` خاصة بطرف محدد —
+> تاجر أو عميل/زائر، لا بالضرورة عبر عمود `tenant_id` حرفياً، `FINANCIAL` تتضمن مبالغ/أسعار مجمَّدة،
+> `AUTH_SECRET` هوية/جلسة/صلاحيات) — عمود `Tenant Scoped؟` منفصل تماماً ويُجيب حرفياً: هل الجدول
+> يحمل عمود `tenant_id` يُقيِّد الوصول بتاجر مُحدَّد؟ لا تخلط بين العمودين.
+
+| الجدول | Owner Domain | Tenant Scoped؟ | Data Classification | RLS Pattern | FKs الفعلية | Indexes الفعلية | Delete Policy | Audit Required؟ |
+|---|---|---|---|---|---|---|---|---|
+| `users` | خليل (Khalil) | لا | `AUTH_SECRET` (الهاتف = بيانات اعتماد الدخول الفعلية) | قراءة الذات (`auth.uid()=id`) — **معطَّلة عملياً**، §6 | — | `PK(id)`, `UNIQUE(phone)` | غير محسوم (`OPEN_QUESTION`، §7 Soft/Hard Delete) | جزئي — `auth.login_success`/`auth.login_failed` في `audit_log` فقط، لا كل تعديل |
+| `categories` | Catalog | لا | `PUBLIC` | النمط 1 (قراءة عامة) | `parent_id → categories` | `PK(id)`, `UNIQUE(slug)` | غير موثَّق صراحة | لا |
+| `products` | Catalog | **نعم** (`tenant_id`) | `PUBLIC` (القراءة)، `tenant_id` نفسه بيانات عزل | النمط 1 | `category_id → categories`, `tenant_id → merchants` (nullable) | `PK(id)` فقط — **`tenant_id` بلا فهرس، راجع §10** | غير موثَّق صراحة | لا |
+| `merchants` | Merchant | لا (هو كيان التاجر نفسه) | `TENANT_PRIVATE` | النمط 2 (قفل كامل منذ اليوم 10، `ADR-012`) | `owner_id` (بلا FK صريح موثَّق — تعريف الجدول نفسه `INFERRED`، §3) | `PK(id)`, `UNIQUE(slug)` | غير موثَّق صراحة | جزئي — `merchant.activated`/`merchant.deactivated` فقط |
+| `inventory` | Catalog | **نعم** (عبر `product_id → merchants` بشكل غير مباشر) | `PUBLIC` (قراءة الكمية) | النمط 1 (قراءة)؛ الكتابة عبر `service_role` (`ADR-022`) | `product_id → products` (هو `PK` نفسه) | `PK(product_id)` | غير موثَّق صراحة | لا — `INV-AUDIT-001` `VIOLATED` جزئياً (خصم/استرجاع ناجح بلا سجل مباشر) |
+| `carts` | Cart | لا (هوية عميل/زائر، لا تاجر) | `TENANT_PRIVATE` (خاصة بالعميل/الزائر) | النمط 2 (`ADR-008`) | `user_id → users` (nullable) | `PK(id)`, `UNIQUE(session_token)`, `UNIQUE(user_id)` | غير موثَّق صراحة | لا |
+| `cart_items` | Cart | يرث `carts` | `TENANT_PRIVATE` | النمط 2 | `cart_id → carts` (**cascade**), `product_id → products` | `PK(id)` فقط — **`cart_id` بلا فهرس منفصل، راجع §10** | `cart_id`: cascade | لا |
+| `orders` | Orders | **نعم** (`tenant_id`) | `FINANCIAL` | النمط 2 (`ADR-009`) | `user_id → users`, `tenant_id → merchants` | `PK(id)` فقط — **`tenant_id` و`user_id` بلا فهرس، راجع §10** | غير موثَّق صراحة | نعم (`order_status_history`) |
+| `order_items` | Orders | يرث `orders` | `FINANCIAL` (`unit_price_snapshot` مجمَّد) | النمط 2 | `order_id → orders` (**cascade**), `product_id → products` | `PK(id)` فقط — **`order_id` بلا فهرس منفصل، راجع §10** | `order_id`: cascade | جزئي — عبر `order_status_history`، لا سجل مباشر لبنود الطلب نفسها |
+| `order_status_history` | Orders | يرث `orders` | `TENANT_PRIVATE` (سجل تشغيلي) | النمط 2 (`ADR-010`) | `order_id → orders` (**cascade**), `actor_id → users` (nullable) | `PK(id)`, `order_status_history_order_id_idx` | `order_id`: cascade | نعم — هو نفسه سجل التدقيق |
+| `sessions` | خليل (Khalil) | Nullable (تاجر) / `null` (إدارة/عميل) | `AUTH_SECRET` | النمط 2 (`ADR-012`) | `user_id → users`, `tenant_id → merchants` (nullable), `active_persona_id → user_personas` (nullable) | `PK(token)`, `sessions_user_id_idx` | غير موثَّق صراحة (حذف يدوي فقط عبر `destroySession`) | جزئي — محاولات الدخول فقط، لا كل إنشاء/إبطال جلسة |
+| `audit_log` | Audit | لا (نطاق منصّة عام) | `TENANT_PRIVATE` (بيانات تشغيلية/أمنية حساسة) | النمط 2 (`ADR-014`) | `actor_id → users` (nullable) | `PK(id)`, `audit_log_entity_idx`, `audit_log_created_at_idx` | غير موثَّق صراحة | هو نفسه سجل التدقيق |
+| `worlds` | خليل (Context Engine) | لا | `AUTH_SECRET` (صلاحيات/هوية — تأكيد مؤسس صريح، `ADR-018`) | النمط 2 | — | `PK(id)`, `UNIQUE(slug)` | غير موثَّق صراحة | لا |
+| `user_personas` | خليل (Context Engine) | لا | `AUTH_SECRET` | النمط 2 (`ADR-018`) | `user_id → users` (**restrict**، `ADR-020`), `world_id → worlds` | `PK(id)`, فهرسان جزئيان (`user_personas_default_per_world_uidx`, `user_personas_one_default_uidx`) | `user_id`: **restrict** | لا |
+| `posts` | بيان (Bayan) | لا (`world_scope`، لا `tenant_id`) | `PUBLIC` (المنشورة فقط، `is_published=true`) | النمط 1 (`ADR-021`) | `world_scope → worlds`, `category_id → categories` | `PK(id)`, `posts_priority_created_idx`, `posts_post_type_idx` | غير موثَّق صراحة | لا |
+| `post_media` | بيان (Bayan) | لا | `PUBLIC` (عزل المسودات بطبقة تطبيق لا RLS، راجع §6) | النمط 1 (`using(true)`) | `post_id → posts` (**cascade**) | `PK(id)`, `post_media_post_id_idx` | `post_id`: cascade | لا |
+| `post_products` | بيان (Bayan) | لا | `PUBLIC` | النمط 1 (`using(true)`) | `post_id → posts` (**cascade**), `product_id → products` | `PK(id)`, `post_products_post_id_idx` | `post_id`: cascade | لا |
+
+**"غير موثَّق صراحة" في عمود Delete Policy** يعني: لا `ON DELETE` صريح في الـDDL المسجَّل في §3 —
+يتصرف Postgres افتراضياً كـ`NO ACTION` (يرفض الحذف إن وُجد صف مرتبط)، **لكن هذا لم يُسجَّل بعد
+كقرار معماري صريح** بنفس انضباط `user_personas.user_id` (`ADR-020`) — فجوة توثيقية معروفة، لا خطراً
+تشغيلياً فورياً (لا كود يحذف صفوف `users`/`merchants`/`orders`/... اليوم).
+
+---
+
 ## 4. الجداول — CONCEPTUAL (مخطَّطة في الدستور، لم تُبنَ)
 
 راجع `SALSABIL_CONSTITUTION.md §8` للقائمة الكاملة. أبرزها بالترتيب المتوقع للبناء:
@@ -506,3 +545,59 @@ Supabase SQL Editor (`scripts/day23-bayan-schema.sql`، نفس قيد عدم و�
 لا نظام Migrations رسمي (مثل Supabase CLI migrations) مُفعَّل بعد — كل SQL نُفِّذ يدوياً عبر SQL Editor. **مخاطرة موثَّقة:** هذا مقبول في مرحلة Vertical Slice الأولى، لكن يجب الانتقال لـ Migrations رسمية قبل أي عمل فريق متعدد أو قبل الإنتاج (اليوم 13، §23). يُضاف كبند في `docs/ROADMAP.md`.
 
 **أول خطوة فعلية (اليوم 17، `ADR-017`):** `scripts/schema-setup.sql` يُعيد بناء المخطط الكامل (الاثني عشر جدولاً، بترتيب Foreign Keys صارم) كملف SQL واحد قابل للصق في مشروع Supabase جديد فارغ — يُستخدَم فعلياً لتأسيس بيئة `staging.reefam.com`. `scripts/seed-test-accounts.sql` (منفصل) يزرع حسابات/بيانات اختبار أولية بعده. **هذا ليس نظام Migrations رسمياً بعد** — لا تتبع نُسخ مخطط، لا `up`/`down`، لا أداة CLI مخصَّصة — فقط أول أثر ملموس نحوه بدل توثيق نظري فقط. راجع `ADR-017` للتفصيل الكامل، بما فيه توثيق أن أجزاءً من `schema-setup.sql` (RLS الفعلية على `categories`/`products`/`inventory`، شكل جدول `merchants`) إعادة بناء استنتاجية (`INFERRED`) لا نقلاً حرفياً موثَّقاً — لا نص SQL أصلي محفوظ لها في هذا المستودع.
+
+**⚠️ ملاحظة نطاق:** `schema-setup.sql` (اليوم 17) أُنشئ قبل `worlds`/`user_personas` (اليوم 19) و`posts`/`post_media`/`post_products` (اليوم 23) — أي بيئة جديدة كاملة تحتاج تطبيق `scripts/schema-setup.sql` ثم `scripts/day19-context-engine-schema.sql` ثم `scripts/day22-user-personas-fk-policy.sql` ثم `scripts/day23-bayan-schema.sql` بالترتيب، لا الاكتفاء بالأول (نفس الفجوة الموثَّقة أصلاً في `ADR-018`، §3 أعلاه).
+
+---
+
+## 9. Schema Change Policy — سياسة أي تغيير Schema مستقبلي
+
+> Evidence: `PROPOSED` (سياسة إجرائية جديدة، `2026-09-06` — لا تُغيِّر أي Migration سابقة بأثر رجعي).
+
+أي `migration` جديدة (سواء عبر SQL Editor يدوياً كما هو الحال اليوم، أو عبر أداة Migrations رسمية
+مستقبلاً — راجع `DD-005` أعلاه) **يجب** أن تُوثِّق الخمسة التالية **قبل** التنفيذ، بنفس مستوى
+التفصيل المُطبَّق فعلياً في كل `ADR` من `ADR-008` حتى `ADR-022`:
+
+1. **السبب (Reason)** — ما المشكلة/الميزة التي تتطلب هذا التغيير تحديداً، لا وصفاً عاماً.
+2. **الجداول المتأثرة (Affected Tables)** — قائمة صريحة، بما فيها أي جدول يتأثر بشكل غير مباشر (FK جديد يشير إليه، مثلاً).
+3. **التوافق العكسي (Backward Compatibility)** — هل الكود الحالي (قبل نشر التغيير) يستمر بالعمل بلا كسر إن طُبِّقت الـMigration أولاً؟ (نمط `ALTER TABLE ADD COLUMN nullable` المتَّبع فعلياً في `ADR-018`/`ADR-019` مثال آمن؛ `DROP COLUMN`/`ALTER ... NOT NULL` على عمود له بيانات حية يحتاج خطة توافق صريحة).
+4. **استراتيجية التراجع (Rollback Strategy)** — كيف تُلغى هذه الـMigration لو ظهر خطأ بعد التطبيق؟ (لا نظام Migrations رسمياً يوفر `down` تلقائياً اليوم، §8 أعلاه — التراجع اليوم SQL يدوي مقابل يُكتب مسبقاً، لا يُرتجَل وقت الحادثة).
+5. **تأثير الفهارس/RLS (Index/RLS Impact)** — هل يحتاج العمود/الجدول الجديد فهرساً (راجع أنماط الاستعلام الفعلية في `*.repository.ts` قبل الافتراض، وراجع §10 أدناه لفجوات قائمة فعلاً)؟ أي نمط RLS ينطبق (النمط 1 أم 2، راجع §1/§6) — **يُحسَم وقت التصميم، لا بعد النشر** (نفس قاعدة `docs/ARCHITECTURE.md §3.1`).
+
+**أي `ADR` مستقبلي يوثِّق Migration جديدة يجب أن يغطي هذه الخمسة صراحة** — غياب أي بند منها في
+الـADR نفسه يُعامَل كنقص توثيقي (`AGENTS.md §13` — No Silent State Change).
+
+---
+
+## 10. Known Indexing Gaps — فجوات الفهرسة المعروفة
+
+> Evidence: `IMPLEMENTED` (Code Inspection مباشر لكل DDL في §3 أعلاه مقابل أنماط الاستعلام الفعلية
+> في `*.repository.ts`، أُجري في هذه الدفعة، 2026-09-06). **⚠️ ملاحظة استمرارية مهمة:** هذه المهمة
+> كُلِّفت بنسخ "جدول الفهارس الخمسة المفقودة من تقرير التدقيق الشامل سابقاً" حرفياً. بحثاً مباشراً في
+> هذا المستودع (`docs/DECISIONS.md`, `docs/ROADMAP.md`, `INVARIANTS.md`, وكل ملف `.md` آخر) — **لا
+> يوجد أي ملف تقرير تدقيق محفوظ بهذا المحتوى فعلياً.** `FULL-ARCHITECTURE-SECURITY-AUDIT-001` نفسه
+> موصوف صراحة في `docs/DECISIONS.md → ADR-022` كـ"تقرير منفصل لا ملف في المستودع". القسم التالي
+> **تحليل مستقل جديد** أُجري الآن لنفس السؤال بالضبط (فهارس مفقودة على أعمدة FK تُستهلَك فعلياً في
+> استعلامات ساخنة)، **وليس نسخاً عن تقرير سابق** — راجع Task Report لهذه الدفعة تحت "Continuity Gaps
+> Found" للتفصيل الكامل لفجوة عدم بقاء تقارير التدقيق كملفات دائمة.
+
+Postgres **لا** يُنشئ فهرساً تلقائياً على عمود FK (بخلاف `PRIMARY KEY`/`UNIQUE`). الأعمدة الخمسة
+التالية مراجع FK فعلية، بلا فهرس مباشر، **وتُستهلَك فعلياً في استعلامات متكررة** (لا نظرية) عبر
+`*.repository.ts`:
+
+| # | العمود | الجدول | يُستهلَك في | الأثر التشغيلي المحتمل |
+|---|---|---|---|---|
+| 1 | `products.tenant_id` | `products` | `CatalogRepository.findProductsByTenant()` — كل تحميل بوابة تاجر لمنتجاته | Sequential Scan على كامل `products` عند نمو الكتالوج فعلياً (لا أثر ملحوظ اليوم بمنتج واحد) |
+| 2 | `orders.tenant_id` | `orders` | `OrdersRepository` خلف `getOrdersForTenant()` — أهم استعلام في بوابة التاجر ولوحة الإدارة | نفس الأثر، يتفاقم أسرع من `products` (الطلبات تتراكم زمنياً بخلاف الكتالوج) |
+| 3 | `orders.user_id` | `orders` | لا استهلاك مباشر اليوم (لا صفحة "طلباتي" للعميل)، لكن FK قائم ومرشَّح واضح لأول ميزة كهذه | لا أثر فعلي اليوم — فرصة إضافته الآن أرخص من إضافته بعد نمو بيانات حقيقي |
+| 4 | `cart_items.cart_id` | `cart_items` | `CartRepository` خلف `CartService.getSummary()` — يُستدعى في كل عرض سلة تقريباً (أعلى تردد استعلام في المشروع) | أعلى أولوية عملية من الأربعة الأخرى — أكثر مسار يُستدعى تكراراً في تجربة العميل الحالية |
+| 5 | `order_items.order_id` | `order_items` | `OrdersRepository` خلف `getOrderWithItems()`/`getOrderForCustomerView()` — كل عرض تفاصيل طلب (تاجر، إدارة، وصفحة تتبّع العميل الضيف) | يتفاقم مع كل طلب جديد يُضاف للجدول |
+
+**لماذا لم تُصلَح الآن:** هذه دفعة توثيقية بقيد `NO BEHAVIOR CHANGE` صريح — إضافة فهرس عملية DDL
+حقيقية على قاعدة حية (Migration، راجع §9 أعلاه)، خارج نطاق مهمة توثيق محض. **الخطر المتبقي:** منخفض
+عملياً اليوم (حجم بيانات تجريبي صغير في كل الجداول الخمسة)، يتصاعد تدريجياً مع نمو عدد الطلبات
+والمنتجات — لا خطر أمني، خطر أداء (Sequential Scan بدل Index Scan) عند نمو حقيقي. **لا `Decision
+Debt` جديد سُجِّل لهذا في `docs/DECISIONS.md` ضمن هذه الدفعة تحديداً** — ذلك الملف خارج نطاق هذه
+المهمة صراحة (راجع قيود المهمة أدناه)؛ يُوصى بتسجيله كـ`DD` في أول دفعة لاحقة تُخوَّل لمس
+`docs/DECISIONS.md` — موثَّق هنا بدل تركه صامتاً (`AGENTS.md §12`، No Silent Risk Acceptance)، وفي
+Task Report هذه الدفعة تحت Outstanding Risks.

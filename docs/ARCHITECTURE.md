@@ -1,11 +1,17 @@
 ---
 title: المعمارية التقنية
 status: ACTIVE
-version: 1.5
-last_updated: 2026-09-02
+version: 1.6
+last_updated: 2026-09-06
 owner: المؤسس (أبوحتاب) + Claude (معماري)
 source_of_truth: هذا الملف (تفصيل)، SALSABIL_CONSTITUTION.md §4-§5 (المبدأ)
 ---
+
+> **تحديث 2026-09-06 (`CONSTITUTION-V2-BATCH2-ARCHITECTURE-SECURITY-DATABASE`):** إضافة §10
+> "Architecture Boundaries" (حدود كل نطاق فعلي اليوم)، §11 "Event Model" (مبدأ فقط)، §12
+> "Automation Principles"، وتصحيح إحالات كانت تُضمِّن أرقاماً (عدد جداول/اختبارات) عرضة للانحراف —
+> استُبدلت بإحالة لمصدر الحقيقة الحي (`docs/DATABASE.md`, `INVARIANTS.md`, `docs/CHANGELOG.md`). لا
+> تعديل على أي قسم آخر خارج هذا.
 
 # المعمارية التقنية
 
@@ -73,8 +79,12 @@ src/
 ├── core/
 │   ├── kernel/          → محركات النواة (خليل، تيسير، حكيم...) — راجع DOMAIN_MAP.md
 │   │   ├── khalil/       → IMPLEMENTED — types.ts, khalil.service.ts (+ createSession/
-│   │   │                     validateSessionToken/destroySession/findUserByPhone، اليوم 10)،
-│   │   │                     khalil.repository.ts
+│   │   │                     validateSessionToken/destroySession/findUserByPhone، اليوم 10؛ +
+│   │   │                     ensureIndividualPersona/listActiveWorlds/findWorldBySlug/
+│   │   │                     findPersonaByUserAndWorld/createPersona، الأيام 19-21 — Context
+│   │   │                     Engine)، khalil.repository.ts — نقطة الوصول الوحيدة المسموحة لجداول
+│   │   │                     `users`/`sessions`/`worlds`/`user_personas`، مفروض آلياً عبر قاعدة
+│   │   │                     `no-direct-khalil-repository-access` (راجع §3.1)
 │   │   └── database/     → IMPLEMENTED
 │   │       ├── supabase-client.ts        → مفتاح anon، للقراءات العامة (categories/products/inventory)
 │   │       └── supabase-admin-client.ts  → مفتاح service_role (اليوم 7، ADR-008)، خادم فقط،
@@ -97,14 +107,28 @@ src/
 │   │   │                     (يستخدم supabase-admin-client، لا supabase-client العام)
 │   │   ├── payments/     → IMPLEMENTED جزئياً (اليوم 8) — PaymentProvider (واجهة) +
 │   │   │                     CashOnDeliveryProvider (التطبيق الوحيد الفعلي)
-│   │   └── orders/       → IMPLEMENTED (اليوم 8-11) — types.ts (ORDER_TRANSITIONS/
-│   │                         ORDER_TRANSITION_ACTORS كمصدر حقيقة لآلة الحالات)، orders.service.ts
-│   │                         (checkout, transitionStatus, getStatusHistory, getOrdersForTenant،
-│   │                         + getAllOrders/getRecentStatusHistory اليوم 11), orders.repository.ts
+│   │   ├── orders/       → IMPLEMENTED (الأيام 8-22) — types.ts (ORDER_TRANSITIONS/
+│   │   │                     ORDER_TRANSITION_ACTORS كمصدر حقيقة لآلة الحالات)، orders.service.ts
+│   │   │                     (checkout, transitionStatus, getStatusHistory, getOrdersForTenant،
+│   │   │                     getAllOrders/getRecentStatusHistory، getOrderForCustomerView؛ +
+│   │   │                     inFlightCheckouts قفل Single-Flight في-الذاكرة، ADR-022)،
+│   │   │                     orders.repository.ts
+│   │   ├── audit/        → IMPLEMENTED (اليوم 12، ADR-014) — سجل تدقيق عام (audit_log)، منفصل عن
+│   │   │                     order_status_history الخاص بدورة حياة الطلب وحدها
+│   │   └── bayan/        → IMPLEMENTED جزئياً (اليوم 23، ADR-021) — types.ts، bayan.service.ts
+│   │                         (listFeed, getPostProducts, replacePostMedia, setPostProducts,
+│   │                         scaleRecipeQuantities)، bayan.repository.ts (يستخدم عميلَي anon
+│   │                         وservice_role معاً — راجع §3.1). لا خلاصة عميل فعلية بعد (اليوم 27،
+│   │                         راجع docs/DOMAIN_MAP.md → بيان)
 │   ├── offline/          → دعم العمل بلا إنترنت — PROPOSED، لم يُبنَ بعد
-│   └── telemetry/        → سجل الأحداث والتدقيق — PROPOSED، لم يُبنَ بعد
+│   └── telemetry/        → سجل الأحداث والتدقيق المركزي (Event Ledger) — PROPOSED، لم يُبنَ بعد
+│                             (لا يُخلَط مع audit/ أعلاه، IMPLEMENTED فعلياً — راجع §11 Event Model)
 └── types/                → أنواع TypeScript مشتركة عبر النطاقات
 ```
+
+**عدد النطاقات (modules) والمحركات (kernel) الفعلي يتغيّر بسرعة أكبر من دورة تحديث هذا الملف — راجع
+`git ls src/core/modules` و`src/core/kernel` مباشرة، أو `docs/DOMAIN_MAP.md` للوصف الوظيفي الكامل
+لكل واحد، بدل الاعتماد على قائمة ثابتة هنا قد تنحرف.**
 
 ### 2.1 معمارية الثيمات متعددة العوالم — Evidence: `IMPLEMENTED` (الآلية)، `PROPOSED` (قيم 5 عوالم لم تُبنَ واجهاتها بعد)
 
@@ -202,9 +226,9 @@ ImportProvider (واجهة عامة، مقترحة من محادثة الاست�
 |---|---|---|
 | الواجهة الأمامية | Next.js (RTL) + TypeScript + Tailwind | `ACTIVE` |
 | منطق الخادم | Edge Functions / Node.js | `ACTIVE` |
-| قاعدة البيانات | Supabase (Postgres + Auth + Realtime + Storage) | `ACTIVE`, `IMPLEMENTED` (اتصال حقيقي، 11 جدولاً: users, categories, products, merchants, inventory, carts, cart_items, orders, order_items, order_status_history, sessions) |
-| الصلاحيات (RLS) | Postgres RLS | `IMPLEMENTED` — نمطان: قراءة عامة (categories/products/inventory) وقفل كامل عبر service_role (merchants/carts/cart_items/orders/order_items/order_status_history/sessions، اليوم 7-10) |
-| اختبارات آلية | Vitest (وحدة + تكامل ضد Supabase حقيقي) | `IMPLEMENTED` (اليوم 7-11) — 72 اختباراً إجمالياً. راجع `src/core/modules/{cart,orders,merchant,admin}/*.test.ts` |
+| قاعدة البيانات | Supabase (Postgres + Auth + Realtime + Storage) | `ACTIVE`, `IMPLEMENTED` (اتصال حقيقي — **عدد الجداول وتفاصيلها الحية تتغيّر بسرعة؛ `docs/DATABASE.md §3` هو مصدر الحقيقة الوحيد لهذا الرقم، لا يُكرَّر هنا بقيمة عرضة للانحراف**) |
+| الصلاحيات (RLS) | Postgres RLS | `IMPLEMENTED` — ثلاثة أنماط (قراءة عامة، قفل كامل عبر service_role، قراءة الذات معطَّلة عملياً) — راجع `docs/DATABASE.md §6` للجدول الكامل والحالة الفعلية لكل جدول |
+| اختبارات آلية | Vitest (وحدة + تكامل ضد Supabase حقيقي) | `IMPLEMENTED` — **عدد الاختبارات يتغيّر مع كل مهمة؛ راجع `docs/CHANGELOG.md` (آخر رقم موثَّق لكل يوم) بدل رقم ثابت هنا.** راجع `src/core/modules/*/*.test.ts` |
 | البحث | Meilisearch | `PROPOSED` (§9 دستور) — لم يُبنَ |
 | الدردشة | Supabase Realtime (المرحلة 1) | `PROPOSED` — لم يُبنَ بعد، مخطط §25 دستور |
 
@@ -246,5 +270,113 @@ ImportProvider (واجهة عامة، مقترحة من محادثة الاست�
 - ❌ Microservices فعلية
 - ❌ أي Adapter دفع/استيراد فعلي (الواجهات فقط مُصمَّمة)
 - ❌ محرك بحث منفصل (Meilisearch)
-- ❌ نظام الأحداث المركزي الكامل (Event Ledger) — الآن فقط `audit_log` أساسي مخطَّط، غير منفَّذ بعد
+- ❌ نظام الأحداث المركزي الكامل (Event Ledger) — `audit_log` (اليوم 12) و`order_status_history`
+  (اليوم 9) مُنفَّذان فعلياً كسجلَّي تدقيق، لكن ليسا سجل أحداث مركزياً بمعنى Event Ledger/Event
+  Bus عابر للنطاقات — راجع §11 أدناه
 - ❌ Rust أو Elixir بأي شكل
+
+---
+
+## 10. Architecture Boundaries — حدود كل نطاق فعلي اليوم
+
+> Evidence: `IMPLEMENTED` (الكود)، `DOCUMENTED_DECISION` (قواعد `dependency-cruiser`)، تقييم
+> "Extraction Readiness" أدناه هو **تحليل جديد أُجري في هذه الدفعة (2026-09-06)** اعتماداً على
+> `npm run arch:check` الفعلي، `docs/DOMAIN_MAP.md`، و`docs/DECISIONS.md` — **وليس نسخاً حرفياً عن
+> أي تقرير تدقيق سابق محفوظ كملف**، لأن لا ملف من هذا النوع موجود فعلياً في المستودع (راجع "فجوات
+> الاستمرارية" في Task Report دفعة `CONSTITUTION-V2-BATCH2` لتفصيل هذه النقطة). لكل نطاق بيانات
+> رئيسي (Domain) موجود فعلياً في `src/core/modules/`:
+
+### Catalog
+| | |
+|---|---|
+| Owns Data | `categories`, `products`, `inventory` |
+| Public Service Interface | `CatalogService.calculatePrice()`, `validateSelection()`/`validateOptions()`, `listAllProducts()` |
+| Allowed Dependencies | `catalog.repository.ts` → `supabase-client.ts` (anon) فقط |
+| Forbidden Dependencies | أي `repository.ts` نطاق آخر (`no-repository-cross-import`)، `khalil.repository.ts` مباشرة (`no-direct-khalil-repository-access`)، استيراد مباشر من `src/app`/`src/components` (`no-ui-importing-repository`) — الثلاثة مفروضة آلياً، راجع §3.1 |
+| Extraction Readiness | **MEDIUM** — ملكية حصرية للجداول مُتحقَّق منها آلياً (`arch:check`: 0 مخالفات)، ويُستهلَك حصراً عبر `CatalogService` من Cart/Orders/Bayan/Admin (`docs/DOMAIN_MAP.md`). **العائق:** `Orders.checkout()` يستدعي `calculatePrice()` بشكل متزامن ضمن نفس العملية بلا أي تجريد لاستدعاء شبكي، والتعويض عند الفشل (`ADR-009`) مصمَّم على افتراض قاعدة بيانات واحدة مشتركة — فصل Catalog كخدمة مستقلة يتطلب إعادة تصميم هذا التدفق أولاً |
+
+### Cart
+| | |
+|---|---|
+| Owns Data | `carts`, `cart_items` |
+| Public Service Interface | `CartService.getSummary()`, `clearCart()`, `addItem`/`removeItem`/`updateItemQuantity`, `getItemCountForSession()` |
+| Allowed Dependencies | `cart.repository.ts` → `supabase-admin-client.ts` (service_role، `ADR-008`)؛ يستدعي `CatalogService`/`InventoryService` عبر `service.ts` لا `repository.ts` مباشرة |
+| Forbidden Dependencies | نفس الثلاثة العامة أعلاه (§3.1) |
+| Extraction Readiness | **LOW** — هوية سلة الزائر (`session_token`) مربوطة بـ`src/proxy.ts` (`ADR-016`) على مستوى التوجيه (routing) نفسه، لا طبقة خدمة قابلة للفصل بسهولة. `Orders.checkout()` يقرأ ملخَّص Cart ثم يستدعي `clearCart()` كخطوة أخيرة ضمن تدفق متزامن واحد بلا تعويض لو فشل `clearCart()` بعد نجاح Orders في بيئة موزَّعة |
+
+### Orders
+| | |
+|---|---|
+| Owns Data | `orders`, `order_items`, `order_status_history` |
+| Public Service Interface | `OrdersService.checkout()`, `transitionStatus()`, `getStatusHistory()`, `getOrdersForTenant()`, `getAllOrders()`, `getRecentStatusHistory()`, `getOrderForCustomerView()`, `getOrderWithItems()` |
+| Allowed Dependencies | `orders.repository.ts` → `supabase-admin-client.ts`؛ ينسِّق (عبر `service.ts` فقط) `CatalogService`, `InventoryService`, `CartService`, `KhalilService`, `PaymentProvider` |
+| Forbidden Dependencies | تقسيم طلب واحد عبر أكثر من `tenant_id` (رفض صريح في الكود، `ADR-009`)؛ استيراد `repository.ts` نطاق آخر مباشرة (مفروض آلياً) |
+| Extraction Readiness | **LOW** — أكثر نطاق تنسيقاً في المشروع (يستدعي أربعة نطاقات أخرى بشكل متزامن ضمن عملية واحدة)، ويعتمد على قفل في-الذاكرة (`inFlightCheckouts`, `ADR-022`) وتعويض تطبيقي بدل معاملة DB حقيقية (`ADR-009`) — كلاهما يفترضان عملية Node واحدة ولا ينجوان من فصل هذا النطاق أو تشغيله على أكثر من نسخة خادم بلا إعادة تصميم (راجع `DD-002` في `docs/DECISIONS.md`) |
+
+### Merchant
+| | |
+|---|---|
+| Owns Data | `merchants` |
+| Public Service Interface | `MerchantService.loginOwnerByPhone()`, `validateSessionToken()`, `listAll()`, `setActiveStatus()`, `canAccessTenant()` |
+| Allowed Dependencies | `merchant.repository.ts` → `supabase-admin-client.ts` (`ADR-012`)؛ يستدعي `KhalilService` للجلسة (أبداً `khalil.repository.ts` مباشرة) |
+| Forbidden Dependencies | `khalil.repository.ts` مباشرة (مفروض آلياً)؛ أي `repository.ts` نطاق آخر |
+| Extraction Readiness | **MEDIUM** — ملكية حصرية لجدول `merchants`، تفويض نظيف للجلسة عبر خدمة Khalil فقط. **العائق:** `Orders.assertActorCanAccessOrder()` يقارن `tenant_id` داخل نفس العملية بلا أي واجهة شبكية للتحقق من ملكية تاجر |
+
+### Admin
+| | |
+|---|---|
+| Owns Data | لا شيء — نطاق تجميع (Aggregation/BFF) بلا جدول خاص، راجع `docs/DOMAIN_MAP.md → Admin` |
+| Public Service Interface | `AdminService.loginByPhone()`, `listMerchants()`, `setMerchantActiveStatus()` |
+| Allowed Dependencies | `KhalilService`, `MerchantService`, `OrdersService`, `BayanService`/`CatalogService` (لوحة منشورات، اليوم 24) — كلها عبر `service.ts` فقط |
+| Forbidden Dependencies | أي `repository.ts` مباشرة (مفروض آلياً)؛ تعديل عمولة تاجر أو حذفه، تسجيل تاجر جديد (قيد عمل صريح، غير مفروض آلياً — راجع `DD-006`) |
+| Extraction Readiness | **N/A** — لا يملك بيانات، فهو ليس مرشَّحاً لاستخراج بمعنى "خدمة مستقلة تملك جداولها"؛ هو طبقة تركيب فوق نطاقات أخرى بطبيعته |
+
+### Bayan
+| | |
+|---|---|
+| Owns Data | `posts`, `post_media`, `post_products` |
+| Public Service Interface | `BayanService.listFeed()`, `getPostProducts()`, `replacePostMedia()`, `setPostProducts()`, `scaleRecipeQuantities()`, `getIndividualsWorldId()` |
+| Allowed Dependencies | `bayan.repository.ts` → عميلا `supabase` (anon، قراءة عامة) **و** `supabase-admin-client.ts` (service_role، إدارة/مسودات) معاً — نمط مزدوج موثَّق (`ADR-021`)؛ يستدعي `khalilService.listActiveWorlds()` (عبر الخدمة، لا `khalil.repository.ts`) |
+| Forbidden Dependencies | قراءة مباشرة لجدولَي `products`/`categories` (لا تحدث فعلياً اليوم — تحقَّقتُ منه بحثاً مباشراً في `bayan.repository.ts`، 2026-09-06: لا استعلام واحد عليهما، فقط تخزين `product_id`/`category_id` كمعرّفات) |
+| Extraction Readiness | **MEDIUM-HIGH** — لا اعتماد فعلي على قراءة جداول نطاقات أخرى مباشرة، فقط معرّفات FK يحلّها المستهلك. **العائق الوحيد:** إخفاء محتوى المسودات لـ`post_media`/`post_products` منطق تطبيقي بحت في `bayan.service.ts`، لا RLS (`ADR-021`) — أي استخراج مستقبلي يجب أن ينقل هذا المنطق معه، لا افتراض أن قاعدة البيانات تفرضه |
+
+### خليل (Khalil)
+| | |
+|---|---|
+| Owns Data | `users`, `sessions`, `worlds`, `user_personas` |
+| Public Service Interface | `KhalilService` — `findUserByPhone`, `findOrCreateCustomerByPhone`, `createSession`, `validateSessionToken`, `destroySession`, `hasRole`, `canAccessTenant`, `ensureIndividualPersona`, `listActiveWorlds`, `findWorldBySlug`, `findPersonaByUserAndWorld`, `createPersona` |
+| Allowed Dependencies | `khalil.repository.ts` → `supabase-client.ts`/`supabase-admin-client.ts` |
+| Forbidden Dependencies | استيراد `khalil.repository.ts` من أي نطاق خارج `core/kernel/khalil/` — القاعدة الوحيدة المخصَّصة لنطاق بعينه في `.dependency-cruiser.cjs` (`no-direct-khalil-repository-access`)، لأن كل نطاق آخر (Merchant, Admin, Orders) يعتمد عليه لهوية المستخدم |
+| Extraction Readiness | **LOW** — أعلى درجة اعتماد مركزي في المشروع: كل مسار دخول/Checkout يستدعيه بشكل متزامن على المسار الحرج (hot path). فصله يفرض على كل نطاق آخر تحويل استدعاء هوية داخلي إلى استدعاء شبكي |
+
+---
+
+## 11. Event Model — مبدأ فقط، لا بناء
+
+**الحدث (Event) إشعار بأن الحالة تغيّرت، وليس مصدر الحقيقة.** مصدر الحقيقة هو حالة قاعدة
+البيانات/Domain نفسها (`orders.status`، `inventory.quantity_available`، إلخ) — لا أي حدث مُصدَر
+سابقاً يصف تلك الحالة. عند بناء أي نظام أحداث مركزي مستقبلي (Event Ledger/Event Bus، محرك النواة
+"الأحداث" §6 من `SALSABIL_CONSTITUTION.md`، أو أي تكامل مستقبلي لبرق/تيسير)، **يُلزَم هذا المبدأ**:
+قراءة الحالة الحالية تعود دائماً لمصدرها المباشر (الجدول/الخدمة)، لا لإعادة بناء الحالة من سجل
+أحداث متراكم كمصدر وحيد، ما لم يُقرَّر صراحة نمط Event Sourcing كقرار معماري منفصل موثَّق (`ADR`)
+لاحقاً — لا افتراضاً ضمنياً اليوم.
+
+**الحالة الفعلية اليوم:** لا نظام أحداث مركزي مبني (`❌` في §9 أعلاه). `order_status_history`
+و`audit_log` سجلا تدقيق (Audit Trail) — يوثقان أن حدثاً وقع، لا يُستهلَكان كمصدر حالة حي من أي كود
+اليوم (`orders.status` نفسه، لا آخر صف في `order_status_history`، هو ما تقرأه `transitionStatus()`
+والواجهات).
+
+---
+
+## 12. Automation Principles — سبع قواعد لأي أتمتة مستقبلية
+
+> مبادئ مختصرة تحكم أي أتمتة مستقبلية (Barq، Taysir، Hakim كمُنفِّذ لا مستشاراً فقط، إلخ) — ليست
+> وثيقة `AUTOMATION.md` كاملة، فقط القواعد السبع الحاكمة.
+
+1. **Idempotent دائماً** — تنفيذ الأتمتة أكثر من مرة بنفس المدخلات يجب أن ينتج نفس النتيجة، لا آثاراً مضاعفة.
+2. **Observable** — كل تنفيذ يترك أثراً قابلاً للملاحظة (سجل/تدقيق) يوضح ماذا حدث، متى، ولماذا.
+3. **Retryable** — فشل مؤقت يُعاد المحاولة بأمان، بلا إنتاج نتيجة مضاعفة (يعتمد مباشرة على مبدأ 1).
+4. **سلوك فشل صريح (Explicit failure behavior)** — كل أتمتة تُحدَّد سلفاً كيف تتصرف عند الفشل (توقف/تراجع/تنبيه بشري) — لا فشلاً صامتاً يُكتشَف لاحقاً بالصدفة.
+5. **لا تتجاوز Authorization أبداً** — أي فحص تفويض يخضع له فاعل بشري ينفّذ نفس العملية، تخضع له الأتمتة بلا استثناء.
+6. **لا تُعدِّل حالة مالية بلا تفويض Domain صريح** — امتداد مباشر لـ`SALSABIL_CONSTITUTION.md §4` بند 4 (حكيم استشاري بحق نقض بشري في المراحل الأولى) — لا أتمتة تنفّذ تحويلاً مالياً أو خصماً بلا موافقة صريحة من منطق النطاق المالك (Domain)، لا من الأتمتة نفسها.
+7. **لا تعتمد على In-Memory State للعمليات الدائمة** — أي أتمتة تُنفَّذ عبر أكثر من طلب/عملية لا يجوز أن تعتمد صحتها على حالة محفوظة في ذاكرة عملية واحدة. **مثال حي فعلي قائم اليوم يوضح بالضبط لماذا هذا المبدأ ضروري لا نظري:** `INV-ORD-002` (`INVARIANTS.md`) وقفل `inFlightCheckouts` في-الذاكرة (`ADR-022`) — مصنَّف `PARTIAL` لا `ENFORCED` تحديداً لأنه لا ينجو من تعدد نسخ خادم (Serverless/multi-instance)، وموثَّق كـ`DD-002` (`docs/DECISIONS.md`) كـBLOCKER صريح يمنع أي نشر إنتاج متعدد الخوادم حتى استبداله بقفل موزَّع. أي أتمتة مستقبلية تكرر نفس النمط (قفل/عدّاد Map محلي) سترث نفس القيد بالضبط.
