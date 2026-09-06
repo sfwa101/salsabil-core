@@ -1,7 +1,7 @@
 ---
 title: سجل التغييرات
 status: ACTIVE
-version: 1.21
+version: 1.22
 last_updated: 2026-09-06
 owner: Claude (تلقائي مع كل مهمة كبيرة)
 source_of_truth: هذا الملف + Git log
@@ -12,6 +12,57 @@ source_of_truth: هذا الملف + Git log
 > يُسجَّل هنا فقط التغييرات المهمة (معمارية، قواعد أعمال، قاعدة بيانات، أمان، UX، قرارات، خارطة طريق) — لا كل commit صغير.
 
 ---
+
+## 2026-09-06 — BAYAN-CLOSEOUT-UI-GAPS: إغلاق BottomNav + UI اختيار الثيم الشخصي
+
+> بعد اعتماد إغلاق دفعة بيان (اليوم 32)، طلب المؤسس إغلاق بندَي `RE-EVALUATE` الوحيدين بقرار صريح
+> نهائي — بناء حقيقي الآن، لا مزيد من التأجيل. **مراجعة عادية كافية** — تركيب واجهة فوق قدرات
+> موجودة فعلاً (`persistPersonalTheme`/`persistPersonalMode` من اليوم 30)، بلا لمس مصادقة/RBAC/
+> RLS/بيانات مالية/تزامن مخزون حقيقي (الرحلة التجريبية في التحقُّق تستهلك مسار Checkout القائم
+> بلا تعديل عليه). خارج Guardian Matrix الإلزامية. `AGENTS.md`/`INVARIANTS.md`/`docs/DECISIONS.md`
+> لم تُلمَس بتعليمة صريحة.
+
+- `src/components/BottomNav.tsx` (جديد) — تنقّل سفلي حقيقي، 4 وجهات: **الرئيسية** (`/`)، **الأقسام**
+  (`/categories`، صفحة جديدة — لا صفحة قائمة أقسام كاملة كانت موجودة، تصفّح الأحياء اليوم فقط عبر
+  `StoryBar` الأفقي في الخلاصة؛ تعكس `[category]/page.tsx` بنيوياً، تستهلك
+  `catalogService.listCategories()` الموجودة أصلاً)، **طلباتي** (`button` لا `Link` — يقرأ
+  `localStorage` وقت النقر عبر `src/lib/last-order.ts` الجديد، يوجّه لآخر `/order/{id}` محفوظ على
+  هذا الجهاز أو لحالة فارغة `/orders` الجديدة إن لم يوجد)، **حسابي** (`/account`، صفحة جديدة —
+  تستضيف `PersonalThemeSheet.tsx` أدناه، لا بيانات حساب حقيقية لعرضها لعدم وجود مصادقة عميل بعد).
+- `src/components/ScrollHideBar.tsx` — `prop` اختياري جديد `edge?: 'top' | 'bottom'` (افتراضي
+  `'top'`، **بلا أي تغيير سلوك لأي استدعاء قائم**) — `BottomNav.tsx` يستهلك نفس منطق تتبّع
+  `scrollY`/`requestAnimationFrame` القائم عبر `edge="bottom"` (`fixed bottom-0` بدل `sticky top-0`،
+  اتجاه إخفاء `translate-y-full` بدل `-translate-y-full`) بدل إعادة بناء آلية منفصلة — يُغلِق فجوة
+  "BottomNav غير موجود" المكتشفة يوم 28 (`RE-EVALUATE` من تقرير اليوم 32).
+- `src/lib/last-order.ts` (جديد) — "آخر طلب محفوظ على هذا الجهاز" عبر `localStorage` فقط (نفس
+  فلسفة `src/lib/personal-theme.ts`، لا حساب/تسجيل دخول للعميل الضيف). `src/components/CheckoutForm.tsx`
+  يستدعي `saveLastOrderId(order.id)` قبل التوجيه لصفحة التتبّع مباشرة بعد نجاح `submitCheckoutAction`.
+- `src/components/PersonalThemeSheet.tsx` (جديد) — نقطة الدخول الوحيدة لاختيار الثيم الشخصي، تُغلِق
+  فجوة "لا UI لاختياره" المكتشفة يوم 30 (`RE-EVALUATE` من تقرير اليوم 32). زر "مظهر التطبيق" يفتح
+  `BottomSheet.tsx` القائم يعرض 4 ثيمات (`Object.values(PERSONAL_THEMES)`) × فاتح/داكن، ينادي
+  `persistPersonalTheme`/`persistPersonalMode`/`readStoredPersonalTheme`/`readStoredPersonalMode`
+  (`src/lib/personal-theme.ts`، موجودة فعلياً منذ اليوم 30 — **لا منطق تخزين/تطبيق جديد، تركيب
+  واجهة فقط**) مباشرة عند كل اختيار، تطبيق فوري بلا زر "حفظ" منفصل. يُركَّب في `src/app/(reef)/account/page.tsx`.
+- `src/app/(reef)/layout.tsx` — تركيب `<BottomNav />` بعد `{children}` (نفس مكان تركيب `Header`) +
+  `pb-20` على غلاف المحتوى لمنع تغطية `BottomNav` (الآن `fixed bottom-0`) لآخر عنصر في أي صفحة.
+- **اكتشاف حي أثناء التحقُّق (بيئة تطوير فقط، لا تأثير على production):** مؤشر تطوير Next.js
+  الافتراضي (`bottom-left`) يتعارض دائماً مع تبويب "حسابي" (الزاوية نفسها في RTL) ويحجبه عن النقر.
+  `next.config.ts` مُحدَّث (`devIndicators.position: 'top-right'`) — تغيير بيئة تطوير بحت، صفر أثر
+  على البناء الإنتاجي.
+- **تحقُّق حي كامل** (`scripts/bayan-closeout-ui-gaps-verify.ts`، جديد ودائم، viewport هاتف حقيقي
+  390×844) — **12/12 نجحت**: `BottomNav` ظاهر بعناصره الأربعة؛ إخفاء/إظهار فعلي عند التمرير (نفس
+  فحص `translate` المحسوب من اليوم 28)؛ "الأقسام" يعرض أقساماً حقيقية بروابط صحيحة؛ "طلباتي" بلا
+  طلب محفوظ يوجّه لحالة فارغة حقيقية؛ **رحلة شراء حقيقية واحدة كاملة** (منتج نشط حقيقي → سلة →
+  Checkout → طلب حقيقي) تثبت أن `CheckoutForm.tsx` يحفظ `order.id` فعلياً في `localStorage` (فحص
+  مباشر، لا افتراض)، ثم "طلباتي" بعدها يوجّه مباشرة لنفس الطلب بالضبط؛ اختيار ثيم شخصي (نسائي/داكن)
+  يُطبَّق فوراً (`--sb-pt-primary` المحسوب يطابق `personal-theme-registry.ts` حرفياً) ويبقى بعد
+  إعادة التحميل؛ صفر أخطاء Console. تنظيف ذاتي كامل مُتحقَّق منه مباشرة (حذف الطلب الحقيقي — يحذف
+  `order_items`/`order_status_history` تلقائياً بـ`cascade`، استرجاع الكمية المخصومة من المخزون
+  الحقيقي +1، حذف سلة/منشورات الاختبار).
+- `npm run typecheck`/`arch:check`/`test:unit` (126/126) نظيفة. Grep تدقيقي شامل أكّد صفر Hex خارج
+  `theme-registry.ts`/`personal-theme-registry.ts`/`globals.css` (بلا تغيير).
+- **إعلان صريح:** هذا يُغلِق الفجوتين الوحيدتين المتبقيتين من مراجعة إغلاق دفعة بيان (اليوم 32) —
+  راجع `docs/ROADMAP.md` للبند المحدَّث.
 
 ## 2026-09-06 (اليوم 32) — بيان (Bayan): إغلاق نهائي شامل للدفعة (BAYAN-HOME-FEED-001)
 

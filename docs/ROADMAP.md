@@ -1,7 +1,7 @@
 ---
 title: خارطة الطريق
 status: ACTIVE
-version: 1.28
+version: 1.29
 last_updated: 2026-09-06
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTION.md §23 (الخطة الأصلية + تصحيح 14→18 يوماً)
@@ -63,8 +63,15 @@ source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTI
 > المتبقي المُعلَن صراحة (لا نسيان):** الهوية البصرية `slug: bayan` (`docs/UI_UX_SYSTEM.md §8.4`)
 > غير مُستخدَمة في صفحة الخلاصة نفسها (تبقى `data-world="reef"`)؛ `OPEN_QUESTION-001`/`002`
 > (`docs/DOMAIN_MAP.md`) غير محسومين؛ مقاسات الشاشة المتعددة مُختبَرة لخلاصة بيان (`/`) تحديداً لا
-> كل صفحات `(reef)`؛ لا مكوّن UI لاختيار الثيم الشخصي بعد. راجع `docs/DOMAIN_MAP.md → بيان` للتفصيل
-> الكامل.
+> كل صفحات `(reef)`؛ ~~لا مكوّن UI لاختيار الثيم الشخصي بعد~~ **أُغلِق، راجع
+> `BAYAN-CLOSEOUT-UI-GAPS` أدناه.** راجع `docs/DOMAIN_MAP.md → بيان` للتفصيل الكامل.
+>
+> **✅ BAYAN-CLOSEOUT-UI-GAPS (2026-09-06):** إغلاق صريح لبندَي `RE-EVALUATE` الوحيدين من مراجعة
+> اليوم 32 — `BottomNav.tsx` حقيقي (4 وجهات: الرئيسية/الأقسام/طلباتي/حسابي) + `PersonalThemeSheet.tsx`
+> (نقطة الدخول الوحيدة لاختيار الثيم الشخصي، تستهلك `persistPersonalTheme`/`persistPersonalMode`
+> من اليوم 30). تحقُّق حي كامل 12/12 (`scripts/bayan-closeout-ui-gaps-verify.ts`). **هذا يُغلِق
+> الفجوتين الوحيدتين المتبقيتين من كامل دفعة بيان** — النطاق المتبقي الحقيقي الآن يقتصر على: الهوية
+> البصرية `slug: bayan`، `OPEN_QUESTION-001`/`002`، ومقاسات شاشة بقية `(reef)` (بند `ATTB` أصلاً).
 
 | 23 | بيان (Bayan) — الباك-إند: `posts`/`post_media`/`post_products` + `bayan.repository.ts`/`bayan.service.ts` (BAYAN-HOME-FEED-001) | `DONE` — DDL يدوي عبر SQL Editor، RLS بالنمط 1 (قراءة عامة للمنشور فقط)، تحقُّق حي 8/8 (قفل RLS للمسودة، محاولات إدراج فاشلة FK×2+CHECK، حذف متسلسل). 20 اختباراً وحدة جديدة، المجموع 103 وحدة/140 إجمالاً. لا واجهة بعد — راجع `ADR-021` |
 | 24 | بيان (Bayan) — لوحة إدارة المنشورات: `src/app/admin/posts/` (قائمة/إنشاء/تعديل) + `PostForm.tsx` (BAYAN-HOME-FEED-001) | `DONE` — أول نموذج إنشاء متعدد الحقول في التطبيق (صفوف صور ديناميكية بمنتقي رابط none/product/recipe + بانِ وصفة متداخل، + إدارة الرف الأفقي `post_products` مستقلة تماماً — أُضيفت لاحقاً بنفس اليوم رداً على سؤال مؤسس صريح لسد فجوة كانت ستظهر عند اليوم 27)، `actions.ts`+Zod+row-component (`AdminPostRow.tsx`) بنفس نمط `OrderRow.tsx`/`AdminMerchantRow.tsx`. 11 اختباراً وحدة جديدة، المجموع 114 وحدة/151 إجمالاً. تحقُّق حي كامل عبر متصفح حقيقي + Supabase حقيقي (`scripts/day24-bayan-admin-posts-verify.ts`، 14/14). راجع `docs/CHANGELOG.md` |

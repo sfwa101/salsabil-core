@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { submitCheckoutAction } from '@/app/(reef)/checkout/actions';
+import { saveLastOrderId } from '@/lib/last-order';
 
 export function CheckoutForm() {
   const router = useRouter();
@@ -30,6 +31,10 @@ export function CheckoutForm() {
       setError(result.error);
       return;
     }
+
+    // "طلباتي" في BottomNav (BAYAN-CLOSEOUT-UI-GAPS) يقرأ هذا لاحقاً للعودة المباشرة لآخر طلب —
+    // localStorage فقط، لا حساب عميل حقيقي يُخزَّن الطلب تحته
+    saveLastOrderId(result.order.id);
 
     // صفحة تتبّع الطلب هي مصدر عرض "تأكيد الطلب" الوحيد الآن — رابط دائم قابل للحفظ/المشاركة
     // (اليوم 14)، بدل حالة محلية تُفقَد عند إعادة تحميل الصفحة
