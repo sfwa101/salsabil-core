@@ -1,7 +1,7 @@
 ---
 title: سجل التغييرات
 status: ACTIVE
-version: 1.16
+version: 1.17
 last_updated: 2026-09-06
 owner: Claude (تلقائي مع كل مهمة كبيرة)
 source_of_truth: هذا الملف + Git log
@@ -10,6 +10,51 @@ source_of_truth: هذا الملف + Git log
 # سجل التغييرات
 
 > يُسجَّل هنا فقط التغييرات المهمة (معمارية، قواعد أعمال، قاعدة بيانات، أمان، UX، قرارات، خارطة طريق) — لا كل commit صغير.
+
+---
+
+## 2026-09-06 (اليوم 28) — بيان (Bayan): Product/Recipe Bottom Sheet (BAYAN-HOME-FEED-001)
+
+> **مراجعة عادية كافية لهذه المهمة** — نفس تصنيف اليوم 27 (خارج Guardian Matrix الإلزامية). لا حوكمة
+> جديدة فُتحت — `AGENTS.md`/`INVARIANTS.md`/`docs/DECISIONS.md` لم تُلمَس صراحة بطلب المؤسس.
+>
+> **فجوة معمارية مكتشفة ومُبلَّغة صراحة (لا افتراض):** الموجّه ذكر إخفاء/إظهار "BottomNav" ضمن سلوك
+> التمرير، لكن لا يوجد أي مكوّن تنقّل سفلي (Bottom Navigation) في الكود أو التوثيق حتى الآن — لم يُبنَ
+> في أي يوم سابق. أُبلِغ المؤسس عبر AskUserQuestion؛ القرار: تجاهل BottomNav الآن، تطبيق السلوك فقط
+> على العناصر الموجودة فعلياً (FeedTopBar/StoryBar/FeedTabBar). `Header.tsx` استُثني أيضاً من نفس
+> السلوك — قرار نطاق منفصل، راجع تعليق `ScrollHideBar.tsx` للتفصيل الكامل.
+
+- **إغلاق Outstanding Risk #1 من تقرير اليوم 27** — النقر على صورة carousel مرتبطة (`post_media.link`)
+  يفتح الآن Product/Recipe Bottom Sheet فعلياً. صور `type: 'none'` تبقى بلا تفاعل كما كانت.
+- `src/components/ProductSheetContent.tsx` (جديد، `'use client'`) — يجلب `Product` الكامل بالمعرّف
+  عبر `getProductByIdAction` الجديدة (`post_media.link.productId` قد يشير لأي منتج، ليس بالضرورة
+  ضمن رف `post_products` نفسه)، ثم يُغلِّف `ProductOptions.tsx` **دون أي تعديل عليه** — نفس التسعير/
+  الإضافة للسلة الحقيقيين بالضبط.
+- `src/components/RecipeSheetContent.tsx` (جديد، `'use client'`) — عدّاد عدد أفراد العائلة يستدعي
+  `scaleRecipeIngredientsAction` (تمريرة رقيقة جديدة لـ`bayanService.scaleRecipeQuantities` القائمة
+  من اليوم 23، لا تكرار للمنطق) عند كل تغيير — نفس نمط `ProductOptions.tsx` مع
+  `calculatePriceAction`. إضافة فردية لكل مكوّن أو "أضف الكل" (حلقة تسلسلية على `addToCartAction`
+  القائمة، لا endpoint دفعة واحدة في السلة). منتجات المكوّنات ذات خيار حجم إلزامي تُضاف بالحجم الأول
+  تلقائياً (نفس تهيئة `ProductOptions.tsx` الافتراضية) بدل فشل صامت. **إصلاح أثناء التحقُّق الحي:**
+  "أضف الكل" كانت تعرض "أُضيف الكل ✓" حتى لو فشلت إضافة مكوّن فعلياً (مثلاً نفاد مخزونه) — صُحِّح
+  ليعكس النجاح الحقيقي فقط (حالة "error" صريحة + رسالة توجّه لمراجعة الأزرار الفردية عند فشل جزئي).
+- `src/app/(reef)/feed-actions.ts` — ثلاث دوال جديدة: `getProductByIdAction`، `getProductsByIdsAction`
+  (تمريرتان رقيقتان لـ`catalogService` القائمة)، `scaleRecipeIngredientsAction` (تمريرة لـ
+  `bayanService.scaleRecipeQuantities`).
+- `src/components/ScrollHideBar.tsx` (جديد، `'use client'`) — يُثبِّت أطفاله (`sticky top-0`)
+  ويُخفيهم بالتمرير للأسفل / يُظهرهم بالتمرير للأعلى (فرق `scrollY` بين نبضتين، `requestAnimationFrame`
+  لا مكتبة خارجية). يُغلِّف `FeedTopBar`+`StoryBar`+`FeedTabBar` معاً في `page.tsx` كوحدة واحدة.
+  `FeedTabBar.tsx` فقد `sticky top-0 z-10` الخاصة به (أصبحت مسؤولية الغلاف الأب لا هذا المكوّن).
+  **اكتشاف تقني أثناء التحقُّق الحي:** Tailwind v4 يطبّق `translate-y-*` عبر خاصية CSS منفصلة
+  `translate` (longhand) لا `transform` نفسها — أي فحص مستقبلي لحالة هذا الإخفاء يجب قراءة
+  `getComputedStyle(el).translate`، لا `.transform` (يبقى "none" ثابتاً بصرف النظر عن الحالة الفعلية).
+- **تحقُّق حي كامل** (`scripts/day28-product-recipe-sheet-verify.ts`، 13/13، viewport هاتف حقيقي
+  390×844): وضع "منتج" ووضع "وصفة" (تغيير عدّاد العائلة يُعيد حساب الكمية فعلياً، "أضف الكل" على
+  الكمية المُحدَّثة) كلاهما ينتهيان بفحص مباشر عبر `service_role` على `carts`/`cart_items` — لا
+  افتراض نجاح من رسالة الواجهة فقط. سلوك التمرير مُتحقَّق منه عبر `getComputedStyle().translate`.
+  ذاتي التنظيف بالكامل (منتج مكوّن مؤقت + سجل مخزون مؤقت + منشورات + سلة الاختبار، جميعها تُحذَف).
+  `npm run build`/`typecheck`/`arch:check` نظيفة، 126 اختباراً وحدة (بلا تغيير — ميزة UI/تكامل خدمات
+  قائمة، مُتحقَّق منها حياً لا وحدياً).
 
 ---
 

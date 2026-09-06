@@ -1,7 +1,7 @@
 ---
 title: المعمارية التقنية
 status: ACTIVE
-version: 1.6
+version: 1.8
 last_updated: 2026-09-06
 owner: المؤسس (أبوحتاب) + Claude (معماري)
 source_of_truth: هذا الملف (تفصيل)، SALSABIL_CONSTITUTION.md §4-§5 (المبدأ)
@@ -115,11 +115,13 @@ src/
 │   │   │                     orders.repository.ts
 │   │   ├── audit/        → IMPLEMENTED (اليوم 12، ADR-014) — سجل تدقيق عام (audit_log)، منفصل عن
 │   │   │                     order_status_history الخاص بدورة حياة الطلب وحدها
-│   │   └── bayan/        → IMPLEMENTED جزئياً (اليوم 23، ADR-021) — types.ts، bayan.service.ts
+│   │   └── bayan/        → IMPLEMENTED (اليوم 23-28، ADR-021) — types.ts، bayan.service.ts
 │   │                         (listFeed, getPostProducts, replacePostMedia, setPostProducts,
 │   │                         scaleRecipeQuantities)، bayan.repository.ts (يستخدم عميلَي anon
-│   │                         وservice_role معاً — راجع §3.1). لا خلاصة عميل فعلية بعد (اليوم 27،
-│   │                         راجع docs/DOMAIN_MAP.md → بيان)
+│   │                         وservice_role معاً — راجع §3.1). الخلاصة الفعلية (اليوم 27) وProduct/
+│   │                         Recipe Bottom Sheet (اليوم 28) يستهلكانه عبر
+│   │                         src/app/(reef)/feed-actions.ts (تركيب صفحة مع catalogService، لا
+│   │                         تعديل على bayan.service.ts نفسه) — راجع docs/DOMAIN_MAP.md → بيان
 │   ├── offline/          → دعم العمل بلا إنترنت — PROPOSED، لم يُبنَ بعد
 │   └── telemetry/        → سجل الأحداث والتدقيق المركزي (Event Ledger) — PROPOSED، لم يُبنَ بعد
 │                             (لا يُخلَط مع audit/ أعلاه، IMPLEMENTED فعلياً — راجع §11 Event Model)
