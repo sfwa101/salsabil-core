@@ -25,6 +25,10 @@ export class CatalogService {
     return catalogRepository.findProductById(id);
   }
 
+  async getProductsByIds(ids: string[]): Promise<Product[]> {
+    return catalogRepository.findProductsByIds(ids);
+  }
+
   /**
    * يتحقق من أن الاختيار (الحجم/الإضافات) صالح لهذا المنتج
    */

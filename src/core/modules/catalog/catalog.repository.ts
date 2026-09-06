@@ -81,6 +81,17 @@ export class CatalogRepository {
     return (data as ProductRow[]).map(toProduct);
   }
 
+  // دفعة واحدة لعدة معرّفات — نفس نمط findPostMediaByPostIds في bayan.repository.ts (اليوم 23).
+  // مستهلكها الأول: خلاصة بيان (اليوم 27) لحل رف المنتجات المرتبط بمنشور (post_products) لمنتجات
+  // كاملة. is_active=true بنفس قاعدة findAllProducts — لا تُعرَض منتجات موقوفة في رف الخلاصة حتى لو
+  // بقي ربطها في post_products من قِبل الأدمن.
+  async findProductsByIds(ids: string[]): Promise<Product[]> {
+    if (ids.length === 0) return [];
+    const { data, error } = await supabase.from('products').select('*').in('id', ids).eq('is_active', true);
+    if (error) throw error;
+    return (data as ProductRow[]).map(toProduct);
+  }
+
   async findProductsByTenant(tenantId: string): Promise<Product[]> {
     const { data, error } = await supabase.from('products').select('*').eq('tenant_id', tenantId);
     if (error) throw error;

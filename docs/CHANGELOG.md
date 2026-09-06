@@ -1,8 +1,8 @@
 ---
 title: سجل التغييرات
 status: ACTIVE
-version: 1.15
-last_updated: 2026-09-05
+version: 1.16
+last_updated: 2026-09-06
 owner: Claude (تلقائي مع كل مهمة كبيرة)
 source_of_truth: هذا الملف + Git log
 ---
@@ -12,6 +12,62 @@ source_of_truth: هذا الملف + Git log
 > يُسجَّل هنا فقط التغييرات المهمة (معمارية، قواعد أعمال، قاعدة بيانات، أمان، UX، قرارات، خارطة طريق) — لا كل commit صغير.
 
 ---
+
+## 2026-09-06 (اليوم 27) — بيان (Bayan): الخلاصة الفعلية — Feed rendering (BAYAN-HOME-FEED-001)
+
+> **مراجعة عادية كافية لهذه المهمة** — Feed rendering ليست ضمن Guardian Matrix الإلزامية (`AGENTS.md
+> §17`، لا مصادقة/RBAC/RLS/بيانات مالية/تزامن مخزون مُمَسّة). لا حوكمة جديدة فُتحت — `AGENTS.md`/
+> `INVARIANTS.md`/`docs/DECISIONS.md` لم تُلمَس صراحة بطلب المؤسس.
+
+- **`bayan.service.listFeed()` لم يُعدَّل إطلاقاً** — كان مكتملاً فعلياً منذ اليوم 23 (`.range()`
+  مُرقَّم الصفحات، `hasMore`، ترتيب `priority desc, created_at desc`، RLS `is_published=true` يستبعد
+  المسودات بنيوياً). عمل اليوم 27 الفعلي كله في طبقة العرض + قدرة كتالوج واحدة جديدة صغيرة.
+- `catalog.repository.ts`/`catalog.service.ts` — إضافة `findProductsByIds`/`getProductsByIds` (دفعة
+  واحدة، نفس نمط `findPostMediaByPostIds` في `bayan.repository.ts`، `is_active=true` بنفس قاعدة
+  `findAllProducts`) — أول قدرة كتالوج تُختبَر وحدياً في هذا المستودع (`catalog.repository.test.ts`،
+  `catalog.service.test.ts` جديدان؛ بقية دوال الكتالوج القائمة تبقى بلا اختبار وحدة، خارج نطاق هذا
+  اليوم إغلاقها).
+- `src/app/(reef)/feed-actions.ts` (جديد، `'use server'`) — `loadFeedPageAction` يركّب بين
+  `bayanService.listFeed()` و`catalogService.getProductsByIds()` على مستوى الصفحة (نفس نمط
+  `orders.service.ts` يستدعي `catalogService` مباشرة، `ADR-021`) — بيان نفسه لا يعرف تفاصيل `Product`
+  الكاملة، طبقة العرض فقط تحتاجها. يُستدعى من `page.tsx` (Server Component) وأيضاً من `Feed.tsx`
+  (Client Component) كـServer Action عادي — نفس نمط استدعاء `actions.ts` من مكوّنات `'use client'`
+  القائم في كل صفحات `(reef)` الأخرى.
+- `src/components/Feed.tsx` (جديد، `'use client'`) — أول استخدام لـ`IntersectionObserver` في هذا
+  المستودع (عنصر "حارس" فارغ أسفل القائمة، `rootMargin: '400px'` لتحميل استباقي قبل وصول القاع
+  فعلياً) بدل مستمع `scroll` يدوي. يحافظ على حالة الخلاصة (`posts`/`products`/`hasMore`) ويُعيد
+  ضبطها كاملة عند تغيّر التبويب (`?tab=`، `page.tsx` يمرّر صفحة أولى جديدة). رفوف الريلز النائبة
+  تتخلل القائمة كل 4 منشورات (`REEL_SHELF_INTERVAL` — رقم بصري تعسّفي).
+- `src/components/PostCard.tsx` (جديد، `'use client'`) — carousel صور بالتمرير+snap (تتبّع الفهرس
+  النشط عبر `onScroll`، لا مكتبة خارجية)، مؤشرات نقاط، caption، ثم رف المنتجات المرتبط
+  (`post_products`) عبر `HorizontalShelf`/`ProductCard` الموجودين أصلاً (كل عنصر رف بعرض `w-36
+  shrink-0` — نفس نمط `StoryBar` في تغليف عنصر الرف بعرضه الخاص بدل تعديل `ProductCard` المشترك).
+  **أول `<img>` فعلي يُصيَّر في واجهة سلسبيل بالكامل** — `Product.imageUrl`/`PostMedia.imageUrl` كانا
+  مخزَّنين منذ اليوم 3/23 بلا أي استهلاك بصري قبل الآن؛ `<img>` عادي لا `next/image` (لا
+  `remotePatterns` مُعدَّة في `next.config.ts`، ولا مبرر لتعديلها الآن لصورة رابط خارجي حر).
+  **استثناء نطاق صريح:** لا نقر على الصورة نفسها يستهلك `post_media.link` (`ProductLink`/
+  `RecipeLink`) — العناصر الأربعة المطلوبة صراحة لليوم 27 (carousel/مؤشرات/caption/رف) لا تتضمن
+  تفاعل الصورة نفسها؛ استهلاك `link` (فتح صفحة منتج أو نافذة وصفة بحساب `scaleRecipeQuantities`)
+  مؤجَّل عمداً لتفادي توسيع نطاق غير مطلوب، لا نسياناً صامتاً.
+- `src/components/ReelsShelfPlaceholder.tsx` (جديد) — رف نائب بصري بحت (6 مربّعات + أيقونة تشغيل)،
+  نفس فلسفة "قريباً" في `FeedTopBar` (اليوم 26): لا بيانات ريل حقيقية (`post_media` بلا حقل فيديو
+  أصلاً)، لا وظيفة نقر.
+- `src/app/(reef)/page.tsx` — يقرأ `searchParams.tab` (Next.js 16 async API) ويُمرِّره كـ`postType`
+  لـ`loadFeedPageAction`. **`<CategoryCard>` وقائمة "أحياء ريف المدينة" حُذفتا بالكامل** — الخلاصة
+  تحلّ محلهما فعلياً كما أُعلِن صراحة في تعليق اليوم 26 نفسه؛ تصفّح الأحياء يبقى متاحاً عبر
+  `StoryBar` أعلى الصفحة. `src/components/CategoryCard.tsx` حُذِف (كان يُستخدَم هنا حصراً، لا مستهلك
+  آخر — `git grep` تأكيدي قبل الحذف).
+- **تحقُّق حي كامل** (`scripts/day27-feed-rendering-verify.ts`، 11/11): يزرع 13 منشوراً منشوراً
+  بأولويات فريدة مُضخَّمة عمداً (`1,000,000+`، تتصدَّر أي محتوى حقيقي قائم بأولويات عادية بلا حاجة
+  لفحص القاعدة أولاً) + منشور مسودة بأعلى أولوية من الجميع (`2,000,000` — لو ظهر لكان أول عنصر
+  بلا منازع). يتحقق من الثلاثة المطلوبة صراحة في الموجّه: الصفحة الأولى تعرض 10 بالضبط بالترتيب
+  الصحيح، التمرير للأسفل يحمّل البقية (13) فعلياً عبر `IntersectionObserver`، المسودة لا تظهر
+  إطلاقاً قبل أو بعد التمرير. ذاتي التنظيف بالكامل (القاعدة عادت لصفر صفوف `posts`، مُتحقَّق منه
+  مباشرة). `npm run build`/`typecheck`/`arch:check` نظيفة، 126 اختباراً وحدة (كان 120، +6 جديدة).
+
+
+---
+
 
 ## 2026-09-05 (اليوم 26) — بيان (Bayan): إعادة هيكلة ترويسة العميل (BAYAN-HOME-FEED-001)
 
