@@ -167,3 +167,152 @@ body {
   background-color: var(--sb-background);
   color: var(--sb-foreground);
 }
+
+/*
+ * محور التفضيل الشخصي للثيمات (اليوم 30، BAYAN-HOME-FEED-001) — مستقل تماماً عن [data-world]
+ * أعلاه. القيم المصدر الكامل: src/config/personal-theme-registry.ts — يجب أن يبقيا متطابقين.
+ *
+ * نطاق CSS Variables منفصل كلياً (بادئة --sb-pt- بدل --sb-) مطبَّق على html[data-personal-theme]
+ * [data-personal-mode] لا [data-world] — لو استُخدمت أسماء --sb- نفسها هنا لكسبها [data-world]
+ * المتداخل دائماً (معرَّف مباشرة على عنصر أقرب)، وهو بالضبط الخلط الممنوع بين "أي عالم" و"أي تفضيل
+ * شخصي للألوان". لا مستهلك واجهة بعد يقرأ --sb-pt-* (بنية تحتية فقط، نفس نمط [data-world] يوم 6).
+ */
+html[data-personal-theme] {
+  font-size: calc(16px * var(--sb-pt-font-scale, 1));
+}
+
+/* رجالي — slug: masculine */
+html[data-personal-theme='masculine'][data-personal-mode='light'] {
+  --sb-pt-background: #f5f7fa;
+  --sb-pt-foreground: #1e2a38;
+  --sb-pt-card: #ffffff;
+  --sb-pt-card-foreground: #1e2a38;
+  --sb-pt-primary: #5b7c99;
+  --sb-pt-primary-foreground: #ffffff;
+  --sb-pt-secondary: #b8c4ce;
+  --sb-pt-secondary-foreground: #1e2a38;
+  --sb-pt-accent: #8fa6b8;
+  --sb-pt-accent-foreground: #1e2a38;
+  --sb-pt-muted: #e7ecef;
+  --sb-pt-muted-foreground: #5a6b78;
+  --sb-pt-border: #d6dee3;
+  --sb-pt-font-scale: 1;
+}
+html[data-personal-theme='masculine'][data-personal-mode='dark'] {
+  --sb-pt-background: #1b222b;
+  --sb-pt-foreground: #e6ebef;
+  --sb-pt-card: #232c37;
+  --sb-pt-card-foreground: #e6ebef;
+  --sb-pt-primary: #7fa1bc;
+  --sb-pt-primary-foreground: #0f1620;
+  --sb-pt-secondary: #3a4653;
+  --sb-pt-secondary-foreground: #e6ebef;
+  --sb-pt-accent: #5b7c99;
+  --sb-pt-accent-foreground: #ffffff;
+  --sb-pt-muted: #2a333e;
+  --sb-pt-muted-foreground: #9aa7b2;
+  --sb-pt-border: #333f4b;
+  --sb-pt-font-scale: 1;
+}
+
+/* نسائي — slug: feminine */
+html[data-personal-theme='feminine'][data-personal-mode='light'] {
+  --sb-pt-background: #fdf6f7;
+  --sb-pt-foreground: #3a2229;
+  --sb-pt-card: #ffffff;
+  --sb-pt-card-foreground: #3a2229;
+  --sb-pt-primary: #d98a9b;
+  --sb-pt-primary-foreground: #ffffff;
+  --sb-pt-secondary: #f3c9cf;
+  --sb-pt-secondary-foreground: #3a2229;
+  --sb-pt-accent: #e7a9b6;
+  --sb-pt-accent-foreground: #3a2229;
+  --sb-pt-muted: #f7e8ea;
+  --sb-pt-muted-foreground: #7a5960;
+  --sb-pt-border: #f0d8dc;
+  --sb-pt-font-scale: 1;
+}
+html[data-personal-theme='feminine'][data-personal-mode='dark'] {
+  --sb-pt-background: #2b1d21;
+  --sb-pt-foreground: #f6e8ea;
+  --sb-pt-card: #35252a;
+  --sb-pt-card-foreground: #f6e8ea;
+  --sb-pt-primary: #e39caa;
+  --sb-pt-primary-foreground: #2b1d21;
+  --sb-pt-secondary: #55393f;
+  --sb-pt-secondary-foreground: #f6e8ea;
+  --sb-pt-accent: #d98a9b;
+  --sb-pt-accent-foreground: #2b1d21;
+  --sb-pt-muted: #3e2a2f;
+  --sb-pt-muted-foreground: #b98f96;
+  --sb-pt-border: #4a333a;
+  --sb-pt-font-scale: 1;
+}
+
+/* شبابي — slug: youth */
+html[data-personal-theme='youth'][data-personal-mode='light'] {
+  --sb-pt-background: #f6f9fa;
+  --sb-pt-foreground: #21243a;
+  --sb-pt-card: #ffffff;
+  --sb-pt-card-foreground: #21243a;
+  --sb-pt-primary: #3fb6b0;
+  --sb-pt-primary-foreground: #ffffff;
+  --sb-pt-secondary: #b79cf0;
+  --sb-pt-secondary-foreground: #2b2050;
+  --sb-pt-accent: #6bd6ce;
+  --sb-pt-accent-foreground: #12332f;
+  --sb-pt-muted: #e9f3f3;
+  --sb-pt-muted-foreground: #506a6c;
+  --sb-pt-border: #d8ecea;
+  --sb-pt-font-scale: 1;
+}
+html[data-personal-theme='youth'][data-personal-mode='dark'] {
+  --sb-pt-background: #171b2a;
+  --sb-pt-foreground: #e8eef0;
+  --sb-pt-card: #1f2438;
+  --sb-pt-card-foreground: #e8eef0;
+  --sb-pt-primary: #59d4cb;
+  --sb-pt-primary-foreground: #0d2422;
+  --sb-pt-secondary: #9b7fe0;
+  --sb-pt-secondary-foreground: #ffffff;
+  --sb-pt-accent: #3fb6b0;
+  --sb-pt-accent-foreground: #ffffff;
+  --sb-pt-muted: #262c42;
+  --sb-pt-muted-foreground: #9aa6c0;
+  --sb-pt-border: #313a52;
+  --sb-pt-font-scale: 1;
+}
+
+/* الوضع المبسّط — تباين أعلى + خط أكبر، slug: simplified */
+html[data-personal-theme='simplified'][data-personal-mode='light'] {
+  --sb-pt-background: #ffffff;
+  --sb-pt-foreground: #000000;
+  --sb-pt-card: #ffffff;
+  --sb-pt-card-foreground: #000000;
+  --sb-pt-primary: #0047ab;
+  --sb-pt-primary-foreground: #ffffff;
+  --sb-pt-secondary: #000000;
+  --sb-pt-secondary-foreground: #ffffff;
+  --sb-pt-accent: #b30000;
+  --sb-pt-accent-foreground: #ffffff;
+  --sb-pt-muted: #e0e0e0;
+  --sb-pt-muted-foreground: #000000;
+  --sb-pt-border: #000000;
+  --sb-pt-font-scale: 1.125;
+}
+html[data-personal-theme='simplified'][data-personal-mode='dark'] {
+  --sb-pt-background: #000000;
+  --sb-pt-foreground: #ffffff;
+  --sb-pt-card: #000000;
+  --sb-pt-card-foreground: #ffffff;
+  --sb-pt-primary: #6fa8ff;
+  --sb-pt-primary-foreground: #000000;
+  --sb-pt-secondary: #ffffff;
+  --sb-pt-secondary-foreground: #000000;
+  --sb-pt-accent: #ff6b6b;
+  --sb-pt-accent-foreground: #000000;
+  --sb-pt-muted: #1a1a1a;
+  --sb-pt-muted-foreground: #ffffff;
+  --sb-pt-border: #ffffff;
+  --sb-pt-font-scale: 1.125;
+}

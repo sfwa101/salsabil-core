@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { PersonalThemeInitializer } from '@/components/PersonalThemeInitializer';
 
 export const metadata: Metadata = {
   title: 'سلسبيل — ديوان',
@@ -11,7 +12,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ar" dir="rtl" data-world="diwan">
-      <body>{children}</body>
+      <body>
+        <PersonalThemeInitializer />
+        {children}
+      </body>
     </html>
   );
 }
