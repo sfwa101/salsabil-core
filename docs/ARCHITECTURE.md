@@ -1,7 +1,7 @@
 ---
 title: المعمارية التقنية
 status: ACTIVE
-version: 1.8
+version: 1.9
 last_updated: 2026-09-06
 owner: المؤسس (أبوحتاب) + Claude (معماري)
 source_of_truth: هذا الملف (تفصيل)، SALSABIL_CONSTITUTION.md §4-§5 (المبدأ)
@@ -115,13 +115,19 @@ src/
 │   │   │                     orders.repository.ts
 │   │   ├── audit/        → IMPLEMENTED (اليوم 12، ADR-014) — سجل تدقيق عام (audit_log)، منفصل عن
 │   │   │                     order_status_history الخاص بدورة حياة الطلب وحدها
-│   │   └── bayan/        → IMPLEMENTED (اليوم 23-28، ADR-021) — types.ts، bayan.service.ts
-│   │                         (listFeed, getPostProducts, replacePostMedia, setPostProducts,
-│   │                         scaleRecipeQuantities)، bayan.repository.ts (يستخدم عميلَي anon
-│   │                         وservice_role معاً — راجع §3.1). الخلاصة الفعلية (اليوم 27) وProduct/
-│   │                         Recipe Bottom Sheet (اليوم 28) يستهلكانه عبر
-│   │                         src/app/(reef)/feed-actions.ts (تركيب صفحة مع catalogService، لا
-│   │                         تعديل على bayan.service.ts نفسه) — راجع docs/DOMAIN_MAP.md → بيان
+│   │   └── bayan/        → IMPLEMENTED بالكامل (اليوم 23-32، دفعة BAYAN-HOME-FEED-001 مُغلَقة،
+│   │                         ADR-021) — types.ts، bayan.service.ts (listFeed, getPostProducts,
+│   │                         replacePostMedia, setPostProducts, scaleRecipeQuantities,
+│   │                         getIndividualsWorldId)، bayan.repository.ts (يستخدم عميلَي anon
+│   │                         وservice_role معاً — راجع §3.1). **لم يُعدَّل إطلاقاً منذ اليوم 23** —
+│   │                         كل عمل الأيام 24-32 طبقة عرض/تركيب فوقه فقط عبر
+│   │                         src/app/(reef)/feed-actions.ts (+ listActiveWorldsAction اليوم 29):
+│   │                         لوحة إدارة (24)، مكوّنات مشتركة HorizontalShelf/BottomSheet (25)،
+│   │                         ترويسة عميل (26)، الخلاصة الفعلية + تمرير لانهائي (27)، Product/Recipe
+│   │                         Bottom Sheet (28)، مبدّل عوالم حقيقي WorldSwitcher (29)، محور تفضيل
+│   │                         شخصي مستقل src/config/personal-theme-registry.ts (30)، Responsive
+│   │                         كامل (31)، E2E شامل + إغلاق توثيقي (32). راجع docs/DOMAIN_MAP.md →
+│   │                         بيان للحالة النهائية والنطاق المتبقي خارج الدفعة صراحة
 │   ├── offline/          → دعم العمل بلا إنترنت — PROPOSED، لم يُبنَ بعد
 │   └── telemetry/        → سجل الأحداث والتدقيق المركزي (Event Ledger) — PROPOSED، لم يُبنَ بعد
 │                             (لا يُخلَط مع audit/ أعلاه، IMPLEMENTED فعلياً — راجع §11 Event Model)
