@@ -1,12 +1,13 @@
 'use client';
 // src/components/HeaderSearchBar.tsx
-// شريط بحث مدموج في Header.tsx على الشاشات الكبيرة (اليوم 31، BAYAN-HOME-FEED-001) — يستبدل
-// الحاجة لزر بحث منفصل في FeedTopBar.tsx من lg (1024px) فصاعداً (ذلك الزر يبقى ظاهراً أسفل lg،
-// راجع FeedTopBar.tsx). لا وظيفة بحث حقيقية بعد — نفس نمط "قريباً" المستخدَم فعلياً في
-// FeedTopBar.tsx/WorldSwitcher.tsx (لا محرك بحث مبني بعد، لا اختراع واجهة لقدرة غير موجودة).
+// شريط بحث في Header.tsx — CREATE-DESIGN-CONSTITUTION-AND-HOME-FEED-PHASE-01 (الجزء 2): أصبح صفاً
+// كامل العرض ظاهراً دائماً مباشرة تحت صف الهيدر الأول (مبدّل العوالم/العنوان/كبسولة السلة)، بلا فراغ
+// بينهما — لا مقصوراً على lg فصاعداً كما كان (كان FeedTopBar.tsx المحذوف الآن يغطي الموبايل بزر بحث
+// منفصل). لا وظيفة بحث حقيقية بعد — نفس نمط "قريباً" المستخدَم فعلياً في WorldSwitcher.tsx (لا محرك
+// بحث مبني بعد، لا اختراع واجهة لقدرة غير موجودة).
 //
 // مكوّن Client صغير مُركَّب داخل Header.tsx (Server Component) — نفس نمط تركيب FeedTabBar (Client)
-// داخل page.tsx (Server) في اليوم 26، التركيب لا يحوّل الأب إلى Client.
+// داخل page.tsx (Server)، التركيب لا يحوّل الأب إلى Client.
 
 import { useState } from 'react';
 import { Search } from 'lucide-react';
@@ -23,7 +24,7 @@ export function HeaderSearchBar() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="relative hidden flex-1 max-w-md lg:block">
+    <form onSubmit={handleSubmit} className="relative w-full">
       <div className="flex items-center gap-2 rounded-full border border-border bg-muted px-4 py-2">
         <Search size={16} className="shrink-0 text-muted-foreground" />
         <input

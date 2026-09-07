@@ -19,10 +19,10 @@ interface FeedProps {
   initialPosts: PostWithDetails[];
   initialHasMore: boolean;
   initialProducts: Product[];
-  postType?: PostType;
+  postTypes?: PostType[];
 }
 
-export function Feed({ initialPosts, initialHasMore, initialProducts, postType }: FeedProps) {
+export function Feed({ initialPosts, initialHasMore, initialProducts, postTypes }: FeedProps) {
   const [posts, setPosts] = useState(initialPosts);
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [products, setProducts] = useState(initialProducts);
@@ -41,7 +41,7 @@ export function Feed({ initialPosts, initialHasMore, initialProducts, postType }
     if (loadingRef.current || !hasMore) return;
     loadingRef.current = true;
     try {
-      const result = await loadFeedPageAction({ postType, offset: posts.length });
+      const result = await loadFeedPageAction({ postTypes, offset: posts.length });
       setPosts((prev) => [...prev, ...result.posts]);
       setHasMore(result.hasMore);
       setProducts((prev) => {
@@ -52,7 +52,7 @@ export function Feed({ initialPosts, initialHasMore, initialProducts, postType }
     } finally {
       loadingRef.current = false;
     }
-  }, [hasMore, postType, posts.length]);
+  }, [hasMore, postTypes, posts.length]);
 
   useEffect(() => {
     const el = sentinelRef.current;

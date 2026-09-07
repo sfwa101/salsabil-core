@@ -84,7 +84,7 @@ function toPostProductLink(row: PostProductRow): PostProductLink {
 export class BayanRepository {
   // -- قراءة عامة (الخلاصة، anon، تعتمد على RLS is_published = true) --
 
-  async listPublishedPosts(options: { postType?: PostType; offset: number; limit: number }): Promise<{ posts: Post[]; hasMore: boolean }> {
+  async listPublishedPosts(options: { postTypes?: PostType[]; offset: number; limit: number }): Promise<{ posts: Post[]; hasMore: boolean }> {
     let query = supabase
       .from('posts')
       .select('*')
@@ -92,8 +92,10 @@ export class BayanRepository {
       .order('created_at', { ascending: false })
       .range(options.offset, options.offset + options.limit); // نطلب صفاً إضافياً واحداً لمعرفة hasMore
 
-    if (options.postType) {
-      query = query.eq('post_type', options.postType);
+    // مصفوفة (حتى الفارغة) = فلتر صريح؛ undefined فقط = بلا فلتر. مصفوفة فارغة تُعيد .in() نتيجة
+    // فارغة بشكل صحيح (تبويب فُعِّل UI له لكن كل أنواعه مُعطَّلة في content-type-registry.ts).
+    if (options.postTypes) {
+      query = query.in('post_type', options.postTypes);
     }
 
     const { data, error } = await query;

@@ -107,7 +107,9 @@ export interface PostMediaDraft {
 }
 
 export interface ListFeedOptions {
-  postType?: PostType;
+  // مصفوفة لا قيمة مفردة (منذ CREATE-DESIGN-CONSTITUTION-AND-HOME-FEED-PHASE-01) — تبويب "منتجات" في
+  // الخلاصة يجمع نوعين معاً (product_highlight + offer)، راجع src/config/content-type-registry.ts.
+  postTypes?: PostType[];
   offset?: number;
   limit?: number;
 }

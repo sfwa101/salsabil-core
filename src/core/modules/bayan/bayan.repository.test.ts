@@ -88,13 +88,31 @@ describe('BayanRepository.listPublishedPosts', () => {
     expect(result.posts[0].id).toBe('post-1');
   });
 
-  it('يمرّر فلتر post_type عند تحديده', async () => {
+  it('يمرّر فلتر post_type (مصفوفة) عند تحديده', async () => {
     const builder = makeQueryBuilder({ data: [], error: null });
     vi.mocked(supabase.from).mockReturnValue(builder as never);
 
-    await bayanRepository.listPublishedPosts({ postType: 'reel', offset: 0, limit: 10 });
+    await bayanRepository.listPublishedPosts({ postTypes: ['reel'], offset: 0, limit: 10 });
 
-    expect(builder.eq).toHaveBeenCalledWith('post_type', 'reel');
+    expect(builder.in).toHaveBeenCalledWith('post_type', ['reel']);
+  });
+
+  it('يدعم فلتر بأكثر من نوع معاً (تبويب مُجمَّع مثل "منتجات")', async () => {
+    const builder = makeQueryBuilder({ data: [], error: null });
+    vi.mocked(supabase.from).mockReturnValue(builder as never);
+
+    await bayanRepository.listPublishedPosts({ postTypes: ['product_highlight', 'offer'], offset: 0, limit: 10 });
+
+    expect(builder.in).toHaveBeenCalledWith('post_type', ['product_highlight', 'offer']);
+  });
+
+  it('لا يستدعي .in() إطلاقاً عند عدم تمرير postTypes (بلا فلتر، تبويب "الكل")', async () => {
+    const builder = makeQueryBuilder({ data: [], error: null });
+    vi.mocked(supabase.from).mockReturnValue(builder as never);
+
+    await bayanRepository.listPublishedPosts({ offset: 0, limit: 10 });
+
+    expect(builder.in).not.toHaveBeenCalled();
   });
 });
 

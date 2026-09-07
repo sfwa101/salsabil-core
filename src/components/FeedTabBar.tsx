@@ -1,32 +1,32 @@
 'use client';
 // src/components/FeedTabBar.tsx
-// شريط تبويبات الخلاصة (اليوم 26، BAYAN-HOME-FEED-001) — حالة عميل بحتة تُقرأ/تُكتَب عبر رابط
-// الصفحة (?tab=...) لا حالة React محلية معزولة، لتبقى قابلة للقراءة مباشرة من مكوّن خادم (اليوم 27
-// يقرأ searchParams.tab لتمرير postType لـ bayanService.listFeed) بلا حاجة لأي مزامنة إضافية —
-// نفس فلسفة "الحالة عبر الرابط/الكوكي لا مخزّن عميل عام" المتّبعة في كل صفحات المشروع حتى الآن.
+// شريط تبويبات الخلاصة — حالة عميل بحتة تُقرأ/تُكتَب عبر رابط الصفحة (?tab=...) لا حالة React محلية
+// معزولة، لتبقى قابلة للقراءة مباشرة من مكوّن خادم (page.tsx يقرأ searchParams.tab لتحديد الفلتر)
+// بلا حاجة لأي مزامنة إضافية.
 //
-// تحديث اليوم 28: لم يعد هذا المكوّن نفسه sticky — أصبح مُغلَّفاً داخل ScrollHideBar في page.tsx
-// (مع FeedTopBar/StoryBar كوحدة واحدة تختفي/تظهر معاً بالتمرير)، فالتموضع اللاصق أصبح مسؤولية
-// الغلاف الأب لا هذا المكوّن.
+// CREATE-DESIGN-CONSTITUTION-AND-HOME-FEED-PHASE-01 (الجزء 3/5): التبويبات الأربعة (الكل|ريلز|
+// منتجات|منشورات) ومنطق التفعيل/التعطيل يُقرآن الآن من src/config/content-type-registry.ts — لا
+// Hardcode هنا. القيمة المخزَّنة في ?tab= أصبحت FeedTabKey (all/reel/products/posts) لا PostType خام
+// (تبويب "منتجات" يمثّل نوعين معاً: product_highlight + offer). مبني فوق Button (shadcn/ui، ADR-025)
+// بدل <button> خام — أول استهلاك حقيقي لمكوّن shadcn في هذه الشجرة.
+//
+// تحديث: لم يعد هذا المكوّن نفسه sticky — مُغلَّف داخل ScrollHideBar في page.tsx (مع StoryBar كوحدة
+// واحدة تختفي/تظهر معاً بالتمرير)، فالتموضع اللاصق مسؤولية الغلاف الأب لا هذا المكوّن.
 
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { POST_TYPES, POST_TYPE_LABELS_AR, type PostType } from '@/core/modules/bayan/types';
+import { Button } from '@/components/ui/button';
+import { FEED_TAB_LABELS_AR, getVisibleFeedTabs, type FeedTabKey } from '@/config/content-type-registry';
 
-const ALL_TAB = 'all' as const;
-type TabValue = typeof ALL_TAB | PostType;
-
-const TABS: { value: TabValue; label: string }[] = [
-  { value: ALL_TAB, label: 'الكل' },
-  ...POST_TYPES.map((t) => ({ value: t, label: POST_TYPE_LABELS_AR[t] })),
-];
+const ALL_TAB: FeedTabKey = 'all';
 
 export function FeedTabBar() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const activeTab: TabValue = (searchParams.get('tab') as TabValue | null) ?? ALL_TAB;
+  const activeTab = (searchParams.get('tab') as FeedTabKey | null) ?? ALL_TAB;
+  const visibleTabs = getVisibleFeedTabs();
 
-  function selectTab(value: TabValue) {
+  function selectTab(value: FeedTabKey) {
     const params = new URLSearchParams(searchParams.toString());
     if (value === ALL_TAB) {
       params.delete('tab');
@@ -39,23 +39,20 @@ export function FeedTabBar() {
 
   return (
     <div className="border-b border-border bg-background px-4 py-3">
-      {/* اليوم 31: مقياس العرض الموحَّد — يطابق FeedTopBar/Header/main عند md/xl (خلفية كاملة العرض،
-          صف التبويبات نفسه مُمركَز). */}
+      {/* مقياس العرض الموحَّد — يطابق Header/main عند md/xl (خلفية كاملة العرض، صف التبويبات نفسه
+          مُمركَز). */}
       <div className="mx-auto flex max-w-2xl gap-2 overflow-x-auto md:max-w-4xl xl:max-w-6xl">
-        {TABS.map((tab) => (
-          <button
-            key={tab.value}
+        {visibleTabs.map((tab) => (
+          <Button
+            key={tab}
             type="button"
-            onClick={() => selectTab(tab.value)}
-            aria-current={activeTab === tab.value}
-            className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition ${
-              activeTab === tab.value
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-muted/70'
-            }`}
+            onClick={() => selectTab(tab)}
+            aria-current={activeTab === tab}
+            variant={activeTab === tab ? 'default' : 'secondary'}
+            className="shrink-0 rounded-full"
           >
-            {tab.label}
-          </button>
+            {FEED_TAB_LABELS_AR[tab]}
+          </Button>
         ))}
       </div>
     </div>

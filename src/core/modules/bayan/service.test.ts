@@ -95,7 +95,7 @@ describe('BayanService.listFeed', () => {
 
     const result = await bayanService.listFeed({ offset: 10, limit: 5 });
 
-    expect(bayanRepository.listPublishedPosts).toHaveBeenCalledWith({ postType: undefined, offset: 10, limit: 5 });
+    expect(bayanRepository.listPublishedPosts).toHaveBeenCalledWith({ postTypes: undefined, offset: 10, limit: 5 });
     expect(result.hasMore).toBe(true);
     expect(result.posts).toHaveLength(1);
     expect(result.posts[0].media).toEqual([media]);
@@ -107,7 +107,7 @@ describe('BayanService.listFeed', () => {
 
     await bayanService.listFeed();
 
-    expect(bayanRepository.listPublishedPosts).toHaveBeenCalledWith({ postType: undefined, offset: 0, limit: 10 });
+    expect(bayanRepository.listPublishedPosts).toHaveBeenCalledWith({ postTypes: undefined, offset: 0, limit: 10 });
   });
 });
 

@@ -9,7 +9,7 @@ import { Feed } from '@/components/Feed';
 import { loadFeedPageAction } from '../feed-actions';
 
 export default async function OffersPage() {
-  const firstPage = await loadFeedPageAction({ postType: 'offer', offset: 0 });
+  const firstPage = await loadFeedPageAction({ postTypes: ['offer'], offset: 0 });
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-6 md:max-w-4xl xl:max-w-6xl">
@@ -18,7 +18,7 @@ export default async function OffersPage() {
         initialPosts={firstPage.posts}
         initialHasMore={firstPage.hasMore}
         initialProducts={firstPage.products}
-        postType="offer"
+        postTypes={['offer']}
       />
     </main>
   );

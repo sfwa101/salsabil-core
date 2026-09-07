@@ -42,7 +42,7 @@ export class BayanService {
     const offset = options.offset ?? 0;
     const limit = options.limit ?? DEFAULT_FEED_PAGE_SIZE;
 
-    const { posts, hasMore } = await bayanRepository.listPublishedPosts({ postType: options.postType, offset, limit });
+    const { posts, hasMore } = await bayanRepository.listPublishedPosts({ postTypes: options.postTypes, offset, limit });
     if (posts.length === 0) return { posts: [], hasMore };
 
     const postIds = posts.map((p) => p.id);

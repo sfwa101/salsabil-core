@@ -17,7 +17,7 @@ export interface FeedPageResult {
   products: Product[];
 }
 
-export async function loadFeedPageAction(options: { postType?: PostType; offset: number }): Promise<FeedPageResult> {
+export async function loadFeedPageAction(options: { postTypes?: PostType[]; offset: number }): Promise<FeedPageResult> {
   const page = await bayanService.listFeed(options);
 
   const productIds = Array.from(new Set(page.posts.flatMap((p) => p.productIds)));
@@ -48,7 +48,8 @@ export async function scaleRecipeIngredientsAction(
   return bayanService.scaleRecipeQuantities(recipe, familySize);
 }
 
-// اليوم 29 (BAYAN-HOME-FEED-001) — يغذّي مبدّل العوالم في FeedTopBar. تمريرة رقيقة لـ
+// اليوم 29 (BAYAN-HOME-FEED-001) — يغذّي مبدّل العوالم (WorldSwitcher.tsx، مركَّب الآن داخل
+// Header.tsx منذ CREATE-DESIGN-CONSTITUTION-AND-HOME-FEED-PHASE-01). تمريرة رقيقة لـ
 // khalilService.listActiveWorlds() الموجودة أصلاً منذ اليوم 20 (أول مستهلك واجهة لها).
 export async function listActiveWorldsAction(): Promise<World[]> {
   return khalilService.listActiveWorlds();

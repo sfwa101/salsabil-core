@@ -32,6 +32,11 @@ export async function addToCartAction(input: AddItemInput): Promise<ActionResult
   try {
     const summary = await cartService.addItem(cart.id, input);
     revalidatePath('/cart');
+    // CREATE-DESIGN-CONSTITUTION-AND-HOME-FEED-PHASE-01: استثناء صريح مُوافَق عليه من المؤسس —
+    // Header.tsx (layout.tsx مشترك عبر (reef) بالكامل) يعرض عدّاد السلة (CartCapsule.tsx) وبلا هذا
+    // السطر لا يُعاد جلبه بعد الإضافة (revalidatePath('/cart') وحده لا يمس الطبقة المشتركة). لا
+    // تعديل آخر على منطق السلة نفسه.
+    revalidatePath('/');
     return { summary };
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'حدث خطأ غير متوقع' };
