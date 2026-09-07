@@ -1,7 +1,7 @@
 ---
 title: سجل التغييرات
 status: ACTIVE
-version: 1.23
+version: 1.24
 last_updated: 2026-09-07
 owner: Claude (تلقائي مع كل مهمة كبيرة)
 source_of_truth: هذا الملف + Git log
@@ -10,6 +10,47 @@ source_of_truth: هذا الملف + Git log
 # سجل التغييرات
 
 > يُسجَّل هنا فقط التغييرات المهمة (معمارية، قواعد أعمال، قاعدة بيانات، أمان، UX، قرارات، خارطة طريق) — لا كل commit صغير.
+
+---
+
+## 2026-09-07 — SEED-AND-VERIFY-STAGING-CONTENT: أول محتوى بيان حقيقي على مشروع staging منفصل
+
+> **سياق:** بعد `STATUS-REVIEW-AND-STAGING-SYNC` (نفس اليوم) الذي أثبت حياً أن `staging.reefam.com`
+> لا يزال يعرض كوداً قديماً (قبل اليوم 23) لأن Vercel لم يُحدَّث منذ اليوم 18، طبَّق المؤسس يدوياً كل
+> SQL Migrations (`schema-setup.sql` + `day19-context-engine-schema.sql` + `day23-bayan-schema.sql`،
+> عبر SQL Editor، نفس نمط كل Migration سابق في هذا المستودع) على **مشروع Supabase جديد كلياً
+> ومنفصل عن dev** مخصَّص لـ`staging.reefam.com`، وزرع صف `worlds` (`individuals`) + التاجر التجريبي
+> عبر `seed-test-accounts.sql`. هذه المهمة تزرع محتوى بيان الحقيقي هناك وتتحقق منه حياً — لا لمس
+> لأي كود أو لبيانات dev.
+
+- **بيانات اعتماد staging:** `.env.staging.local` (جديد، جذر المشروع، مُستثنى من Git عبر
+  `.gitignore` — `.env*.local`) — أدخل المؤسس القيم الثلاث مباشرة (لم تُكتب/تُعرَض في أي محادثة).
+- **تحقُّق حي مستقل قبل الزرع — 17/17 جدولاً موجود فعلياً على staging** (`information_schema`
+  عبر استعلام مباشر بـ`service_role` لكل جدول من الـ17 المُعرَّفة عبر الملفات الثلاثة: 12
+  `schema-setup.sql` + 2 `day19-context-engine-schema.sql` + 3 `day23-bayan-schema.sql`) — لا قبول
+  لتصريح المؤسس بلا تحقُّق مستقل (نموذج الدليل، `SALSABIL_CONSTITUTION.md §4.1`). صف `worlds`
+  (`individuals`, `is_active=true`) مؤكَّد موجوداً أيضاً.
+- **`scripts/seed-daily-food-demo-content.ts` (من `SEED-REAL-DEMO-CONTENT`، بلا أي تعديل على
+  الملف نفسه) شُغِّل مُوجَّهاً صراحة لـ`.env.staging.local`** — عبر تصدير القيم الثلاث كمتغيرات بيئة
+  في نفس جلسة الصدفة قبل التشغيل (`process.loadEnvFile` في Node لا يُجاوز متغيراً مضبوطاً مسبقاً —
+  تحقَّق منه بتجربة مباشرة قبل الاعتماد عليه)، فلا حاجة لتعديل السكربت أو لمس `.env.local`. نفس
+  8 منتجات + 5 منشورات (`is_published=true`) بالضبط زُرِعت بمعرّفات (`UUID`) **جديدة كلياً ومختلفة**
+  عن نظيراتها في dev.
+- **تحقُّق حي مباشر عبر `service_role` ضد staging نفسها (لا افتراضاً):** استعلام مباشر من مشروع
+  staging (`yrenjgufmmebdssyvyoy.supabase.co`) أكَّد 9 منتجات في `daily-food` (8 الجديدة + "دجاجة
+  كاملة طازجة" من `seed-test-accounts.sql`) و5 منشورات — **بمعرّفات مختلفة تماماً** عن معرّفات dev
+  (`liolnkdmjfkvawnkwhje.supabase.co`، الذي بقي كما هو، 10 منتجات بلا أي تغيير من هذه المهمة).
+  يستبعد هذا احتمال أن يكون الزرع أصاب dev بالخطأ.
+- **تحقُّق HTTP نهائي عبر `curl` — كما هو متوقَّع، لا فشل:** `staging.reefam.com` لا يزال يعرض
+  الصفحة الرئيسية القديمة ("أحياء ريف المدينة") و`/account`/`/categories` لا يزالان `404` — Vercel لم
+  يُحدَّث بعد بمفاتيح مشروع staging الجديدة ولا بالكود الأحدث (نفس الفجوة المُوثَّقة في
+  `STATUS-REVIEW-AND-STAGING-SYNC`، غير محلولة بهذه المهمة عمداً — خارج نطاقها المُعلَن). **قاعدة
+  بيانات staging جاهزة الآن ومزروعة بمحتوى حقيقي؛ الكود المنشور على Vercel هو الفجوة المتبقية
+  الوحيدة.**
+- ملفات مؤقتة للتحقُّق (فحص الجداول + مقارنة dev/staging) حُذفت بعد التأكيد — لا أثر دائم غير
+  `.env.staging.local` نفسه.
+- لا لمس `AGENTS.md`/`INVARIANTS.md`/`docs/DECISIONS.md` (تعليمة صريحة). لا كود، لا Migration جديدة —
+  بيانات فقط على قاعدة موجودة أصلاً.
 
 ---
 
