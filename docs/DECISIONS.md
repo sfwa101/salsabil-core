@@ -1366,6 +1366,38 @@ Related: INVARIANTS.md → GP-001، src/components/CartActionButton.tsx،
           src/components/CartLineItem.tsx، src/app/(reef)/cart/actions.ts، src/app/(reef)/cart/page.tsx
 ```
 
+### DD-011
+```
+Decision: هل تُعاد هيكلة عزل بيانات اختبارات orders/inventory integration (fixtures فريدة/تنظيف
+          أدق بين ملفات مختلفة)، أم يُكتفى بتشغيل orders.integration.test.ts معزولاً عند الحاجة؟
+Reason: اكتُشف حياً أثناء FULL-VISUAL-PARITY-AUDIT-AND-FIX (بند 4، دفعة CartLineItem.tsx البصرية
+          البحتة، 2026-09-07) — الاختبار "ترفض Checkout عند نفاد المخزون الحقيقي بين الإضافة للسلة
+          والتنفيذ" (orders.integration.test.ts) يفشل **حتمياً** (3 محاولات متتالية، نفس الفشل
+          الحرفي كل مرة — لا عشوائية) عند تشغيل `npm test` الكامل (husky pre-push)، بينما ينجح
+          12/12 **دائماً** عند تشغيل الملف وحده (`vitest run orders.integration.test.ts`) بمعزل عن
+          بقية ملفات integration. هذا يثبت تعارضاً بين ملفات integration مختلفة تتشارك قاعدة dev
+          الحية نفسها (`.env.local`) — على الأرجح صف/مورد مشترك (منتج/تصنيف/تاجر) يُعدَّل من ملف آخر
+          أثناء تنفيذ هذا الاختبار تحديداً، لا خللاً في منطق `OrdersService`/`InventoryService`
+          نفسه (السلوك المُختبَر يعمل بشكل صحيح فعلياً عند العزل). لم يُحدَّد الملف/المورد المتعارض
+          بالضبط — يحتاج تحقيقاً مخصَّصاً، خارج نطاق دفعة واجهة بصرية بحتة.
+Risk: (أ) أي مساهم آخر يواجه نفس فشل pre-push غير المرتبط بتغييره فيُضطر لنفس قرار التجاوز
+          (`--no-verify`) بلا وثيقة تشرح السبب — هذا السجل يسدّ تلك الفجوة. (ب) الأخطر: هذا الاختبار
+          تحديداً يحمي **Inventory Concurrency** (Guardian Matrix: DEEP) — طالما تعارض العزل قائم،
+          "الاختبار الكامل يفشل أحياناً" قد يُطبَّع (Normalize) فيُتجاهَل فشل حقيقي مستقبلي لنفس
+          الاختبار (Alert Fatigue) — خطر أمان اختباري حقيقي لا نظري.
+Owner: Founder
+Created: 2026-09-07
+Review by: قبل أي تعديل مستقبلي فعلي على orders.service.ts/inventory.service.ts أو ملفات
+          integration الأخرى المشتبَه بتعارضها معه (يحتاج تحديد الملف بالضبط أولاً)
+Blocking: NO لعمل الميزات العادي (كل ملف integration ينجح منفرداً، والمنطق الفعلي سليم) — YES لصحة
+          husky pre-push كبوابة موثوقة (تجاوزها بـ`--no-verify` أصبح ضرورياً أحياناً بإذن صريح، لا
+          استثناءً نادراً كما يُفترَض)
+Status: OPEN
+Related: src/core/modules/orders/orders.integration.test.ts، .husky/pre-push، AGENTS.md §9 (حظر
+          تجاوز الخطافات إلا بطلب صريح — طُبِّق هنا فعلياً مرة واحدة بإذن المؤسس المباشر في محادثة
+          FULL-VISUAL-PARITY-AUDIT-AND-FIX)
+```
+
 ---
 
 ### مراجَع ولم يُحوَّل إلى Decision Debt (مع التبرير)
