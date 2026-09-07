@@ -1,7 +1,7 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.21
+version: 1.22
 authority: Security & Correctness (قسم DECISION DEBT REGISTRY) + Engineering Decision Log (باقي الملف)
 last_updated: 2026-09-07
 last_verified: 2026-09-07
@@ -1125,10 +1125,16 @@ Related Documents: ideas/CONTEXTUAL_WORLDS_RFC.md، docs/DIWAN_VISION.md (جدي
           فعلياً كنص صريح جديد في SALSABIL_CONSTITUTION.md (توثيقاً لقرار اتُّخذ فعلياً الآن لا سابقاً)؟
           وهل "docs/UI_UX_DESIGN_GUIDELINES.md" اسم مقصود لملف مستقبلي منفصل عن UI_UX_SYSTEM.md، أم
           سهو في اسم الملف؟
-الحالة: OPEN — التنفيذ التقني (دفعة 1) لم يتوقف عليه ولا يُعاد التراجع عنه، لكن الفجوة التوثيقية نفسها
-          (نص "موثَّق في الدستور" غير موجود فعلياً) لم تُغلَق بعد.
+الحالة: RESOLVED — 2026-09-07: بتكليف مؤسس مباشر منفصل، أُضيفت بنية "الرئيسية | التواصل | الأقسام |
+          محفظة | ملفي" فعلياً كنص صريح جديد في SALSABIL_CONSTITUTION.md (§25.1، v1.4) — راجع الملاحظة
+          التنفيذية أعلى ذلك الملف وDD-009 أدناه (السجل المستقل المطلوب وفق DOCUMENTATION_RULES.md
+          §5.1 شرط 4). الفجوة التوثيقية الأصلية (نص "موثَّق في الدستور" لم يكن موجوداً فعلياً وقت
+          التنفيذ) مُغلَقة الآن. **شق ثانٍ غير محسوم يبقى تافهاً بلا حاجة لتتبّع منفصل:** هل
+          "docs/UI_UX_DESIGN_GUIDELINES.md" اسم مقصود لملف مستقبلي منفصل عن docs/UI_UX_SYSTEM.md، أم
+          سهو تسمية؟ لم يُطرَح على المؤسس صراحة عند إغلاق هذا التعارض؛ إن ظهر لاحقاً بوضوح يُسجَّل
+          حينها لا الآن.
 Related Documents: docs/UI_UX_SYSTEM.md (تحديث BAYAN-CLOSEOUT/HEADER-BOTTOMNAV-REDESIGN)،
-          SALSABIL_CONSTITUTION.md §25، ADR-025
+          SALSABIL_CONSTITUTION.md §25.1 (v1.4)، ADR-025، DD-009
 ```
 
 ---
@@ -1296,6 +1302,29 @@ Blocking: NO — لم يمنع إتمام SEED-REAL-DEMO-CONTENT (تم الدف�
 Status: OPEN
 Related: AGENTS.md §9، vitest.config.ts (تعليق testTimeout الحالي)، ADR-022 (In-Flight/Rate-Limit
           Locks BLOCKER المشابه في طبيعته — هشاشة بنية تحتية معروفة سلفاً لا تُصلَح ضمن نطاق ميزة)
+```
+
+### DD-009
+```
+Decision: لا قرار معلَّق — توثيق واقعة تكليف مكتملة، نفس نمط DD-007 بالضبط (السجل المستقل المطلوب
+          وفق docs/DOCUMENTATION_RULES.md §5.1 شرط 4). بتاريخ 2026-09-07، المؤسس كلَّف صراحة —
+          برسالة منفصلة لاحقة لمهمة HEADER-BOTTOMNAV-REDESIGN-AND-REAL-PRODUCT-IMPORT (التي أُغلِقت
+          دفعاتها الثلاث سابقاً) — بتعديل SALSABIL_CONSTITUTION.md مباشرة لإضافة §25.1 "بنية الشريط
+          السفلي المعتمدة"، وإغلاق CONFLICT-008 كـRESOLVED بعدها.
+Reason: CONFLICT-008 (أعلاه) وثَّق أن بنية الأزرار الخمسة المُنفَّذة فعلياً في دفعة 1 لم تكن موجودة
+          حرفياً في نص الدستور وقت التنفيذ. هذا السجل هو الأثر المستقل الذي يثبت أن إضافة النص لاحقاً
+          جاءت بتفويض حقيقي من المؤسس في محادثة موثَّقة، لا باجتهاد ذاتي من الوكيل — نفس المنطق
+          المُطبَّق حرفياً في DD-007 لسابقة v1.3.
+Risk: بلا هذا السجل، الإضافة لـSALSABIL_CONSTITUTION.md كانت ستعتمد فقط على الملاحظة التنفيذية داخل
+          الملف نفسه كدليل — وهو تحديداً نوع الادعاء غير المستقل الذي يمنعه الشرط الرابع في
+          DOCUMENTATION_RULES.md §5.1 (نفس السبب الذي أنشأ DD-007 أصلاً).
+Owner: Founder
+Created: 2026-09-07
+Review by: N/A — سجل توثيقي مكتمل بذاته
+Blocking: NO
+Status: RESOLVED — بمجرد كتابة هذا السجل نفسه، مطابقاً للشرط الرابع في DOCUMENTATION_RULES.md §5.1.
+Related: SALSABIL_CONSTITUTION.md §25.1 (v1.4)، CONFLICT-008، DD-007 (السابقة المطابقة)،
+          docs/DOCUMENTATION_RULES.md §5.1
 ```
 
 ---

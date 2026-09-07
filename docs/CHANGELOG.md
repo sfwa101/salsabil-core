@@ -1,7 +1,7 @@
 ---
 title: سجل التغييرات
 status: ACTIVE
-version: 1.29
+version: 1.30
 last_updated: 2026-09-07
 owner: Claude (تلقائي مع كل مهمة كبيرة)
 source_of_truth: هذا الملف + Git log
@@ -12,6 +12,17 @@ source_of_truth: هذا الملف + Git log
 > يُسجَّل هنا فقط التغييرات المهمة (معمارية، قواعد أعمال، قاعدة بيانات، أمان، UX، قرارات، خارطة طريق) — لا كل commit صغير.
 
 ---
+
+## 2026-09-07 — اعتماد بنية BottomNav الخمسة رسمياً في SALSABIL_CONSTITUTION.md (§25.1، v1.4)
+
+> توثيق فقط — لا كود. تكليف مؤسس مباشر منفصل بعد إغلاق المهمة الثلاثية الدفعات.
+
+- **`SALSABIL_CONSTITUTION.md` → v1.4** — إضافة §25.1 "بنية الشريط السفلي المعتمدة": الرئيسية |
+  التواصل | الأقسام | محفظة | ملفي، توثيقاً رسمياً لبنية مُنفَّذة فعلياً في دفعة 1 من
+  `HEADER-BOTTOMNAV-REDESIGN-AND-REAL-PRODUCT-IMPORT`. عبر استثناء `PROPOSED_CONSTITUTION_CHANGE`
+  الصريح (`docs/DOCUMENTATION_RULES.md §5.1`) — ملاحظة تنفيذية جديدة أعلى الملف توثّق شروطه الأربعة.
+- **`docs/DECISIONS.md`** — `CONFLICT-008` → `RESOLVED`، `DD-009` جديد (السجل المستقل المطلوب وفق
+  شرط §5.1 الرابع، نفس نمط `DD-007`).
 
 ## 2026-09-07 — HEADER-BOTTOMNAV-REDESIGN-AND-REAL-PRODUCT-IMPORT دفعة 3: تعطيل 8 منتجات Demo قديمة
 
