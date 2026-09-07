@@ -72,14 +72,21 @@ export default async function CartPage() {
   }
 
   const tenantIds = [...new Set(summary.lines.map((line) => line.product.tenantId).filter((id): id is string => id !== null))];
-  const merchants = tenantIds.length > 0 ? await merchantService.getByIds(tenantIds) : [];
+  const cartProductIds = summary.lines.map((line) => line.product.id);
+
+  // FIX-DD-010-CART-QUANTITY-UI-STALE: هاتان مستقلتان تماماً عن بعضهما (تجميع التاجر لا يعتمد على
+  // رف "غالباً ما يُشترى معه" ولا العكس) — كانتا تُنتظَران بالتتابع، تضيفان رحلة شبكة كاملة زائدة
+  // على كل تحميل/تحديث لصفحة السلة (~85-150ms إضافية مقيسة). Promise.all يدمجهما في رحلة واحدة.
+  const [merchants, mostOrderedIds] = await Promise.all([
+    tenantIds.length > 0 ? merchantService.getByIds(tenantIds) : Promise.resolve([]),
+    ordersService.getMostOrderedProductIds(cartProductIds, CROSS_SELL_LIMIT),
+  ]);
   const merchantNameById = new Map(merchants.map((m) => [m.id, m.businessName]));
 
   const groups = groupByTenant(summary.lines, merchantNameById);
   const isMultiVendor = groups.length > 1;
 
-  const cartProductIds = summary.lines.map((line) => line.product.id);
-  const mostOrderedIds = await ordersService.getMostOrderedProductIds(cartProductIds, CROSS_SELL_LIMIT);
+  // هذه تعتمد على mostOrderedIds فعلياً — تبقى متتابعة بعده، لا يمكن دمجها في Promise.all أعلاه
   const crossSellProducts = mostOrderedIds.length > 0 ? await catalogService.getProductsByIds(mostOrderedIds) : [];
 
   return (

@@ -1,11 +1,15 @@
 // src/components/CartLineItem.tsx
 // بطاقة بند سلة غنية — REBUILD-CART-CHECKOUT-FROM-LOVABLE-REFERENCE دفعة 1: صورة حقيقية
 // (product.imageUrl) + أزرار +/- عبر Button (shadcn/ui) بدل النص الخام القديم. الحذف/التحديث
-// يبقيان عبر Server Actions (نفس نمط cart/page.tsx القديم بالضبط) — لا framer-motion، لا سحب
-// للحذف، لا تحديث متفائل (Optimistic) من جانب العميل: نطاق مقصود، راجع Task Report.
+// يبقيان عبر Server Actions — لا framer-motion، لا سحب للحذف، لا تحديث متفائل (Optimistic) كامل:
+// نطاق مقصود.
+//
+// FIX-DD-010-CART-QUANTITY-UI-STALE: CartActionButton (جديد) يعرض مؤشر Pending أثناء معالجة كل
+// نموذج — بلا هذا، إعادة التصيير (الآن أثقل بعد تجميع التاجر + رف "غالباً ما يُشترى معه"، ~1-1.4
+// ثانية مقيسة حياً) تبدو "متجمّدة" رغم نجاحها. راجع CartActionButton.tsx للتشخيص الكامل.
 
 import { Minus, Plus, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { CartActionButton } from '@/components/CartActionButton';
 import { updateCartItemAction, removeCartItemAction } from '@/app/(reef)/cart/actions';
 import type { CartLineSummary } from '@/core/modules/cart/types';
 
@@ -42,15 +46,14 @@ export function CartLineItem({ line }: { line: CartLineSummary }) {
               await removeCartItemAction(item.id);
             }}
           >
-            <Button
-              type="submit"
+            <CartActionButton
+              ariaLabel="حذف"
               variant="ghost"
               size="icon-xs"
-              aria-label="حذف"
               className="shrink-0 text-destructive hover:bg-destructive/10"
             >
               <Trash2 size={14} />
-            </Button>
+            </CartActionButton>
           </form>
         </div>
 
@@ -63,9 +66,9 @@ export function CartLineItem({ line }: { line: CartLineSummary }) {
                 await updateCartItemAction(item.id, item.quantity - 1);
               }}
             >
-              <Button type="submit" variant="ghost" size="icon-xs" aria-label="إنقاص">
+              <CartActionButton ariaLabel="إنقاص" variant="ghost" size="icon-xs">
                 <Minus size={12} />
-              </Button>
+              </CartActionButton>
             </form>
             <span className="w-5 text-center text-sm font-medium text-foreground">{item.quantity}</span>
             <form
@@ -74,9 +77,9 @@ export function CartLineItem({ line }: { line: CartLineSummary }) {
                 await updateCartItemAction(item.id, item.quantity + 1);
               }}
             >
-              <Button type="submit" variant="ghost" size="icon-xs" aria-label="زيادة">
+              <CartActionButton ariaLabel="زيادة" variant="ghost" size="icon-xs">
                 <Plus size={12} />
-              </Button>
+              </CartActionButton>
             </form>
           </div>
         </div>
