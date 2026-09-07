@@ -7,6 +7,12 @@
 // FIX-DD-010-CART-QUANTITY-UI-STALE: CartActionButton (جديد) يعرض مؤشر Pending أثناء معالجة كل
 // نموذج — بلا هذا، إعادة التصيير (الآن أثقل بعد تجميع التاجر + رف "غالباً ما يُشترى معه"، ~1-1.4
 // ثانية مقيسة حياً) تبدو "متجمّدة" رغم نجاحها. راجع CartActionButton.tsx للتشخيص الكامل.
+//
+// FULL-VISUAL-PARITY-AUDIT-AND-FIX (بند 4) — زر +/- أُعيد تصميمه ليطابق بصرياً D:\temp\reefam-
+// lovable-reference (ButcherSheet.tsx، قسم "Qty + total"): دائرتان مستقلتان (لا كبسولة بحدود
+// تحيطهما كما كانت) — إنقاص محايد (outline، خلفية background) وزيادة بلون العلامة (primary مليء) —
+// بتوكنز --sb-* (bg-primary/border-border) لا Hex مباشر (المرجع يستخدم rose-600 مباشرة، خاص بفئة
+// اللحوم فقط — راجع ADR-023، لا يُستخدَم كتوكن عام هنا).
 
 import { Minus, Plus, Trash2 } from 'lucide-react';
 import { CartActionButton } from '@/components/CartActionButton';
@@ -59,26 +65,28 @@ export function CartLineItem({ line }: { line: CartLineSummary }) {
 
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold text-primary">{lineTotal} جنيه</span>
-          <div className="flex items-center gap-1 rounded-full border border-border p-0.5">
+          <div className="flex items-center gap-2">
             <form
               action={async () => {
                 'use server';
                 await updateCartItemAction(item.id, item.quantity - 1);
               }}
             >
-              <CartActionButton ariaLabel="إنقاص" variant="ghost" size="icon-xs">
-                <Minus size={12} />
+              <CartActionButton ariaLabel="إنقاص" variant="outline" size="icon" className="rounded-full shadow-sm">
+                <Minus size={14} />
               </CartActionButton>
             </form>
-            <span className="w-5 text-center text-sm font-medium text-foreground">{item.quantity}</span>
+            <span className="min-w-[1.5ch] text-center text-sm font-bold tabular-nums text-foreground">
+              {item.quantity}
+            </span>
             <form
               action={async () => {
                 'use server';
                 await updateCartItemAction(item.id, item.quantity + 1);
               }}
             >
-              <CartActionButton ariaLabel="زيادة" variant="ghost" size="icon-xs">
-                <Plus size={12} />
+              <CartActionButton ariaLabel="زيادة" variant="default" size="icon" className="rounded-full shadow-sm">
+                <Plus size={14} />
               </CartActionButton>
             </form>
           </div>
