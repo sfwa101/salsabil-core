@@ -1,22 +1,24 @@
 // src/app/(reef)/account/page.tsx
-// وجهة تبويب "حسابي" في BottomNav.tsx (BAYAN-CLOSEOUT-UI-GAPS) — لا مصادقة عميل حقيقية بعد
-// (عميل ضيف دائماً)، فلا بيانات حساب لعرضها اليوم. الغرض الفعلي الوحيد لهذه الصفحة اليوم: استضافة
-// نقطة الدخول الوحيدة لاختيار الثيم الشخصي (PersonalThemeSheet.tsx، يُغلِق فجوة يوم 30).
-//
-// RAPID-VISUAL-REDESIGN-BATCH-SAFE-SCREENS: غلاف بصري فقط (بطاقات بدل نص عارٍ) + رابط لصفحة
-// المساعدة الثابتة الجديدة (/help) — لا بيانات جديدة، لا تغيير في PersonalThemeSheet نفسه.
+// وجهة تبويب "ملفي" في BottomNav.tsx (اسم التبويب حُدِّث من "حسابي" — راجع تعليق BottomNav.tsx —
+// HEADER-BOTTOMNAV-REDESIGN-AND-REAL-PRODUCT-IMPORT دفعة 1). لا مصادقة عميل حقيقية بعد (عميل ضيف
+// دائماً)، فلا بيانات حساب لعرضها اليوم. تستضيف: اختيار الثيم الشخصي (PersonalThemeSheet.tsx)،
+// بطاقة "طلباتي" (LastOrderCard.tsx — قدرة انتقلت هنا من تبويب BottomNav المحذوف، لا فقدان وظيفة)،
+// ورابط المساعدة (/help).
 
 import Link from 'next/link';
 import { HelpCircle, ChevronLeft } from 'lucide-react';
 import { PersonalThemeSheet } from '@/components/PersonalThemeSheet';
+import { LastOrderCard } from '@/components/LastOrderCard';
 
 export default function AccountPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 py-10 md:max-w-4xl xl:max-w-6xl">
-      <h1 className="mb-8 text-2xl font-semibold text-foreground">حسابي</h1>
+      <h1 className="mb-8 text-2xl font-semibold text-foreground">ملفي</h1>
 
       <div className="flex flex-col gap-3">
         <PersonalThemeSheet />
+
+        <LastOrderCard />
 
         <Link
           href="/help"

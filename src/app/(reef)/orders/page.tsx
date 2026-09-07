@@ -1,7 +1,9 @@
 // src/app/(reef)/orders/page.tsx
-// حالة فارغة لتبويب "طلباتي" في BottomNav.tsx (BAYAN-CLOSEOUT-UI-GAPS) — تُعرَض فقط حين لا يوجد
-// طلب محفوظ في localStorage على هذا الجهاز (src/lib/last-order.ts). لا نظام حسابات/تسجيل دخول
-// للعميل الضيف، فلا "قائمة طلبات" حقيقية ممكنة اليوم — راجع BottomNav.tsx للمنطق الكامل.
+// حالة فارغة لبطاقة "طلباتي" في صفحة /account (ملفي) — تُعرَض فقط حين لا يوجد طلب محفوظ في
+// localStorage على هذا الجهاز (src/lib/last-order.ts). لا نظام حسابات/تسجيل دخول للعميل الضيف،
+// فلا "قائمة طلبات" حقيقية ممكنة اليوم — راجع LastOrderCard.tsx للمنطق الكامل. كانت هذه وجهة تبويب
+// BottomNav مستقل قبل HEADER-BOTTOMNAV-REDESIGN-AND-REAL-PRODUCT-IMPORT دفعة 1 (البنية الجديدة
+// خمسة أزرار بلا "طلباتي" مستقلة — راجع تعليق BottomNav.tsx).
 //
 // RAPID-VISUAL-REDESIGN-BATCH-SAFE-SCREENS: غلاف بصري فقط (أيقونة + بطاقة) — لا تغيير في المنطق
 // أعلاه، تبقى هذه حالة فارغة حقيقية بلا أي محاكاة لبيانات غير موجودة.
@@ -17,7 +19,7 @@ export default function OrdersEmptyPage() {
       </span>
       <h1 className="text-xl font-semibold text-foreground">لا يوجد طلب محفوظ على هذا الجهاز بعد</h1>
       <p className="text-muted-foreground">
-        بعد إتمام أول طلب، ستجد رابط تتبّعه هنا مباشرة من تبويب "طلباتي".
+        بعد إتمام أول طلب، ستجد رابط تتبّعه هنا مباشرة من بطاقة "طلباتي" في صفحة "ملفي".
       </p>
       <Link
         href="/"
