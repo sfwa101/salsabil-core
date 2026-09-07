@@ -90,6 +90,10 @@ export class MerchantService {
     return merchantRepository.findById(id);
   }
 
+  async getByIds(ids: string[]): Promise<Merchant[]> {
+    return merchantRepository.findByIds(ids);
+  }
+
   async setActiveStatus(id: string, isActive: boolean): Promise<Merchant> {
     return merchantRepository.setActiveStatus(id, isActive);
   }

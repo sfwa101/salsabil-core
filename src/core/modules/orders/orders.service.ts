@@ -3,6 +3,7 @@
 // CartService/KhalilService حياً، لا يُعيد كتابة أي من منطقها (docs/ARCHITECTURE.md §3، §7)
 
 import { cartService } from '../cart/cart.service';
+import type { Cart } from '../cart/types';
 import { catalogService } from '../catalog/catalog.service';
 import { inventoryService } from '../inventory/inventory.service';
 import { khalilService } from '../../kernel/khalil/service';
@@ -50,7 +51,7 @@ export class OrdersService {
     const existing = inFlightCheckouts.get(cart.id);
     if (existing) return existing;
 
-    const promise = this.performCheckout(cart.id, input).finally(() => {
+    const promise = this.performCheckout(cart, input).finally(() => {
       inFlightCheckouts.delete(cart.id);
     });
     inFlightCheckouts.set(cart.id, promise);
@@ -65,8 +66,10 @@ export class OrdersService {
   // بلا فائدة حقيقية لا في الاختبار (كل خطوة مُختبَرة عبر مسارات checkout() الكاملة أصلاً، لا
   // منعزلة) ولا في القراءة (القارئ يحتاج التسلسل الكامل لفهم حدود التعويض في catch أدناه على أي
   // حال). هذا استثناء مبرَّر موثَّق، لا تجاهلاً صامتاً للحد — راجع ADR-022 للتفصيل الكامل.
-  private async performCheckout(cartId: string, input: CheckoutInput): Promise<Order> {
-    const summary = await cartService.getSummary(cartId);
+  private async performCheckout(cart: Cart, input: CheckoutInput): Promise<Order> {
+    // getSummaryForCart لا getSummary(cart.id) — نفس إصلاح REBUILD-CART-CHECKOUT-FROM-LOVABLE-
+    // REFERENCE دفعة 2: cart مُمرَّر بالفعل من checkout()، لا داعٍ لإعادة جلبه بمعرّفه.
+    const summary = await cartService.getSummaryForCart(cart);
 
     if (summary.lines.length === 0) {
       throw new Error('السلة فارغة');
@@ -131,7 +134,7 @@ export class OrdersService {
         throw e;
       }
 
-      await cartService.clearCart(cartId);
+      await cartService.clearCart(cart.id);
 
       // أول قيد في سجل التدقيق — الحالة الابتدائية 'pending' بلا حالة سابقة، فاعلها النظام
       // نفسه لا مستخدماً بشرياً (CONSTITUTION §4 بند 5: كل تحوّل يُسجَّل من فعله ومتى ولماذا)
@@ -250,6 +253,13 @@ export class OrdersService {
   // المستدعي (Server Action) التأكد أن الفاعل platform_admin قبل الوصول لهذه الدالة.
   async getAllOrders(): Promise<Order[]> {
     return ordersRepository.findAll();
+  }
+
+  // "غالباً ما يُشترى معه" في السلة — راجع findMostOrderedProductIds في orders.repository.ts.
+  // تُعيد معرّفات منتجات فقط؛ حلّها لكائنات Product كاملة مسؤولية المستدعي عبر
+  // catalogService.getProductsByIds (لا استيراد catalog.repository.ts هنا — يحترم عزل النطاقات).
+  async getMostOrderedProductIds(excludeIds: string[], limit: number): Promise<string[]> {
+    return ordersRepository.findMostOrderedProductIds(excludeIds, limit);
   }
 
   // سجل تدقيق خاص بالطلبات فقط — للوحة الإدارة (اليوم 11). يعرض order_status_history تحديداً،

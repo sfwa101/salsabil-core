@@ -1,7 +1,7 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.22
+version: 1.23
 authority: Security & Correctness (قسم DECISION DEBT REGISTRY) + Engineering Decision Log (باقي الملف)
 last_updated: 2026-09-07
 last_verified: 2026-09-07
@@ -1325,6 +1325,34 @@ Blocking: NO
 Status: RESOLVED — بمجرد كتابة هذا السجل نفسه، مطابقاً للشرط الرابع في DOCUMENTATION_RULES.md §5.1.
 Related: SALSABIL_CONSTITUTION.md §25.1 (v1.4)، CONFLICT-008، DD-007 (السابقة المطابقة)،
           docs/DOCUMENTATION_RULES.md §5.1
+```
+
+### DD-010
+```
+Decision: هل تُبنى بنود +/- السلة كمكوّن عميل تفاعلي (useTransition + تحديث متفائل أو
+          router.refresh() صريح) بدل النموذج الحالي (<form action={Server Action}> +
+          revalidatePath('/cart') فقط)، لحل عدم تحديث الواجهة في وضع الإنتاج؟
+Reason: اكتُشف حياً أثناء REBUILD-CART-CHECKOUT-FROM-LOVABLE-REFERENCE دفعة 1 (2026-09-07):
+          النقر على "+"/"−" في /cart تحت `next start` (وضع الإنتاج) ينفّذ الطلب فعلياً بنجاح
+          (تحقَّقتُ مباشرة من قاعدة البيانات — quantity تحدَّثت من 1 إلى 2 حقاً) لكن الواجهة
+          المعروضة للمستخدم لا تتغيّر إطلاقاً (تبقى تعرض القيمة القديمة). نفس الاختبار بالضبط تحت
+          `next dev` يعمل بشكل صحيح (1 → 2 مرئية فوراً). النمط نفسه (`<form
+          action={async () => {'use server'; ...}}>` + `revalidatePath`) كان موجوداً حرفياً في
+          الكود القديم لصفحة /cart قبل هذه الدفعة (نفس السطور تقريباً، فقط بلا تصميم بصري) — **هذا
+          خلل مسبق الوجود لم يُكتشَف سابقاً لأنه لم يُختبَر حياً تحت وضع إنتاج فعلي من قبل حتى هذه
+          الدفعة**، لا انحداراً أدخلته هذه الدفعة نفسها.
+Risk: أي مستخدم حقيقي على نشر إنتاجي (`next start`، لا `next dev`) يضغط +/- في السلة سيرى الكمية
+          "متجمّدة" رغم أن الخصم/الإضافة الفعلية تمت بنجاح في قاعدة البيانات — ارتباك مستخدم حقيقي
+          مباشر (يظن أن الضغط لم ينجح، فيعيد المحاولة، فقد يُضاعِف الكمية فعلياً في القاعدة بينما
+          الشاشة لا تزال تعرض الرقم القديم). هذا يمس Golden Path GP-001 (`INVARIANTS.md`) في مساره
+          نحو نشر إنتاجي حقيقي مستقبلاً — dev فقط اليوم (`docs/ROADMAP.md`)، فلا خطر تشغيلي فوري
+          على مستخدمين حقيقيين الآن، لكنه BLOCKER حقيقي قبل أي نشر إنتاجي لواجهة السلة.
+Owner: Founder
+Created: 2026-09-07
+Review by: قبل أي نشر إنتاجي حقيقي لصفحة /cart (BLOCKER صريح لتلك اللحظة تحديداً، لا قبلها)
+Blocking: YES — لنشر إنتاجي لصفحة السلة تحديداً؛ NO لبيئة dev الحالية
+Status: OPEN
+Related: INVARIANTS.md → GP-001، src/components/CartLineItem.tsx، src/app/(reef)/cart/actions.ts
 ```
 
 ---

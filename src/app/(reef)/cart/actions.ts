@@ -12,7 +12,9 @@ type ActionResult = { summary: CartSummary } | { error: string };
 export async function getCartSummaryAction(): Promise<CartSummary> {
   const identity = await getCartIdentity();
   const cart = await cartService.getOrCreateCart(identity);
-  return cartService.getSummary(cart.id);
+  // getSummaryForCart لا getSummary(cart.id) — نملك cart كاملاً بالفعل، لا داعٍ لإعادة جلبه
+  // بمعرّفه (REBUILD-CART-CHECKOUT-FROM-LOVABLE-REFERENCE دفعة 2).
+  return cartService.getSummaryForCart(cart);
 }
 
 // للـHeader (اليوم 14) — يُستدعى من كل صفحات (reef)، بما فيها صفحات لا تمس السلة إطلاقاً

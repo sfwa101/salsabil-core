@@ -48,19 +48,32 @@ export class CartService {
 
   // TODO(BR-016): لا حد أدنى للطلب مطبَّق بعد — القيمة غير معتمدة رسمياً.
   // راجع docs/BUSINESS_RULES.md → BR-016 (OPEN_QUESTION) قبل الإطلاق.
+  //
+  // REBUILD-CART-CHECKOUT-FROM-LOVABLE-REFERENCE دفعة 2: كانت هذه الدالة تجلب البنود
+  // (findItems) ثم تستعلم عن كل منتج على حدة (N استعلام متوازٍ عبر Promise.all) — قياس حي أثبت
+  // أن استعلاماً واحداً مُجمَّعاً (findItemsWithProducts، JOIN عبر FK) بنفس زمن استعلام مفرد
+  // تقريباً، بدل رحلتي شبكة متتاليتين. الإصلاح مطبَّق هنا عالمياً (كل مستدعي getSummary/
+  // getSummaryForCart يستفيد بلا تغيير إضافي).
   async getSummary(cartId: string): Promise<CartSummary> {
     const cart = await cartRepository.findCartById(cartId);
     if (!cart) throw new Error(`السلة غير موجودة: ${cartId}`);
+    return this.buildSummary(cart);
+  }
 
-    const items = await cartRepository.findItems(cartId);
-    const lines = await Promise.all(
-      items.map(async (item) => {
-        const product = await catalogService.getProductById(item.productId);
-        if (!product) throw new Error(`المنتج غير موجود: ${item.productId}`);
-        const unitPrice = catalogService.calculatePrice(product, item.selection);
-        return { item, product, unitPrice, lineTotal: unitPrice * item.quantity };
-      })
-    );
+  // REBUILD-CART-CHECKOUT-FROM-LOVABLE-REFERENCE دفعة 2: مسار سريع لمستدعٍ يملك كائن Cart كاملاً
+  // فعلاً (مثال: getCartSummaryAction بعد getOrCreateCart، أو orders.service.ts.performCheckout)
+  // — يتجنّب إعادة جلب نفس صف carts بمعرّفه (findCartById) رغم معرفته مسبقاً، وهي رحلة شبكة
+  // كاملة زائدة قِيست حياً (~85-150ms) على كل تحميل صفحة /cart و/checkout قبل هذا الإصلاح.
+  async getSummaryForCart(cart: Cart): Promise<CartSummary> {
+    return this.buildSummary(cart);
+  }
+
+  private async buildSummary(cart: Cart): Promise<CartSummary> {
+    const itemsWithProducts = await cartRepository.findItemsWithProducts(cart.id);
+    const lines = itemsWithProducts.map(({ item, product }) => {
+      const unitPrice = catalogService.calculatePrice(product, item.selection);
+      return { item, product, unitPrice, lineTotal: unitPrice * item.quantity };
+    });
 
     return { cart, lines, total: lines.reduce((sum, line) => sum + line.lineTotal, 0) };
   }

@@ -69,6 +69,15 @@ export class MerchantRepository {
     return (data as MerchantRow[]).map(toMerchant);
   }
 
+  // دفعة واحدة لعدة معرّفات — نفس نمط CatalogRepository.findProductsByIds. مستهلكها الأول: تجميع
+  // بنود السلة حسب التاجر (REBUILD-CART-CHECKOUT-FROM-LOVABLE-REFERENCE دفعة 1).
+  async findByIds(ids: string[]): Promise<Merchant[]> {
+    if (ids.length === 0) return [];
+    const { data, error } = await supabaseAdmin.from('merchants').select('*').in('id', ids);
+    if (error) throw error;
+    return (data as MerchantRow[]).map(toMerchant);
+  }
+
   async setActiveStatus(id: string, isActive: boolean): Promise<Merchant> {
     const { data, error } = await supabaseAdmin.from('merchants').update({ is_active: isActive }).eq('id', id).select('*').single();
     if (error) throw error;

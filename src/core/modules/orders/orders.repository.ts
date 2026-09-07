@@ -207,6 +207,28 @@ export class OrdersRepository {
     return (data as OrderStatusHistoryRow[]).map(toOrderStatusHistoryEntry);
   }
 
+  // "غالباً ما يُشترى معه" في السلة (REBUILD-CART-CHECKOUT-FROM-LOVABLE-REFERENCE دفعة 1) — عدّ
+  // تكرار كل منتج عبر كل order_items تاريخياً، الأكثر تكراراً أولاً، بعد استبعاد المنتجات
+  // الموجودة في السلة الحالية أصلاً. تجميع في الذاكرة (لا SQL GROUP BY عبر PostgREST مباشرة) —
+  // حجم order_items تجريبي اليوم (عشرات الصفوف)، نفس فلسفة "لا نبني أكثر من المطلوب فعلاً"
+  // المُطبَّقة في CartService.getItemCount المجاور.
+  async findMostOrderedProductIds(excludeIds: string[], limit: number): Promise<string[]> {
+    const { data, error } = await supabaseAdmin.from('order_items').select('product_id');
+    if (error) throw error;
+
+    const excluded = new Set(excludeIds);
+    const counts = new Map<string, number>();
+    for (const row of data as { product_id: string }[]) {
+      if (excluded.has(row.product_id)) continue;
+      counts.set(row.product_id, (counts.get(row.product_id) ?? 0) + 1);
+    }
+
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([productId]) => productId);
+  }
+
   // سجل تدقيق عام عبر كل الطلبات — للوحة الإدارة فقط (اليوم 11). الأحدث أولاً، بحد أقصى
   // اختياري (لا Pagination حقيقي بعد — حجم البيانات تجريبي الآن).
   async findAllStatusHistory(limit: number): Promise<OrderStatusHistoryEntry[]> {

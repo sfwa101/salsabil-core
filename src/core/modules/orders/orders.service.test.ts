@@ -60,6 +60,10 @@ vi.mock('../cart/cart.repository', () => ({
     createCartForUser: vi.fn(),
     createCartForSession: vi.fn(),
     findItems: vi.fn(),
+    // REBUILD-CART-CHECKOUT-FROM-LOVABLE-REFERENCE دفعة 2: performCheckout يستدعي
+    // cartService.getSummaryForCart الآن، الذي يستدعي هذه بدل findItems + استعلام منتج منفصل —
+    // راجع mockCartItems أدناه.
+    findItemsWithProducts: vi.fn(),
     insertItem: vi.fn(),
     updateItemQuantity: vi.fn(),
     deleteItem: vi.fn(),
@@ -127,6 +131,17 @@ function makeItem(overrides: Partial<CartItem> = {}): CartItem {
   };
 }
 
+// getSummaryForCart تستدعي findItemsWithProducts (استعلام مُجمَّع)، لا findItems + بحث منتج منفصل
+// — يبني كل زوج {item, product} من نفس قاموس products أعلاه (يعكس حالته الحالية وقت الاستدعاء،
+// بما فيها أي تعديل مؤقت مثل isActive: false في اختبار "منتج غير نشط" أدناه). findItems يبقى
+// مموَّهاً بنفس البنود أيضاً — clearCart() (نهاية checkout الناجح) لا تزال تستدعيه مباشرة.
+function mockCartItems(items: CartItem[]): void {
+  vi.mocked(cartRepository.findItems).mockResolvedValue(items);
+  vi.mocked(cartRepository.findItemsWithProducts).mockResolvedValue(
+    items.map((item) => ({ item, product: products[item.productId] }))
+  );
+}
+
 const checkoutInput = {
   identity: { sessionToken: 'session-1' } as const,
   customerName: 'زبون اختبار',
@@ -142,14 +157,14 @@ beforeEach(() => {
 
 describe('OrdersService.checkout', () => {
   it('يرفض عند سلة فارغة', async () => {
-    vi.mocked(cartRepository.findItems).mockResolvedValue([]);
+    mockCartItems([]);
     await expect(ordersService.checkout(checkoutInput)).rejects.toThrow(/فارغة/);
     expect(ordersRepository.createOrder).not.toHaveBeenCalled();
   });
 
   it('يرفض عند منتج غير نشط', async () => {
     products[chicken.id] = { ...chicken, isActive: false };
-    vi.mocked(cartRepository.findItems).mockResolvedValue([makeItem()]);
+    mockCartItems([makeItem()]);
     await expect(ordersService.checkout(checkoutInput)).rejects.toThrow(/لم يعد متاحاً/);
     products[chicken.id] = chicken; // إعادة الحالة لبقية الاختبارات
   });
@@ -157,14 +172,14 @@ describe('OrdersService.checkout', () => {
   it('يرفض عند نقص المخزون (decrementIfAvailable يعيد false عند الاستهلاك الفعلي)', async () => {
     const { inventoryRepository } = await import('../inventory/inventory.repository');
     vi.mocked(inventoryRepository.decrementIfAvailable).mockResolvedValueOnce(false);
-    vi.mocked(cartRepository.findItems).mockResolvedValue([makeItem()]);
+    mockCartItems([makeItem()]);
     await expect(ordersService.checkout(checkoutInput)).rejects.toThrow(/غير متوفرة في المخزون/);
     expect(ordersRepository.createOrder).not.toHaveBeenCalled();
   });
 
   it('يستعيد (release) كل مخزون خُصم في نفس المحاولة عند فشل خطوة لاحقة (تعويض، بند 3)', async () => {
     const { inventoryRepository } = await import('../inventory/inventory.repository');
-    vi.mocked(cartRepository.findItems).mockResolvedValue([makeItem({ quantity: 2 })]);
+    mockCartItems([makeItem({ quantity: 2 })]);
     // ينجح خصم المخزون، ثم يفشل إنشاء الطلب نفسه (خطأ DB افتراضي) — يجب استرجاع الكمية المخصومة
     vi.mocked(ordersRepository.createOrder).mockRejectedValueOnce(new Error('فشل DB افتراضي'));
 
@@ -175,7 +190,7 @@ describe('OrdersService.checkout', () => {
   });
 
   it('يرفض عند تعدد التجار بين بنود السلة', async () => {
-    vi.mocked(cartRepository.findItems).mockResolvedValue([
+    mockCartItems([
       makeItem({ id: 'a', productId: chicken.id, selection: { sizeId: 'small' } }),
       makeItem({ id: 'b', productId: fish.id, selection: {} }),
     ]);
@@ -183,7 +198,7 @@ describe('OrdersService.checkout', () => {
   });
 
   it('ينجح: يُنشئ الطلب بسعر مجمَّد مطابق للسعر المحسوب حياً، وينشئ مستخدماً جديداً، ويُفرغ السلة', async () => {
-    vi.mocked(cartRepository.findItems).mockResolvedValue([makeItem({ quantity: 2, selection: { sizeId: 'small' } })]);
+    mockCartItems([makeItem({ quantity: 2, selection: { sizeId: 'small' } })]);
 
     const order = await ordersService.checkout(checkoutInput);
 
@@ -208,7 +223,7 @@ describe('OrdersService.checkout', () => {
   });
 
   it('لا يُنشئ مستخدماً جديداً إذا وُجد مستخدم مطابق بالهاتف مسبقاً', async () => {
-    vi.mocked(cartRepository.findItems).mockResolvedValue([makeItem()]);
+    mockCartItems([makeItem()]);
     vi.mocked(khalilRepository.findUserByPhoneAdmin).mockResolvedValueOnce(testUser);
 
     await ordersService.checkout(checkoutInput);

@@ -42,6 +42,9 @@ vi.mock('./cart.repository', () => ({
     createCartForUser: vi.fn(),
     createCartForSession: vi.fn(),
     findItems: vi.fn(),
+    // REBUILD-CART-CHECKOUT-FROM-LOVABLE-REFERENCE دفعة 2: getSummary/getSummaryForCart تستدعيان
+    // هذه الآن بدل findItems + استعلام منتج منفصل لكل بند — راجع cart.repository.ts.
+    findItemsWithProducts: vi.fn(),
     insertItem: vi.fn(),
     updateItemQuantity: vi.fn(),
     deleteItem: vi.fn(),
@@ -66,14 +69,24 @@ function makeItem(overrides: Partial<CartItem> = {}): CartItem {
   };
 }
 
+// buildSummary (getSummary/getSummaryForCart) تستدعي findItemsWithProducts دائماً في نهايتها —
+// حتى الاختبارات التي لا تتحقق من محتوى summary (addItem/updateItemQuantity/removeItem) تحتاج
+// موكاً صالحاً هنا، وإلا يرمي .map() على undefined. المنتج المرتبط دائماً chicken في هذا الملف.
+function mockSummaryItems(items: CartItem[]): void {
+  vi.mocked(cartRepository.findItemsWithProducts).mockResolvedValue(
+    items.map((item) => ({ item, product: chicken }))
+  );
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(cartRepository.findCartById).mockResolvedValue(cart);
+  mockSummaryItems([]);
 });
 
 describe('CartService.getSummary', () => {
   it('يحسب سعر كل بند حياً عبر calculatePrice الحقيقي، ويجمع الإجمالي بشكل صحيح', async () => {
-    vi.mocked(cartRepository.findItems).mockResolvedValue([
+    mockSummaryItems([
       makeItem({ id: 'a', selection: { sizeId: 'small' }, quantity: 2 }), // 100 * 2 = 200
       makeItem({ id: 'b', selection: { sizeId: 'large' }, quantity: 1 }), // 150 * 1 = 150
     ]);
@@ -84,6 +97,18 @@ describe('CartService.getSummary', () => {
     expect(summary.lines[0].lineTotal).toBe(200);
     expect(summary.lines[1].unitPrice).toBe(150);
     expect(summary.total).toBe(350);
+  });
+});
+
+describe('CartService.getSummaryForCart', () => {
+  it('لا يستدعي findCartById إطلاقاً — يستخدم كائن Cart المُمرَّر مباشرة (REBUILD-CART-CHECKOUT دفعة 2)', async () => {
+    mockSummaryItems([makeItem({ selection: { sizeId: 'medium' }, quantity: 1 })]);
+
+    const summary = await cartService.getSummaryForCart(cart);
+
+    expect(cartRepository.findCartById).not.toHaveBeenCalled();
+    expect(summary.cart).toBe(cart);
+    expect(summary.total).toBe(120);
   });
 });
 
@@ -184,8 +209,9 @@ describe('CartService.getItemCountForSession', () => {
 describe('CartService.removeItem', () => {
   it('يحذف البند ويُعيد ملخصاً محدَّثاً عندما ينتمي فعلاً لهذه السلة', async () => {
     const item = makeItem();
-    // الاستدعاء الأول: فحص الملكية (يجد البند)؛ الثاني: getSummary بعد الحذف الفعلي (لا بند بعدها)
-    vi.mocked(cartRepository.findItems).mockResolvedValueOnce([item]).mockResolvedValueOnce([]);
+    // findItems: فحص الملكية فقط (يجد البند). getSummary اللاحق يستخدم findItemsWithProducts
+    // (موكاً في beforeEach إلى [] — لا بند بعد الحذف الفعلي).
+    vi.mocked(cartRepository.findItems).mockResolvedValue([item]);
 
     const summary = await cartService.removeItem(cart.id, item.id);
 
