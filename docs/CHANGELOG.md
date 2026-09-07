@@ -1,7 +1,7 @@
 ---
 title: سجل التغييرات
 status: ACTIVE
-version: 1.25
+version: 1.26
 last_updated: 2026-09-07
 owner: Claude (تلقائي مع كل مهمة كبيرة)
 source_of_truth: هذا الملف + Git log
@@ -12,6 +12,43 @@ source_of_truth: هذا الملف + Git log
 > يُسجَّل هنا فقط التغييرات المهمة (معمارية، قواعد أعمال، قاعدة بيانات، أمان، UX، قرارات، خارطة طريق) — لا كل commit صغير.
 
 ---
+
+## 2026-09-07 — تركيب shadcn/ui فعلياً + إصلاح انكسار خط حقيقي (ADR-025)
+
+> **سياق:** طلب مباشر بتشغيل `npx shadcn@latest init`. قبل التنفيذ، تم التوقف والتوضيح (`AGENTS.md
+> §5` — عملية صعبة التراجع تتعارض مع حالة موثَّقة صراحة، `CONFLICT-005`: shadcn/ui غير مثبّتة عمداً،
+> ونظام الثيمات الكامل بُني كبديل عنها). أكَّد المؤسس: نفّذه الآن مع حل التعارض.
+
+- **`npx shadcn@latest init --preset nova --base radix --template next --rtl --css-variables`
+  نُفِّذ فعلياً.** جديد: `components.json` (`style: radix-nova`, `base: radix`, `baseColor: neutral`,
+  `iconLibrary: lucide`, `rtl: true`)، `src/lib/utils.ts` (`cn()`)، `src/components/ui/button.tsx`
+  (أول مكوّن، بلا استهلاك في صفحة بعد). تبعيات جديدة: `class-variance-authority`, `cn`, `radix-ui`
+  (الحزمة الموحَّدة الجديدة، لا `@radix-ui/react-*` منفصلة), `shadcn`, `tw-animate-css`.
+- **حل التعارض مع `--sb-*`/`[data-world]` (`ADR-025`):** الأداة أضافت كتلة `:root`/`.dark` خامة
+  بأسماء shadcn القياسية (`--background`, `--primary`...) داخل `globals.css` — **أُبقيت كما هي، لم
+  تُحذَف** (بعض ملفات shadcn المولَّدة، مثال حقيقي `button.tsx`، تستخدمها مباشرة في قيم Tailwind
+  تعسفية كـ`color-mix(...)`، والحذف كان سيكسر ذلك بلا فائدة). **الأهم: توكنز سلسبيل الأساسية
+  (`--color-background/primary/secondary/accent/muted/border/destructive`) لم تتغيّر إطلاقاً** — لا
+  تزال تُقرَأ من `--sb-*` عبر `@theme inline`، وتبقى واعية بـ`[data-world]` تماماً كالسابق. قيد جديد
+  موثَّق صراحة: تفاصيل CSS دقيقة داخل ملفات shadcn المولَّدة (كحالة `color-mix` أعلاه) وتوكنز جديدة
+  كلياً (`ring`/`input`/`popover`/`sidebar-*`/`chart-*`) لا تتفاعل مع تبديل `[data-world]` — ثابتة
+  عبر كل العوالم حتى تُستهلَك فعلياً وتُعاد مراجعتها فرداً بفرد.
+- **إصلاح انكسار حقيقي اكتُشف أثناء التحقُّق الحي (لا افتراضاً):**
+  1. الأداة كتبت `--font-sans: var(--font-sans);` (مرجع ذاتي فارغ) في `@theme inline` — أسقط مكدّس
+     الخط الافتراضي الفعلي، فعرض المتصفح النص بخط Times New Roman. **تحقُّق مباشر عبر `git stash`:**
+     قُورنت الحالة قبل/بعد فعلياً عبر Playwright، لا افتراضاً — الحالة قبل shadcn init كانت تعرض
+     `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto...` بالفعل. أُصلِح بكتابة نفس المكدّس
+     صراحة.
+  2. الأداة أضافت أيضاً خط `Geist` (لاتيني بحت) على `<html>` في `src/app/layout.tsx` — أُزيل عمداً:
+     يحسم ضمنياً سؤال الخط العربي المفتوح صراحة (`docs/UI_UX_SYSTEM.md §3`، Tajawal/Cairo لا تزال
+     `PROPOSED`)، ولا فائدة منه أصلاً (Geist لا يغطي حروفاً عربية).
+- **توثيق:** `docs/DECISIONS.md` (`ADR-025` جديد، `CONFLICT-005` → `SUPERSEDED`)،
+  `docs/ARCHITECTURE.md` (§2، §2.1، جدول المكدّس التقني §5)، `docs/UI_UX_SYSTEM.md` (§8.2).
+- **تحقُّق:** `tsc --noEmit` نظيف، `npm run arch:check` نظيف (139 وحدة، 414 اعتماد، صفر مخالفة)،
+  126/126 اختبار وحدة ناجح، `npm run build` ناجح. تحقُّق حي عبر Playwright (سكربتات مؤقتة، حُذفت
+  بعد التأكد): كل الصفحات المتأثرة 200 بلا أخطاء Console، `font-family` المحسوبة فعلياً على
+  `<body>` مطابقة تماماً لحالة `git stash` الأصلية (إثبات لا افتراض)، سلسلة `data-world` (`diwan`
+  ثم `reef-lavender`) لا تزال تحسب الألوان الصحيحة بلا تأثر.
 
 ## 2026-09-07 — RAPID-VISUAL-REDESIGN-BATCH-SAFE-SCREENS: ثيم reef-lavender + سجل هوية الأحياء + 8 شاشات
 

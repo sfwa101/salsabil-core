@@ -1,12 +1,17 @@
 ---
 title: المعمارية التقنية
 status: ACTIVE
-version: 1.10
+version: 1.11
 last_updated: 2026-09-07
 owner: المؤسس (أبوحتاب) + Claude (معماري)
 source_of_truth: هذا الملف (تفصيل)، SALSABIL_CONSTITUTION.md §4-§5 (المبدأ)
 ---
 
+> **تحديث 2026-09-07 (تركيب shadcn/ui، `ADR-025`):** `shadcn/ui` أصبحت مثبَّتة فعلياً (كانت
+> `CONFLICT-005` توثّق غيابها) — §2 (هيكل المجلدات) و§2.1 (الطبقة 1) مُحدَّثان ليعكسا ذلك. راجع
+> `ADR-025` للتفصيل الكامل (لماذا، ماذا تغيّر في `globals.css`، وقيد فعلي مكتشَف ومُصلَح أثناء
+> التنفيذ).
+>
 > **تحديث 2026-09-07 (`RAPID-VISUAL-REDESIGN-BATCH-SAFE-SCREENS`):** إضافة §13 "Neighborhood
 > Identity System" — سجل مركزي ثانٍ (`src/config/neighborhood-identity-registry.ts`) فوق
 > `theme-registry.ts`، لهوية بصرية اختيارية لكل حي (category) بمعزل عن ثيم العالم العام. راجع
@@ -73,9 +78,11 @@ src/
 │   │                       (تستهلك فقط bg-primary/text-foreground/border-border...)
 │   │                       OrderRow.tsx (كان MerchantOrderRow.tsx) مُعمَّم اليوم 11 — يُستخدَم من
 │   │                       بوابتي التاجر والإدارة معاً عبر onTransition كـ prop قابل للحقن
-│   └── ui/               → فارغ حالياً — shadcn/ui **غير مثبّتة** (تحقَّق منه فعلياً
-│                             اليوم 6: لا components.json، لا cva/clsx/cn — راجع
-│                             docs/DECISIONS.md → CONFLICT-005)
+│   └── ui/               → shadcn/ui **مثبَّتة فعلياً الآن** (`npx shadcn@latest init`،
+│                             2026-09-07، `ADR-025`) — `button.tsx` أول مكوّن مولَّد، بلا استهلاك في
+│                             أي صفحة بعد. `components.json` (`style: "radix-nova"`, `base: radix`,
+│                             `rtl: true`) في جذر المستودع. راجع `docs/DECISIONS.md → CONFLICT-005`
+│                             (حالتها الآن `SUPERSEDED` لا `RESOLVED`) و`ADR-025` للتفصيل الكامل
 ├── config/
 │   └── theme-registry.ts → IMPLEMENTED (اليوم 6) — السجل المركزي لثيمات كل عالم
 │                             (slug، الاسم AR/EN، التوكنز الدلالية الكاملة).
@@ -148,7 +155,11 @@ src/
 راجع `docs/UI_UX_SYSTEM.md §8` للتفصيل الكامل، و`ADR-007` في `docs/DECISIONS.md` للقرار المعماري (لا يزال `PROPOSED` رسمياً — التنفيذ سبق الاعتماد الرسمي، نفس نمط ADR-006).
 
 طبقتان من CSS Variables داخل `src/app/globals.css`:
-- **الطبقة 1 (خام):** قيم Hex مباشرة تحت `[data-world="<slug>"]`، بادئة `--sb-` (بديل عن أسماء shadcn القياسية غير المسبوقة، لأن shadcn/ui غير مثبّتة).
+- **الطبقة 1 (خام):** قيم Hex مباشرة تحت `[data-world="<slug>"]`، بادئة `--sb-` — تبقى مصدر الحقيقة
+  الفعلي لألوان الواجهة حتى بعد تركيب shadcn/ui فعلياً (`ADR-025`، 2026-09-07). shadcn/ui تضيف طبقة
+  `:root`/`.dark` خاماء منفصلة بأسمائها القياسية غير المسبوقة (`--primary`, `--background`...) —
+  مطلوبة لبعض آلياتها الداخلية فقط (راجع تعليق `src/app/globals.css` أعلى تلك الكتلة)، لا تحل محل
+  `--sb-*` ولا تتفاعل مع `[data-world]`.
 - **الطبقة 2 (دلالية):** `@theme inline` تربط `--color-primary` بـ `var(--sb-primary)` وهكذا لبقية التوكنز. **يجب استخدام `@theme inline` لا `@theme` العادية** — `@theme` العادية تُجمِّد القيمة عند `:root` وقت البناء، فلا يتغيّر أي شيء فعلياً عند تبديل `data-world` في عنصر متداخل (تحقَّق منه فعلياً: خطأ حقيقي وقع أثناء بناء اليوم 6، أُصلح باستخدام `@theme inline`).
 
 `data-world="diwan"` على `<html>` هو الافتراضي؛ كل قسم فرعي (مثل `(reef)`) يضع `data-world="<slug>"` على عنصر جذر خاص به (لا `<html>` مجدداً)، فيُعاد تعريف الطبقة الثانية فقط لذلك القسم من الشجرة.
@@ -238,6 +249,7 @@ ImportProvider (واجهة عامة، مقترحة من محادثة الاست�
 | الطبقة | التقنية | الحالة |
 |---|---|---|
 | الواجهة الأمامية | Next.js (RTL) + TypeScript + Tailwind | `ACTIVE` |
+| مكوّنات UI | shadcn/ui (`base: radix`, `style: radix-nova`) + `radix-ui` | `IMPLEMENTED` (`ADR-025`، 2026-09-07) — `button.tsx` أول مكوّن، بلا استهلاك في صفحة بعد |
 | منطق الخادم | Edge Functions / Node.js | `ACTIVE` |
 | قاعدة البيانات | Supabase (Postgres + Auth + Realtime + Storage) | `ACTIVE`, `IMPLEMENTED` (اتصال حقيقي — **عدد الجداول وتفاصيلها الحية تتغيّر بسرعة؛ `docs/DATABASE.md §3` هو مصدر الحقيقة الوحيد لهذا الرقم، لا يُكرَّر هنا بقيمة عرضة للانحراف**) |
 | الصلاحيات (RLS) | Postgres RLS | `IMPLEMENTED` — ثلاثة أنماط (قراءة عامة، قفل كامل عبر service_role، قراءة الذات معطَّلة عملياً) — راجع `docs/DATABASE.md §6` للجدول الكامل والحالة الفعلية لكل جدول |

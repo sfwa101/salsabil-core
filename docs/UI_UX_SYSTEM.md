@@ -1,8 +1,8 @@
 ---
 title: نظام التصميم (Design System)
 status: PROPOSED (الاتجاه العام + معمارية الثيمات متعددة العوالم §8 ACCEPTED من حيث المبدأ ومُنفَّذة تقنياً لديوان/ريف، القيم الدقيقة للألوان و5 العوالم الأخرى لا تزال PROPOSED؛ محور التفضيل الشخصي §8.6 IMPLEMENTED كاملاً بمستهلك واجهة حقيقي، BAYAN-CLOSEOUT-UI-GAPS؛ Responsive §7 IMPLEMENTED لخلاصة بيان تحديداً، اليوم 31؛ §9 ملخّص أنماط دفعة بيان المُغلَقة بالكامل + BottomNav)
-version: 1.8
-last_updated: 2026-09-06
+version: 1.9
+last_updated: 2026-09-07
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف، SALSABIL_CONSTITUTION.md §21, §30.2 (المصدر الأصلي)
 ---
@@ -122,7 +122,7 @@ Next.js مُعَدّ باتجاه RTL افتراضي (`SALSABIL_CONSTITUTION.md 
   --destructive / --destructive-foreground   ← مشتركة عبر كل العوالم، لا تُخصَّص (خطأ يجب أن يُقرأ كخطأ في أي عالم)
 ```
 
-**ملاحظة تقنية — Evidence: `IMPLEMENTED` (تحقَّق منه فعلياً اليوم 6):** `shadcn/ui` **غير مثبّتة** في هذا المشروع — لا `components.json` في جذر المستودع، `src/components/ui/` فارغ فعلياً (لا ملفات)، لا `class-variance-authority`/`clsx`/`cn()` في أي مكان. سُجِّل كـ `CONFLICT-005` في `docs/DECISIONS.md` كما طلب موجّه اليوم 6. استُخدمت لذلك الأسماء القياسية بادئة `--sb-` بصيغة Hex مباشرة (لا HSL)، مربوطة بأسماء Tailwind القياسية (`bg-primary`, `text-foreground`...) عبر `@theme inline` في `globals.css` — راجع `docs/ARCHITECTURE.md §2.1` للتفصيل التقني الكامل (بما فيه خطأ `@theme` العادية الذي وقع وأُصلح فعلياً أثناء التنفيذ).
+**ملاحظة تقنية — Evidence: `IMPLEMENTED`:** `shadcn/ui` كانت **غير مثبّتة** في هذا المشروع منذ اليوم 6 (لا `components.json`، `src/components/ui/` فارغ، لا `class-variance-authority`/`clsx`/`cn()`) — سُجِّل حينها كـ `CONFLICT-005` في `docs/DECISIONS.md`. **تحديث 2026-09-07 (`ADR-025`):** أصبحت مثبَّتة فعلياً الآن (`npx shadcn@latest init`) — `CONFLICT-005` مُحدَّثة إلى `SUPERSEDED`. أسماء التوكنز الدلالية الأساسية لسلسبيل **لم تتغيّر** — تبقى بادئة `--sb-` بصيغة Hex مباشرة (لا HSL)، مربوطة بأسماء Tailwind القياسية (`bg-primary`, `text-foreground`...) عبر `@theme inline` في `globals.css`، وتبقى مصدر الحقيقة لكل عالم عبر `[data-world]` — راجع `docs/ARCHITECTURE.md §2.1`/`§13` وADR-025 للتفصيل الكامل لكيفية تعايش الطبقتين معاً.
 
 ### 8.3 آلية التبديل
 
