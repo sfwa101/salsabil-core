@@ -1,7 +1,7 @@
 ---
 title: سجل التغييرات
 status: ACTIVE
-version: 1.28
+version: 1.29
 last_updated: 2026-09-07
 owner: Claude (تلقائي مع كل مهمة كبيرة)
 source_of_truth: هذا الملف + Git log
@@ -12,6 +12,20 @@ source_of_truth: هذا الملف + Git log
 > يُسجَّل هنا فقط التغييرات المهمة (معمارية، قواعد أعمال، قاعدة بيانات، أمان، UX، قرارات، خارطة طريق) — لا كل commit صغير.
 
 ---
+
+## 2026-09-07 — HEADER-BOTTOMNAV-REDESIGN-AND-REAL-PRODUCT-IMPORT دفعة 3: تعطيل 8 منتجات Demo قديمة
+
+> موافقة صريحة من المؤسس على الخطة كما عُرضت — تنفيذ فوري بعدها.
+
+- **`scripts/deactivate-old-demo-products.ts`** (جديد) — `is_active=false` (لا `DELETE`) للثمانية
+  من `scripts/seed-daily-food-demo-content.ts` (أرز/سكر/زيت/بيض/طماطم/بصل/خبز/جبنة قريش). فحص FK
+  حي مسبق: **صفر** مراجع في `order_items`/`cart_items` لكل الثمانية — آمن. **"دجاجة كاملة طازجة"
+  (أول منتج، 16 مرجع `order_items`، 12 `cart_items`) مُستبعَدة كلياً من السكربت عمداً** — لها سجل
+  طلبات حقيقي. idempotent ومُتحقَّق (تشغيل مزدوج، نفس النتيجة).
+- **تحقُّق حي:** المنتجات النشطة الآن 21 (19 من دفعة 2 + "دجاجة كاملة طازجة" + منتج اختبار E2E غير
+  ذي صلة) — الثمانية القديمة اختفت فعلياً من `/daily-food` بلا أي كود إضافي (`CatalogRepository`
+  يستبعد `is_active=false` أصلاً). فتح صفحة "دجاجة كاملة طازجة" يعمل بلا كسر (زر الإضافة للسلة ظاهر).
+  صفر أخطاء Console.
 
 ## 2026-09-07 — HEADER-BOTTOMNAV-REDESIGN-AND-REAL-PRODUCT-IMPORT دفعة 2: استيراد 19 منتج Demo احترافي
 
