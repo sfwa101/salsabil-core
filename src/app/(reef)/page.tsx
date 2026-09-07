@@ -24,15 +24,19 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
   return (
     <>
-      {/* CREATE-DESIGN-CONSTITUTION-AND-HOME-FEED-PHASE-01: FeedTopBar.tsx حُذف — مبدّل العوالم +
-          عنوان التوصيل انتقلا إلى Header.tsx (layout.tsx المشترك). القصص+التبويبات وحدهما الآن
-          يختفيان/يظهران معاً بالتمرير (ScrollHideBar). */}
-      <ScrollHideBar>
-        <div className="border-b border-border bg-card px-4 py-3">
-          <div className="mx-auto max-w-2xl md:max-w-4xl xl:max-w-6xl">
-            <StoryBar categories={activeCategories} />
-          </div>
+      {/* FULL-VISUAL-PARITY-AUDIT-AND-FIX (بند 1ج): StoryBar لم يعد داخل أي ScrollHideBar — تدفق
+          محتوى عادي (Scrollable)، يختفي مع التمرير للأسفل مثل أي محتوى، ويحتاج المستخدم للتمرير
+          لأعلى ليصل إليه مجدداً (قرار مؤسس صريح، لا يشارك حركة الهيدر/التبويبات). */}
+      <div className="border-b border-border bg-card px-4 py-3">
+        <div className="mx-auto max-w-2xl md:max-w-4xl xl:max-w-6xl">
+          <StoryBar categories={activeCategories} />
         </div>
+      </div>
+
+      {/* FeedTabBar وحده: mode="reposition" — لا يختفي أبداً، يلتصق top:0 حين يكون Header مخفياً
+          بالتمرير للأسفل، ويرتد أسفل Header (--header-height المنشورة من Header.tsx) حين يظهر
+          بالتمرير للأعلى. راجع تعليق ScrollHideBar.tsx للتفصيل الكامل. */}
+      <ScrollHideBar mode="reposition" topOffset="var(--header-height, 0px)">
         <Suspense fallback={null}>
           <FeedTabBar />
         </Suspense>

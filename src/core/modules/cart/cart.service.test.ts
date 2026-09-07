@@ -206,6 +206,26 @@ describe('CartService.getItemCountForSession', () => {
   });
 });
 
+describe('CartService.getTotalForSession', () => {
+  it('يعيد صفراً بلا استدعاء getSummary إن لم توجد سلة لهذا التوكن بعد (نفس نمط getItemCountForSession)', async () => {
+    vi.mocked(cartRepository.findCartBySessionToken).mockResolvedValue(null);
+
+    const total = await cartService.getTotalForSession('brand-new-token');
+
+    expect(total).toBe(0);
+    expect(cartRepository.findItemsWithProducts).not.toHaveBeenCalled();
+  });
+
+  it('يعيد إجمالي السلة الموجودة فعلاً لهذا التوكن (سعر محسوب حياً عبر getSummary)', async () => {
+    vi.mocked(cartRepository.findCartBySessionToken).mockResolvedValue(cart);
+    mockSummaryItems([makeItem({ selection: { sizeId: 'medium' }, quantity: 2 })]); // 120 * 2 = 240
+
+    const total = await cartService.getTotalForSession(cart.sessionToken!);
+
+    expect(total).toBe(240);
+  });
+});
+
 describe('CartService.removeItem', () => {
   it('يحذف البند ويُعيد ملخصاً محدَّثاً عندما ينتمي فعلاً لهذه السلة', async () => {
     const item = makeItem();

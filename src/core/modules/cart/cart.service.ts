@@ -46,6 +46,16 @@ export class CartService {
     return this.getItemCount(cart.id);
   }
 
+  // FULL-VISUAL-PARITY-AUDIT-AND-FIX (بند 1ب) — كبسولة السلة في الهيدر تعرض الآن الإجمالي بالجنيه
+  // لا عدد القطع. نفس نمط getItemCountForSession حرفياً (قراءة فقط، بلا getOrCreateCart، بلا سلة =
+  // صفر) لكن عبر getSummary().total بدل getItemCount.
+  async getTotalForSession(sessionToken: string): Promise<number> {
+    const cart = await cartRepository.findCartBySessionToken(sessionToken);
+    if (!cart) return 0;
+    const summary = await this.getSummary(cart.id);
+    return summary.total;
+  }
+
   // TODO(BR-016): لا حد أدنى للطلب مطبَّق بعد — القيمة غير معتمدة رسمياً.
   // راجع docs/BUSINESS_RULES.md → BR-016 (OPEN_QUESTION) قبل الإطلاق.
   //

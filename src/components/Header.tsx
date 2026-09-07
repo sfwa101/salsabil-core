@@ -13,34 +13,40 @@
 // أُسقط، وزر البحث المكرر لم يعد ضرورياً بعد أن أصبح HeaderSearchBar ظاهراً دائماً.
 
 import Link from 'next/link';
-import { getCartItemCountAction } from '@/app/(reef)/cart/actions';
+import { getCartTotalAction } from '@/app/(reef)/cart/actions';
 import { WorldSwitcher } from './WorldSwitcher';
 import { DeliveryAddressButton } from './DeliveryAddressButton';
 import { CartCapsule } from './CartCapsule';
 import { HeaderSearchBar } from './HeaderSearchBar';
+import { ScrollHideBar } from './ScrollHideBar';
 
 export async function Header() {
-  const itemCount = await getCartItemCountAction();
+  const cartTotal = await getCartTotalAction();
 
   return (
-    <header className="border-b border-border bg-card/95 backdrop-blur-sm">
-      {/* مقياس العرض الموحَّد (يطابق FeedTabBar/main) */}
-      <div className="mx-auto flex max-w-2xl flex-col gap-2 px-4 py-3 md:max-w-4xl xl:max-w-6xl">
-        <div className="flex items-center justify-between gap-3">
-          <WorldSwitcher />
+    // FULL-VISUAL-PARITY-AUDIT-AND-FIX (بند 1ج): sticky+hide فعلياً الآن — يختفي بالتمرير للأسفل،
+    // يظهر فوراً بالتمرير للأعلى. ينشر ارتفاعه الحي (--header-height) ليرتد FeedTabBar (page.tsx)
+    // تحته بدقة — راجع تعليق ScrollHideBar.tsx للتفصيل الكامل.
+    <ScrollHideBar publishHeightAs="--header-height">
+      <header className="border-b border-border bg-card/95 backdrop-blur-sm">
+        {/* مقياس العرض الموحَّد (يطابق FeedTabBar/main) */}
+        <div className="mx-auto flex max-w-2xl flex-col gap-2 px-4 py-3 md:max-w-4xl xl:max-w-6xl">
+          <div className="flex items-center justify-between gap-3">
+            <WorldSwitcher />
 
-          <div className="flex min-w-0 flex-1 flex-col items-center gap-0.5 text-center">
-            <Link href="/" className="text-lg font-semibold tracking-tight text-foreground">
-              ريف المدينة
-            </Link>
-            <DeliveryAddressButton />
+            <div className="flex min-w-0 flex-1 flex-col items-center gap-0.5 text-center">
+              <Link href="/" className="text-lg font-semibold tracking-tight text-foreground">
+                ريف المدينة
+              </Link>
+              <DeliveryAddressButton />
+            </div>
+
+            <CartCapsule total={cartTotal} />
           </div>
 
-          <CartCapsule itemCount={itemCount} />
+          <HeaderSearchBar />
         </div>
-
-        <HeaderSearchBar />
-      </div>
-    </header>
+      </header>
+    </ScrollHideBar>
   );
 }

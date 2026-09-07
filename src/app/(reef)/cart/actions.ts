@@ -26,6 +26,14 @@ export async function getCartItemCountAction(): Promise<number> {
   return cartService.getItemCountForSession(token);
 }
 
+// FULL-VISUAL-PARITY-AUDIT-AND-FIX (بند 1ب) — للهيدر (CartCapsule.tsx)، يعرض الآن الإجمالي بالجنيه
+// لا عدد القطع. نفس نمط getCartItemCountAction حرفياً.
+export async function getCartTotalAction(): Promise<number> {
+  const token = await getExistingCartSessionToken();
+  if (!token) return 0;
+  return cartService.getTotalForSession(token);
+}
+
 export async function addToCartAction(input: AddItemInput): Promise<ActionResult> {
   const identity = await getCartIdentity();
   const cart = await cartService.getOrCreateCart(identity);
