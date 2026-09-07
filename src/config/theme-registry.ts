@@ -8,7 +8,7 @@
 // يوم 6 — لا components.json، لا cva/clsx)، لذا التوكنز هنا بصيغة Hex مباشرة
 // بدل HSL، وتُستهلك عبر متغيرات CSS مسبوقة بـ --sb-.
 
-export type WorldSlug = 'diwan' | 'reef' | 'asrab' | 'nabdh' | 'noor' | 'takween' | 'bayan';
+export type WorldSlug = 'diwan' | 'reef' | 'reef-lavender' | 'asrab' | 'nabdh' | 'noor' | 'takween' | 'bayan';
 
 export interface WorldSemanticTokens {
   background: string;
@@ -79,6 +79,30 @@ export const WORLD_THEMES: Record<WorldSlug, WorldTheme> = {
       muted: '#EEF3EC',
       mutedForeground: '#5B6D5F',
       border: '#E3EDE6',
+      ...DESTRUCTIVE,
+    },
+  },
+  'reef-lavender': {
+    slug: 'reef-lavender',
+    name: { ar: 'ريف المدينة (لافندر)', en: 'Reef (Lavender)' },
+    tokens: {
+      // مُستخرَجة حرفياً (تحويل HSL→Hex دقيق، لا تقريب بصري) من ثيم "lavender" الحقيقي في مستودع
+      // Lovable المرجعي (reefam-d6cc4e17، src/styles.css) — راجع docs/DECISIONS.md → ADR-023 للتفصيل
+      // الكامل ومصدر كل قيمة. نفس هوية "ريف المدينة" التجارية (world_scope يبقى reef في بيان/الكتالوج)
+      // بغلاف بصري بديل فقط — لا تُستبدَل قيم reef الأخضر أعلاه، تُضاف كخيار مستقل (طلب مؤسس صريح).
+      background: '#FBF9FE',
+      foreground: '#251C33',
+      card: '#FEFCFF',
+      cardForeground: '#251C33',
+      primary: '#9561D1',
+      primaryForeground: '#FEFCFF',
+      secondary: '#F1E9FA',
+      secondaryForeground: '#251C33',
+      accent: '#EC79C6',
+      accentForeground: '#FFFFFF',
+      muted: '#F0ECF7',
+      mutedForeground: '#766E82',
+      border: '#E5DCF2',
       ...DESTRUCTIVE,
     },
   },

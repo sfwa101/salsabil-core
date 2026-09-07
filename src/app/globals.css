@@ -78,6 +78,24 @@
   --sb-border: #e3ede6;
 }
 
+/* ريف المدينة (لافندر) — بديل بصري اختياري لـreef، مُستخرَج حرفياً من مرجع Lovable
+   (ADR-023) — لا يستبدل reef الأخضر أعلاه، slug: reef-lavender */
+[data-world='reef-lavender'] {
+  --sb-background: #fbf9fe;
+  --sb-foreground: #251c33;
+  --sb-card: #fefcff;
+  --sb-card-foreground: #251c33;
+  --sb-primary: #9561d1;
+  --sb-primary-foreground: #fefcff;
+  --sb-secondary: #f1e9fa;
+  --sb-secondary-foreground: #251c33;
+  --sb-accent: #ec79c6;
+  --sb-accent-foreground: #ffffff;
+  --sb-muted: #f0ecf7;
+  --sb-muted-foreground: #766e82;
+  --sb-border: #e5dcf2;
+}
+
 /* أسراب طيبة — بيانات فقط، لا واجهة بعد، slug: asrab */
 [data-world='asrab'] {
   --sb-background: #f8f7f2;

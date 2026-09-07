@@ -1,8 +1,8 @@
 ---
 title: خارطة الطريق
 status: ACTIVE
-version: 1.29
-last_updated: 2026-09-06
+version: 1.30
+last_updated: 2026-09-07
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTION.md §23 (الخطة الأصلية + تصحيح 14→18 يوماً)
 ---
@@ -117,6 +117,10 @@ source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTI
 
 ## Phase 2 (بعد نجاح الخلية الأولى) — Evidence: `CONSTITUTION` §35 (Backlog)
 
+- **`PROPOSED` (2026-09-07، `RAPID-VISUAL-REDESIGN-BATCH-SAFE-SCREENS`):** تحويل سجل هوية الأحياء
+  البصرية (`src/config/neighborhood-identity-registry.ts`، `ADR-024`) من كود ثابت إلى جدول قاعدة
+  بيانات + واجهة إدارة CRUD — يسمح بتغيير لون/هوية حي دون نشر كود جديد. لم يُبنَ بعد، يحتاج تقييم
+  حجم الحاجة الفعلية أولاً (اليوم: حي واحد فقط مسجَّل في السجل، `daily-food`).
 - توسيع أحياء ريف (مطاعم، عطور، دواجن، أسماك، ألبان...)
 - محرك البدائل الذكية (§14)
 - نظام الحجز بالسعة (§15)

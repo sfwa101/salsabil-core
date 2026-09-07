@@ -15,17 +15,22 @@ export default async function MerchantOrdersPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between rounded-2xl border border-border bg-card p-4">
         <h1 className="text-xl font-semibold text-foreground">طلباتي</h1>
         <form action={logoutMerchantAction}>
-          <button type="submit" className="text-sm text-muted-foreground underline">
+          <button
+            type="submit"
+            className="rounded-xl border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted"
+          >
             تسجيل الخروج
           </button>
         </form>
       </div>
 
       {orders.length === 0 ? (
-        <p className="text-center text-muted-foreground">لا توجد طلبات بعد</p>
+        <p className="rounded-2xl border border-dashed border-border p-8 text-center text-muted-foreground">
+          لا توجد طلبات بعد
+        </p>
       ) : (
         <ul className="flex flex-col gap-3">
           {orders.map((order) => {
