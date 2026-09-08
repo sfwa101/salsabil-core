@@ -1,8 +1,8 @@
 ---
 title: نظام التصميم (Design System)
 status: PROPOSED (الاتجاه العام + معمارية الثيمات متعددة العوالم §8 ACCEPTED من حيث المبدأ ومُنفَّذة تقنياً لديوان/ريف، القيم الدقيقة للألوان و5 العوالم الأخرى لا تزال PROPOSED؛ محور التفضيل الشخصي §8.6 IMPLEMENTED كاملاً بمستهلك واجهة حقيقي، BAYAN-CLOSEOUT-UI-GAPS؛ Responsive §7 IMPLEMENTED لخلاصة بيان تحديداً، اليوم 31؛ §9 ملخّص أنماط دفعة بيان المُغلَقة بالكامل + BottomNav)
-version: 1.10
-last_updated: 2026-09-07
+version: 1.11
+last_updated: 2026-09-08
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف، SALSABIL_CONSTITUTION.md §21, §30.2 (المصدر الأصلي)
 ---
@@ -73,13 +73,29 @@ source_of_truth: هذا الملف، SALSABIL_CONSTITUTION.md §21, §30.2 (ال
 
 هذه العناصر مطلوبة في القالب الأصلي للملف لكن **لا معلومة عنها في الدستور أو المحادثات حتى الآن** — لا تُخترَع:
 
-- Spacing system الدقيق (8px grid أم غيره؟)
-- Border radius القياسي
-- Shadows / Elevation levels
+- ~~Spacing system الدقيق (8px grid أم غيره؟)~~ **مُغلَق جزئياً (2026-09-08،
+  `EXTRACT-DESIGN-DNA-AND-APPLY-ACROSS-ALL-SCREENS`):** فحص مباشر لمرجع Lovable
+  (`D:\temp\reefam-lovable-reference`) لم يجد أي مقياس مسافات مخصَّص — Tailwind الافتراضي (شبكة 4px)
+  كما هو، بلا تخصيص. النتيجة موثَّقة في `src/config/design-tokens-registry.ts` →
+  `TYPOGRAPHY_EXTRACTION_FINDING`. **هذا لا يعني "لا قرار" — يعني القرار الفعلي المكتشَف هو عدم وجود
+  تخصيص، لا حاجة لاختراع مقياس جديد.**
+- ~~Border radius القياسي~~ **مُغلَق (2026-09-08):** سلسلة استدارة تراكمية (Additive Scale) مُستخرَجة
+  حرفياً من `--radius` في المرجع (أساس `1.5rem` + `sm/md/lg/xl/2xl/3xl` بفوارق ±px ثابتة) —
+  `src/config/design-tokens-registry.ts` → `RADIUS_SCALE` (+ `RADIUS_SCALE_SOFT` بديل بأساس
+  `1.75rem` للثيمات الباستيلية الأكثر "أنثوية"، غير مُطبَّق افتراضياً). القيم كـ CSS Custom
+  Properties إضافية بحتة (`--sb-radius-*`) في `src/app/globals.css` — **لم تُستبدَل** سلسلة
+  `--radius-*` الحالية المولَّدة من shadcn init، إضافة موازية جاهزة للاستخدام في شاشات جديدة فقط.
+- ~~Shadows / Elevation levels~~ **مُغلَق (2026-09-08):** سلسلة ظلال مُستخرَجة حرفياً من `--shadow-*`
+  في المرجع — `src/config/design-tokens-registry.ts` → `SHADOW_SCALE` (+ `GLASS_SURFACE`/
+  `GLASS_SURFACE_STRONG` لسطح Glass Morphism، §4 أعلاه). القيم "المُلوَّنة بالعالم" (`pill`/`tinted`/
+  `glow`) أُعيد بناؤها عبر `var(--sb-primary)` بدل تجميدها على أخضر ريف كما في المرجع — تتكيّف تلقائياً
+  مع أي `[data-world]` نشط. مُضافة كـ `--sb-shadow-*`/`.sb-glass*` في `src/app/globals.css`، إضافية بحتة.
 - تصميم البطاقات (Cards) — لا مرجع بصري دقيق بعد
 - Buttons / Inputs — لا مواصفات دقيقة
 - Bottom navigation — لا تصميم بعد. **Bottom sheets تحديداً: تحديث (اليوم 25-26):** `src/components/BottomSheet.tsx` مكوّن عام `IMPLEMENTED` فعلياً (فتح/إغلاق بالزر/الخلفية/`Escape`)، بأول استخدام حي حقيقي (اختيار عنوان في `FeedTopBar.tsx`، اليوم 26). التصميم الدقيق (radius `rounded-t-2xl`, `shadow-xl`) امتداد للأنماط القائمة أصلاً لا قرار جديد رسمي — لا يُعتبَر هذا حسماً شاملاً لكل استخدامات Bottom Sheet مستقبلية، فقط أول نمط حي يُرجَع إليه.
-- Skeletons / Loading states / Empty states / Error states — لا تصميم بعد
+- Skeletons / Loading states / Empty states / Error states — لا تصميم بعد (تحديث 2026-09-08: نمط
+  حركة اللمعان فقط — لا شكل Skeleton نفسه — متاح الآن عبر `src/config/animation-registry.ts` →
+  `shimmerSlide`/`.animate-sb-shimmer`؛ هذا لا يُغلِق الفجوة، فقط جزء "الحركة" منها)
 - Accessibility guidelines — لم تُناقَش بعد
 - **مكتبة الأيقونات الفعلية (Lucide / Phosphor / Heroicons أو غيرها)** — لم تُحسم رسمياً، لكن **`lucide-react` أصبح النمط الفعلي القائم** (`Header.tsx` منذ اليوم 14، ثم `FeedTopBar.tsx` اليوم 26: `Globe`/`MapPin`/`Barcode`/`Search`/`ChevronDown`) — أي مكوّن جديد يحتاج أيقونة يجب أن يستخدم `lucide-react` لا مكتبة أخرى، تفادياً لتضارب بصري، إلى أن يصدر قرار مؤسس رسمي مغاير. راجع §8.4 أدناه للمفاهيم الرمزية الوصفية المستقلة عن مكتبة الأيقونات نفسها.
 - **Dark Mode لكل عالم** — لم يُطلب بعد، معمارية §8 لا تمنعه مستقبلاً لكنه خارج نطاق هذا التحديث

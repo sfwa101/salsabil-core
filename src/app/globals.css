@@ -477,3 +477,142 @@ html[data-personal-theme='simplified'][data-personal-mode='dark'] {
     @apply font-sans;
   }
 }
+
+/*
+ * ============================================================================
+ * DESIGN TOKENS — EXTRACT-DESIGN-DNA (2026-09-08)
+ * ============================================================================
+ * إضافة إضافية بحتة (لا تُعدِّل أي متغيّر/class موجود أعلاه) — مصدر البيانات الكامل
+ * src/config/design-tokens-registry.ts وsrc/config/animation-registry.ts، يجب أن يبقى هذا القسم
+ * متطابقاً معهما. لا [data-world] هنا عمداً (قيم فيزيائية مشتركة عبر كل العوالم، لا لونية) — القيم
+ * "المُلوَّنة بالعالم" (pill/tinted/glow) مبنية عبر var(--sb-primary) فتتكيّف تلقائياً.
+ * لا مستهلك حي بعد لهذا القسم — جاهز للاستخدام في شاشات المرحلة 2 من نفس الموجّه.
+ */
+
+:root {
+  /* نصف القطر — design-tokens-registry.ts → RADIUS_SCALE (أساس 1.5rem) */
+  --sb-radius-sm: 1.25rem;
+  --sb-radius-md: 1.375rem;
+  --sb-radius-lg: 1.5rem;
+  --sb-radius-xl: 1.75rem;
+  --sb-radius-2xl: 2rem;
+  --sb-radius-3xl: 2.25rem;
+
+  /* الظلال — design-tokens-registry.ts → SHADOW_SCALE */
+  --sb-shadow-soft: 0 1px 2px hsl(150 20% 20% / 0.04), 0 8px 24px -8px hsl(150 25% 25% / 0.10);
+  --sb-shadow-tile: 0 2px 4px hsl(150 20% 20% / 0.05), 0 24px 48px -16px hsl(142 40% 25% / 0.18);
+  --sb-shadow-float: 0 8px 32px hsl(150 30% 15% / 0.18), 0 2px 6px hsl(150 25% 20% / 0.08);
+  --sb-shadow-pill: 0 6px 20px -4px hsl(var(--sb-primary) / 0.35);
+  --sb-shadow-tinted: 0 10px 30px -10px hsl(var(--sb-primary) / 0.35);
+  --sb-shadow-glow: 0 0 20px hsl(var(--sb-primary) / 0.3);
+
+  /* منحنيات الحركة — design-tokens-registry.ts → MOTION_EASING */
+  --sb-ease-apple: cubic-bezier(0.32, 0.72, 0, 1);
+  --sb-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@layer utilities {
+  /* سطح زجاجي — design-tokens-registry.ts → GLASS_SURFACE/GLASS_SURFACE_STRONG. محايد لونياً
+     (يعتمد على --sb-card/--sb-border الحاليين للعالم النشط، لا لون ثابت). */
+  .sb-glass {
+    background: hsl(var(--sb-card) / 0.85);
+    backdrop-filter: saturate(180%) blur(24px);
+    -webkit-backdrop-filter: saturate(180%) blur(24px);
+    border: 1px solid hsl(var(--sb-border) / 0.6);
+  }
+  .sb-glass-strong {
+    background: hsl(var(--sb-card) / 0.96);
+    backdrop-filter: saturate(180%) blur(32px);
+    -webkit-backdrop-filter: saturate(180%) blur(32px);
+    border: 1px solid hsl(var(--sb-border) / 0.7);
+  }
+
+  /* ضغط لمسي بسيط — إحساس iOS عند الضغط على عنصر تفاعلي. */
+  .sb-press {
+    transition: transform 0.15s var(--sb-ease-apple);
+  }
+  .sb-press:active {
+    transform: scale(0.96);
+  }
+
+  /* animation-registry.ts → fadeIn */
+  @keyframes sb-fade-in {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+  }
+  .animate-sb-fade-in { animation: sb-fade-in 0.3s var(--sb-ease-apple) both; }
+
+  /* animation-registry.ts → fadeScaleIn (مصدر: splash-in) */
+  @keyframes sb-fade-scale-in {
+    0% { opacity: 0; transform: scale(0.92); filter: blur(12px); }
+    100% { opacity: 1; transform: scale(1); filter: blur(0); }
+  }
+  .animate-sb-fade-scale-in { animation: sb-fade-scale-in 0.9s var(--sb-ease-apple) both; }
+
+  /* animation-registry.ts → slideUp (مصدر: float-up) */
+  @keyframes sb-slide-up {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  .animate-sb-slide-up { animation: sb-slide-up 0.7s var(--sb-ease-apple) both; }
+
+  /* animation-registry.ts → scalePop (مصدر: capsule-pop) */
+  @keyframes sb-scale-pop {
+    0% { opacity: 0; transform: scale(0.6); }
+    60% { transform: scale(1.06); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  .animate-sb-scale-pop { animation: sb-scale-pop 0.45s var(--sb-ease-apple) both; }
+
+  /* animation-registry.ts → cartPulse (مصدر: cart-capsule-in) */
+  @keyframes sb-cart-pulse {
+    0% { opacity: 0; transform: translateX(20px) scale(0.7); }
+    60% { transform: translateX(-3px) scale(1.05); }
+    100% { opacity: 1; transform: translateX(0) scale(1); }
+  }
+  .animate-sb-cart-pulse { animation: sb-cart-pulse 0.5s var(--sb-ease-apple) both; }
+
+  /* animation-registry.ts → plusOnePop (مصدر: plus-one-pop) */
+  @keyframes sb-plus-one {
+    0% { opacity: 0; transform: translate(-50%, 0) scale(0.6); }
+    25% { opacity: 1; transform: translate(-50%, -14px) scale(1.1); }
+    100% { opacity: 0; transform: translate(-50%, -36px) scale(0.9); }
+  }
+  .animate-sb-plus-one { animation: sb-plus-one 0.9s var(--sb-ease-apple) both; }
+
+  /* animation-registry.ts → qtyCapsuleIn (مصدر: qty-capsule-in — نقطة ارتكاز "right" لا "left"،
+     تصحيح RTL مطابق لتعليق origin-right في CartCapsule.tsx). */
+  @keyframes sb-qty-capsule-in {
+    0% { opacity: 0; transform: scaleX(0.4); }
+    100% { opacity: 1; transform: scaleX(1); }
+  }
+  .animate-sb-qty-capsule-in { animation: sb-qty-capsule-in 0.35s var(--sb-ease-apple) both; transform-origin: right center; }
+
+  /* animation-registry.ts → shimmerSlide (مصدر: shimmer-slide) */
+  @keyframes sb-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  .animate-sb-shimmer { animation: sb-shimmer 1.6s linear infinite; }
+
+  /* animation-registry.ts → ringPulse (مصدر: ring-pulse، مُعاد بناؤه بـvar(--sb-primary)) */
+  @keyframes sb-ring-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 hsl(var(--sb-primary) / 0.45); }
+    50% { box-shadow: 0 0 0 6px hsl(var(--sb-primary) / 0); }
+  }
+  .animate-sb-ring-pulse { animation: sb-ring-pulse 2.4s var(--sb-ease-apple) infinite; }
+
+  /* animation-registry.ts → glowPulse (مصدر: glow-pulse، مُعاد بناؤه بـvar(--sb-primary)) */
+  @keyframes sb-glow-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 hsl(var(--sb-primary) / 0.35), 0 8px 24px -8px hsl(var(--sb-primary) / 0.45); }
+    50% { box-shadow: 0 0 0 8px hsl(var(--sb-primary) / 0), 0 10px 28px -8px hsl(var(--sb-primary) / 0.55); }
+  }
+  .animate-sb-glow-pulse { animation: sb-glow-pulse 2.6s var(--sb-ease-apple) infinite; }
+
+  /* animation-registry.ts → pulseSoft (مصدر: pulse-soft) */
+  @keyframes sb-pulse-soft {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.55; transform: scale(0.85); }
+  }
+  .animate-sb-pulse-soft { animation: sb-pulse-soft 2.2s var(--sb-ease-apple) infinite; }
+}
