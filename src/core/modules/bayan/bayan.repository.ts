@@ -18,6 +18,7 @@ import type {
   CreatePostMediaInput,
   PostMediaDraft,
 } from './types';
+import type { Product, ProductOption } from '../catalog/types';
 
 interface PostRow {
   id: string;
@@ -45,6 +46,28 @@ interface PostProductRow {
   post_id: string;
   product_id: string;
   display_order: number;
+}
+
+// نفس أعمدة ProductRow في catalog.repository.ts حرفياً — مُكرَّرة عمداً هنا لا مستوردة منها
+// (dependency-cruiser يمنع أي repository.ts من استيراد repository.ts نطاق آخر،
+// no-repository-cross-import، docs/ARCHITECTURE.md §3.1). نفس نمط EmbeddedProductRow في
+// cart.repository.ts حرفياً — راجع تعليقه هناك لنفس المبرر الكامل.
+interface EmbeddedProductRow {
+  id: string;
+  category_id: string;
+  tenant_id: string | null;
+  name: string;
+  description: string | null;
+  base_price: number;
+  unit: string;
+  image_url: string | null;
+  options: ProductOption[];
+  is_active: boolean;
+  created_at: string;
+}
+
+interface PostProductWithProductRow extends PostProductRow {
+  products: EmbeddedProductRow;
 }
 
 function toPost(row: PostRow): Post {
@@ -78,6 +101,22 @@ function toPostProductLink(row: PostProductRow): PostProductLink {
     postId: row.post_id,
     productId: row.product_id,
     displayOrder: row.display_order,
+  };
+}
+
+function toEmbeddedProduct(row: EmbeddedProductRow): Product {
+  return {
+    id: row.id,
+    categoryId: row.category_id,
+    tenantId: row.tenant_id,
+    name: row.name,
+    description: row.description ?? undefined,
+    basePrice: row.base_price,
+    unit: row.unit,
+    imageUrl: row.image_url ?? undefined,
+    options: row.options ?? [],
+    isActive: row.is_active,
+    createdAt: row.created_at,
   };
 }
 
@@ -119,6 +158,31 @@ export class BayanRepository {
     const { data, error } = await supabase.from('post_products').select('*').in('post_id', postIds).order('display_order');
     if (error) throw error;
     return (data as PostProductRow[]).map(toPostProductLink);
+  }
+
+  // FIX-STALE-PRODUCT-REFS-PERFORMANCE-AND-CATEGORY-VISUALS (الجزء 3) — نفس نمط
+  // cart.repository.ts.findItemsWithProducts حرفياً: استعلام واحد مُجمَّع (JOIN حقيقي عبر FK قائم
+  // post_products.product_id → products.id) بدل findPostProductsByPostIds ثم استعلام منفصل لاحق
+  // (catalogService.getProductsByIds في feed-actions.ts) — يدمج رحلتي شبكة متتاليتين في واحدة.
+  // مُستخدَمة حصراً في bayanService.listFeed() (الخلاصة العامة)؛ findPostProductsByPostIds أعلاه
+  // تبقى كما هي لمستهلكها الوحيد الآخر (bayanService.getPostProducts، لوحة إدارة بيان — تحتاج
+  // معرّفات فقط، لا كائن Product كاملاً).
+  async findPostProductsWithProductsByPostIds(
+    postIds: string[]
+  ): Promise<Array<{ postId: string; productId: string; displayOrder: number; product: Product }>> {
+    if (postIds.length === 0) return [];
+    const { data, error } = await supabase
+      .from('post_products')
+      .select('*, products(*)')
+      .in('post_id', postIds)
+      .order('display_order');
+    if (error) throw error;
+    return (data as PostProductWithProductRow[]).map((row) => ({
+      postId: row.post_id,
+      productId: row.product_id,
+      displayOrder: row.display_order,
+      product: toEmbeddedProduct(row.products),
+    }));
   }
 
   // -- إدارة (platform_admin، service_role، تشمل المسودات) --

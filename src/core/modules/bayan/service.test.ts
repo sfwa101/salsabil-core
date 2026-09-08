@@ -3,8 +3,9 @@
 // (نفس نمط src/core/kernel/khalil/service.test.ts)
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Post, PostMedia, PostProductLink, RecipeLink } from './types';
+import type { Post, PostMedia, RecipeLink } from './types';
 import type { World } from '../../kernel/khalil/types';
+import type { Product } from '../catalog/types';
 
 const individualsWorld: World = { id: 'world-1', slug: 'individuals', name: 'الأفراد', isActive: true, createdAt: new Date().toISOString() };
 
@@ -28,13 +29,29 @@ const media: PostMedia = {
   createdAt: new Date().toISOString(),
 };
 
-const productLink: PostProductLink = { id: 'pp-1', postId: 'post-1', productId: 'prod-1', displayOrder: 0 };
+const product: Product = {
+  id: 'prod-1',
+  categoryId: 'cat-1',
+  tenantId: null,
+  name: 'منتج اختبار',
+  basePrice: 50,
+  unit: 'قطعة',
+  options: [],
+  isActive: true,
+  createdAt: new Date().toISOString(),
+};
+
+// FIX-STALE-PRODUCT-REFS-PERFORMANCE-AND-CATEGORY-VISUALS (الجزء 3): findPostProductsByPostIds
+// استُبدلت بـfindPostProductsWithProductsByPostIds (JOIN واحد يُعيد المنتج كاملاً) في listFeed —
+// راجع bayan.repository.ts/bayan.service.ts.
+const productLinkWithProduct = { postId: 'post-1', productId: 'prod-1', displayOrder: 0, product };
 
 vi.mock('./bayan.repository', () => ({
   bayanRepository: {
     listPublishedPosts: vi.fn(),
     findPostMediaByPostIds: vi.fn(),
     findPostProductsByPostIds: vi.fn(),
+    findPostProductsWithProductsByPostIds: vi.fn(),
     findAllPosts: vi.fn(),
     findPostById: vi.fn(),
     findPostMediaByPostId: vi.fn(),
@@ -83,15 +100,15 @@ describe('BayanService.listFeed', () => {
 
     const result = await bayanService.listFeed();
 
-    expect(result).toEqual({ posts: [], hasMore: false });
+    expect(result).toEqual({ posts: [], hasMore: false, products: [] });
     expect(bayanRepository.findPostMediaByPostIds).not.toHaveBeenCalled();
-    expect(bayanRepository.findPostProductsByPostIds).not.toHaveBeenCalled();
+    expect(bayanRepository.findPostProductsWithProductsByPostIds).not.toHaveBeenCalled();
   });
 
-  it('يجمّع كل منشور مع صوره ومنتجاته المرتبطة بالترتيب', async () => {
+  it('يجمّع كل منشور مع صوره ومنتجاته المرتبطة بالترتيب، ويعيد المنتجات الكاملة (JOIN) بلا استعلام إضافي', async () => {
     vi.mocked(bayanRepository.listPublishedPosts).mockResolvedValue({ posts: [post], hasMore: true });
     vi.mocked(bayanRepository.findPostMediaByPostIds).mockResolvedValue([media]);
-    vi.mocked(bayanRepository.findPostProductsByPostIds).mockResolvedValue([productLink]);
+    vi.mocked(bayanRepository.findPostProductsWithProductsByPostIds).mockResolvedValue([productLinkWithProduct]);
 
     const result = await bayanService.listFeed({ offset: 10, limit: 5 });
 
@@ -100,6 +117,7 @@ describe('BayanService.listFeed', () => {
     expect(result.posts).toHaveLength(1);
     expect(result.posts[0].media).toEqual([media]);
     expect(result.posts[0].productIds).toEqual(['prod-1']);
+    expect(result.products).toEqual([product]);
   });
 
   it('يستخدم القيم الافتراضية (offset=0, limit=10) عند عدم تمرير خيارات', async () => {

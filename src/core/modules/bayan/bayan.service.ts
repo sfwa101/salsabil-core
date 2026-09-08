@@ -37,18 +37,23 @@ export class BayanService {
 
   /**
    * الخلاصة العامة — منشورات منشورة فقط، مع كل صورها ومنتجاتها المرتبطة، صفحة واحدة في كل نداء.
+   *
+   * FIX-STALE-PRODUCT-REFS-PERFORMANCE-AND-CATEGORY-VISUALS (الجزء 3) — findPostProductsByPostIds
+   * استُبدلت بـfindPostProductsWithProductsByPostIds (JOIN واحد يجلب المنتج كاملاً مع الرابط، نفس
+   * نمط cart.service.ts.buildSummary) — يُلغي رحلة catalogService.getProductsByIds المنفصلة التي
+   * كانت تُنفَّذ لاحقاً في feed-actions.ts، فيقلّص 3 رحلات متتالية إلى 2.
    */
   async listFeed(options: ListFeedOptions = {}): Promise<FeedPage> {
     const offset = options.offset ?? 0;
     const limit = options.limit ?? DEFAULT_FEED_PAGE_SIZE;
 
     const { posts, hasMore } = await bayanRepository.listPublishedPosts({ postTypes: options.postTypes, offset, limit });
-    if (posts.length === 0) return { posts: [], hasMore };
+    if (posts.length === 0) return { posts: [], hasMore, products: [] };
 
     const postIds = posts.map((p) => p.id);
     const [media, productLinks] = await Promise.all([
       bayanRepository.findPostMediaByPostIds(postIds),
-      bayanRepository.findPostProductsByPostIds(postIds),
+      bayanRepository.findPostProductsWithProductsByPostIds(postIds),
     ]);
 
     const detailed = posts.map((post) => ({
@@ -57,7 +62,9 @@ export class BayanService {
       productIds: productLinks.filter((pl) => pl.postId === post.id).map((pl) => pl.productId),
     }));
 
-    return { posts: detailed, hasMore };
+    const productsById = new Map(productLinks.map((pl) => [pl.productId, pl.product]));
+
+    return { posts: detailed, hasMore, products: Array.from(productsById.values()) };
   }
 
   /**

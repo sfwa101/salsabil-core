@@ -141,6 +141,64 @@ describe('BayanRepository.findPostMediaByPostIds', () => {
   });
 });
 
+// FIX-STALE-PRODUCT-REFS-PERFORMANCE-AND-CATEGORY-VISUALS (الجزء 3) — نفس نمط
+// cart.repository.test.ts.findItemsWithProducts: تحقُّق أن الاستعلام يطلب JOIN حقيقياً
+// (select('*, products(*)')) ويحوّل الصف المُضمَّن لكائن Product كامل بلا رحلة إضافية.
+describe('BayanRepository.findPostProductsWithProductsByPostIds', () => {
+  it('يعيد مصفوفة فارغة بلا استعلام إذا كانت قائمة postIds فارغة', async () => {
+    const result = await bayanRepository.findPostProductsWithProductsByPostIds([]);
+
+    expect(result).toEqual([]);
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  it('يطلب المنتج المُضمَّن عبر select واحد، ويحوّله لكائن Product كامل', async () => {
+    const embeddedProductRow = {
+      id: 'prod-1',
+      post_id: 'post-1',
+      product_id: 'prod-1',
+      display_order: 0,
+      products: {
+        id: 'prod-1',
+        category_id: 'cat-1',
+        tenant_id: null,
+        name: 'منتج اختبار',
+        description: null,
+        base_price: 50,
+        unit: 'قطعة',
+        image_url: null,
+        options: [],
+        is_active: true,
+        created_at: '2026-09-05T00:00:00.000Z',
+      },
+    };
+    const builder = makeQueryBuilder({ data: [embeddedProductRow], error: null });
+    vi.mocked(supabase.from).mockReturnValue(builder as never);
+
+    const result = await bayanRepository.findPostProductsWithProductsByPostIds(['post-1']);
+
+    expect(builder.select).toHaveBeenCalledWith('*, products(*)');
+    expect(result[0]).toEqual({
+      postId: 'post-1',
+      productId: 'prod-1',
+      displayOrder: 0,
+      product: {
+        id: 'prod-1',
+        categoryId: 'cat-1',
+        tenantId: null,
+        name: 'منتج اختبار',
+        description: undefined,
+        basePrice: 50,
+        unit: 'قطعة',
+        imageUrl: undefined,
+        options: [],
+        isActive: true,
+        createdAt: '2026-09-05T00:00:00.000Z',
+      },
+    });
+  });
+});
+
 describe('BayanRepository.createPost', () => {
   it('يستخدم supabaseAdmin (service_role) لا supabase العام', async () => {
     const builder = makeQueryBuilder({ data: postRow, error: null });

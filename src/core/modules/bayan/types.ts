@@ -1,5 +1,7 @@
 // src/core/modules/bayan/types.ts
 // بيان — محرك المحتوى (الخلاصة الرئيسية لريف المدينة، BAYAN-HOME-FEED-001، اليوم 23)
+
+import type { Product } from '../catalog/types';
 //
 // ⚠️ Post.worldScope هو فلتر بيانات (أي سياق/شخصية يخص هذا المحتوى — جدول worlds، خليل، اليوم 19)
 // لا علاقة له إطلاقاً بسمة data-world البصرية (WorldSlug/WORLD_THEMES في src/config/theme-registry.ts،
@@ -117,4 +119,10 @@ export interface ListFeedOptions {
 export interface FeedPage {
   posts: PostWithDetails[];
   hasMore: boolean;
+  // FIX-STALE-PRODUCT-REFS-PERFORMANCE-AND-CATEGORY-VISUALS (الجزء 3) — منتجات "منتجات هذا المنشور"
+  // (post_products) لكل المنشورات في هذه الصفحة، مُجمَّعة ومُزالة التكرار — تصل الآن عبر JOIN واحد
+  // (bayan.repository.ts.findPostProductsWithProductsByPostIds) بدل استعلام catalogService منفصل
+  // لاحق في feed-actions.ts. لا يخالف مبدأ "بيان لا يعرف تفاصيل Product الكاملة" — الحقل هنا نتيجة
+  // مُجمَّعة تمر عبره لطبقة العرض، لا استخدام داخلي لمنطق بيان نفسه.
+  products: Product[];
 }

@@ -1,8 +1,12 @@
 'use server';
 // خلاصة بيان الرئيسية (اليوم 27، BAYAN-HOME-FEED-001) — تركيب على مستوى الصفحة بين نطاقين
-// (bayan/catalog)، نفس نمط orders.service.ts الذي يستدعي catalogService مباشرة (ADR-021). يبقى هنا
-// لا داخل bayan.service.ts نفسه: bayan لا يحتاج معرفة تفاصيل Product الكاملة لمنطقه الخاص (يكتفي
-// بـ productIds)، فحل المنتجات الكاملة مسؤولية طبقة العرض التي تحتاجها فعلاً.
+// (bayan/catalog)، نفس نمط orders.service.ts الذي يستدعي catalogService مباشرة (ADR-021).
+//
+// FIX-STALE-PRODUCT-REFS-PERFORMANCE-AND-CATEGORY-VISUALS (الجزء 3) — bayanService.listFeed() أصبح
+// يُعيد `products` جاهزة الآن (JOIN واحد داخل bayan.repository.ts، راجع تعليقه) — رحلة
+// catalogService.getProductsByIds المنفصلة هنا حُذفت (كانت رحلة شبكة ثالثة متتالية). الاستيرادان
+// الآخران لـcatalogService (getProductByIdAction/getProductsByIdsAction أدناه) يبقيان بلا تغيير —
+// يخدمان Product/Recipe Bottom Sheet عند النقر (طلب عند الحاجة، لا علاقة له بتحميل الخلاصة نفسه).
 
 import { bayanService } from '@/core/modules/bayan/bayan.service';
 import { catalogService } from '@/core/modules/catalog/catalog.service';
@@ -19,11 +23,7 @@ export interface FeedPageResult {
 
 export async function loadFeedPageAction(options: { postTypes?: PostType[]; offset: number }): Promise<FeedPageResult> {
   const page = await bayanService.listFeed(options);
-
-  const productIds = Array.from(new Set(page.posts.flatMap((p) => p.productIds)));
-  const products = productIds.length > 0 ? await catalogService.getProductsByIds(productIds) : [];
-
-  return { posts: page.posts, hasMore: page.hasMore, products };
+  return { posts: page.posts, hasMore: page.hasMore, products: page.products };
 }
 
 // اليوم 28 (BAYAN-HOME-FEED-001) — يغذّي Product/Recipe Bottom Sheet عند النقر على صورة منشور
