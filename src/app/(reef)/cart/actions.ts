@@ -34,6 +34,18 @@ export async function getCartTotalAction(): Promise<number> {
   return cartService.getTotalForSession(token);
 }
 
+// FIX-STALE-PRODUCT-REFS-PERFORMANCE-AND-CATEGORY-VISUALS (الجزء 2) — لصفحة الحي ([category]/
+// page.tsx): تحتاج الملخّص الكامل (لمعرفة كمية كل منتج مُضافة مسبقاً)، لا الإجمالي فقط. **لا تستخدم
+// getCartSummaryAction أعلاه هنا** — تلك تستدعي getCartIdentity() (تكتب كوكي عند غيابه)، وهذا يفشل
+// فعلياً (خطأ Next.js حقيقي، مُتحقَّق منه حياً: "Cookies can only be modified in a Server Action or
+// Route Handler") عند أول عرض RSC لزائر بلا أي كوكي سلة سابق. نفس نمط getCartItemCountAction حرفياً
+// (قراءة فقط، بلا سلة = null).
+export async function getCartSummaryIfExistsAction(): Promise<CartSummary | null> {
+  const token = await getExistingCartSessionToken();
+  if (!token) return null;
+  return cartService.getSummaryForSession(token);
+}
+
 export async function addToCartAction(input: AddItemInput): Promise<ActionResult> {
   const identity = await getCartIdentity();
   const cart = await cartService.getOrCreateCart(identity);

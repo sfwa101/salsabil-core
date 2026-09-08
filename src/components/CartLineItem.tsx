@@ -13,9 +13,13 @@
 // تحيطهما كما كانت) — إنقاص محايد (outline، خلفية background) وزيادة بلون العلامة (primary مليء) —
 // بتوكنز --sb-* (bg-primary/border-border) لا Hex مباشر (المرجع يستخدم rose-600 مباشرة، خاص بفئة
 // اللحوم فقط — راجع ADR-023، لا يُستخدَم كتوكن عام هنا).
+//
+// FIX-STALE-PRODUCT-REFS-PERFORMANCE-AND-CATEGORY-VISUALS (الجزء 2) — markup الأزرار +/- استُخرج
+// إلى QuantityStepper.tsx (مكوّن مشترك) — بطاقة المنتج في صفحة الحي تستهلك نفس المكوّن الآن.
 
-import { Minus, Plus, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { CartActionButton } from '@/components/CartActionButton';
+import { QuantityStepper } from '@/components/QuantityStepper';
 import { updateCartItemAction, removeCartItemAction } from '@/app/(reef)/cart/actions';
 import type { CartLineSummary } from '@/core/modules/cart/types';
 
@@ -65,31 +69,17 @@ export function CartLineItem({ line }: { line: CartLineSummary }) {
 
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold text-primary">{lineTotal} جنيه</span>
-          <div className="flex items-center gap-2">
-            <form
-              action={async () => {
-                'use server';
-                await updateCartItemAction(item.id, item.quantity - 1);
-              }}
-            >
-              <CartActionButton ariaLabel="إنقاص" variant="outline" size="icon" className="rounded-full shadow-sm">
-                <Minus size={14} />
-              </CartActionButton>
-            </form>
-            <span className="min-w-[1.5ch] text-center text-sm font-bold tabular-nums text-foreground">
-              {item.quantity}
-            </span>
-            <form
-              action={async () => {
-                'use server';
-                await updateCartItemAction(item.id, item.quantity + 1);
-              }}
-            >
-              <CartActionButton ariaLabel="زيادة" variant="default" size="icon" className="rounded-full shadow-sm">
-                <Plus size={14} />
-              </CartActionButton>
-            </form>
-          </div>
+          <QuantityStepper
+            quantity={item.quantity}
+            onDecrement={async () => {
+              'use server';
+              await updateCartItemAction(item.id, item.quantity - 1);
+            }}
+            onIncrement={async () => {
+              'use server';
+              await updateCartItemAction(item.id, item.quantity + 1);
+            }}
+          />
         </div>
       </div>
     </div>

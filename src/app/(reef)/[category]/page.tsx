@@ -13,6 +13,7 @@ import { notFound } from 'next/navigation';
 import { catalogService } from '@/core/modules/catalog/catalog.service';
 import { ProductCard } from '@/components/ProductCard';
 import { getNeighborhoodIdentity } from '@/config/neighborhood-identity-registry';
+import { getCartSummaryIfExistsAction } from '@/app/(reef)/cart/actions';
 
 export default async function CategoryPage({ params }: { params: Promise<{ category: string }> }) {
   const { category: slug } = await params;
@@ -22,11 +23,18 @@ export default async function CategoryPage({ params }: { params: Promise<{ categ
     notFound();
   }
 
-  const [products, allCategories] = await Promise.all([
+  const [products, allCategories, cartSummary] = await Promise.all([
     catalogService.listProductsByCategory(category.id),
     catalogService.listCategories(),
+    getCartSummaryIfExistsAction(),
   ]);
   const activeProducts = products.filter((p) => p.isActive);
+  // FIX-STALE-PRODUCT-REFS-PERFORMANCE-AND-CATEGORY-VISUALS (الجزء 2) — أول بند مطابق productId فقط
+  // (يتجاهل selection) كافٍ هنا: منتجات هذا الحي كلها بلا خيارات حجم/إضافة (باستثناء "دجاجة كاملة
+  // طازجة" المُستبعَدة أصلاً من الزر السريع في ProductCard.tsx نفسه لهذا السبب بالذات)، فلا يوجد
+  // عملياً أكثر من بند سلة واحد لكل معرّف منتج هنا. cartSummary=null (زائر بلا كوكي سلة بعد) يعني
+  // حرفياً "سلة فارغة" — getCartSummaryIfExistsAction قراءة فقط، آمنة أثناء عرض RSC.
+  const cartLineByProductId = new Map((cartSummary?.lines ?? []).map((line) => [line.product.id, line]));
   const subCategories = allCategories.filter((c) => c.isActive && c.parentId === category.id);
   const identity = getNeighborhoodIdentity('reef', category.slug);
 
@@ -65,7 +73,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ categ
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
           {activeProducts.map((product) => (
-            <ProductCard key={product.id} product={product} />
+            <ProductCard key={product.id} product={product} cartLine={cartLineByProductId.get(product.id)} />
           ))}
         </div>
       )}

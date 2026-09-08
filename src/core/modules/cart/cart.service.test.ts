@@ -226,6 +226,29 @@ describe('CartService.getTotalForSession', () => {
   });
 });
 
+describe('CartService.getSummaryForSession', () => {
+  it('يعيد null بلا استدعاء findCartById إن لم توجد سلة لهذا التوكن بعد (نفس نمط getTotalForSession)', async () => {
+    vi.mocked(cartRepository.findCartBySessionToken).mockResolvedValue(null);
+
+    const summary = await cartService.getSummaryForSession('brand-new-token');
+
+    expect(summary).toBeNull();
+    expect(cartRepository.findCartById).not.toHaveBeenCalled();
+    expect(cartRepository.findItemsWithProducts).not.toHaveBeenCalled();
+  });
+
+  it('يعيد الملخّص الكامل للسلة الموجودة فعلاً لهذا التوكن، عبر getSummaryForCart (بلا findCartById زائدة)', async () => {
+    vi.mocked(cartRepository.findCartBySessionToken).mockResolvedValue(cart);
+    mockSummaryItems([makeItem({ selection: { sizeId: 'medium' }, quantity: 3 })]); // 120 * 3 = 360
+
+    const summary = await cartService.getSummaryForSession(cart.sessionToken!);
+
+    expect(cartRepository.findCartById).not.toHaveBeenCalled();
+    expect(summary?.total).toBe(360);
+    expect(summary?.lines).toHaveLength(1);
+  });
+});
+
 describe('CartService.removeItem', () => {
   it('يحذف البند ويُعيد ملخصاً محدَّثاً عندما ينتمي فعلاً لهذه السلة', async () => {
     const item = makeItem();

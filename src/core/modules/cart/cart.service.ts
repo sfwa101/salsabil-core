@@ -56,6 +56,19 @@ export class CartService {
     return summary.total;
   }
 
+  // FIX-STALE-PRODUCT-REFS-PERFORMANCE-AND-CATEGORY-VISUALS (الجزء 2) — [category]/page.tsx يحتاج
+  // الملخّص الكامل (لا الإجمالي فقط) لمعرفة أي منتج مُضاف بالفعل وبأي كمية (QuantityStepper). نفس
+  // نمط getTotalForSession/getItemCountForSession حرفياً: قراءة فقط، بلا getOrCreateCart — **حاسم
+  // هنا تحديداً** لأن المستدعي (RSC صفحة حي) لا يجوز أن يكتب كوكي أثناء العرض (Next.js يرفض ذلك
+  // خارج Server Action/Route Handler) — getCartSummaryAction القائمة تستدعي getCartIdentity()
+  // (تُنشئ كوكي عند غيابه)، آمنة فقط من داخل Server Action حقيقي (مثال: /cart/page.tsx بعد أول
+  // إضافة فعلية سابقة تكون قد أنشأت الكوكي بالفعل)، لا لأول زيارة عرض بلا أي كوكي سابق.
+  async getSummaryForSession(sessionToken: string): Promise<CartSummary | null> {
+    const cart = await cartRepository.findCartBySessionToken(sessionToken);
+    if (!cart) return null;
+    return this.getSummaryForCart(cart);
+  }
+
   // TODO(BR-016): لا حد أدنى للطلب مطبَّق بعد — القيمة غير معتمدة رسمياً.
   // راجع docs/BUSINESS_RULES.md → BR-016 (OPEN_QUESTION) قبل الإطلاق.
   //
