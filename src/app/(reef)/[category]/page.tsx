@@ -45,7 +45,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ categ
       </Link>
 
       <section
-        className="mb-6 rounded-3xl bg-primary p-6 text-primary-foreground"
+        className="animate-sb-fade-scale-in mb-6 rounded-3xl bg-primary p-6 text-primary-foreground shadow-[var(--sb-shadow-tinted)]"
         style={identity ? { backgroundColor: identity.accentColor, color: identity.accentForeground } : undefined}
       >
         <h1 className="text-2xl font-bold md:text-3xl">{category.name}</h1>
@@ -60,7 +60,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ categ
             <Link
               key={sub.id}
               href={`/${sub.slug}`}
-              className="shrink-0 rounded-full border border-border bg-card px-4 py-1.5 text-sm font-medium text-foreground transition hover:border-primary"
+              className="sb-press shrink-0 rounded-full border border-border bg-card px-4 py-1.5 text-sm font-medium text-foreground shadow-[var(--sb-shadow-soft)] transition hover:border-primary"
             >
               {sub.name}
             </Link>

@@ -5,7 +5,11 @@ import { calculatePriceAction } from '@/app/(reef)/product/[id]/actions';
 import { addToCartAction } from '@/app/(reef)/cart/actions';
 import type { Product } from '@/core/modules/catalog/types';
 
-export function ProductOptions({ product }: { product: Product }) {
+// accentColor اختياري بحت (EXTRACT-DESIGN-DNA-AND-APPLY-ACROSS-ALL-SCREENS، المرحلة 2) — لون هوية
+// حي المنتج (neighborhood-identity-registry.ts) إن وُجد، لتلوين الاختيار النشط/السعر/الزر بدل
+// primary العام دائماً. غيابه (كما في ProductSheetContent.tsx، لا يمرّره) يُبقي السلوك والمظهر
+// كما كانا تماماً قبل هذه الدفعة — لا تغيير افتراضي، لا لمس لمنطق الحساب/الإضافة.
+export function ProductOptions({ product, accentColor }: { product: Product; accentColor?: string }) {
   const sizeOptions = product.options.filter((o) => o.type === 'size');
   const addonOptions = product.options.filter((o) => o.type === 'addon');
 
@@ -55,9 +59,10 @@ export function ProductOptions({ product }: { product: Product }) {
             {sizeOptions.map((option) => (
               <label
                 key={option.id}
-                className={`flex cursor-pointer items-center justify-between rounded-xl border p-3 ${
+                className={`sb-press flex cursor-pointer items-center justify-between rounded-xl border p-3 transition ${
                   sizeId === option.id ? 'border-primary bg-primary/5' : 'border-border'
                 }`}
+                style={sizeId === option.id && accentColor ? { borderColor: accentColor, backgroundColor: `${accentColor}0D` } : undefined}
               >
                 <span className="flex items-center gap-2">
                   <input
@@ -84,9 +89,10 @@ export function ProductOptions({ product }: { product: Product }) {
             {addonOptions.map((option) => (
               <label
                 key={option.id}
-                className={`flex cursor-pointer items-center justify-between rounded-xl border p-3 ${
+                className={`sb-press flex cursor-pointer items-center justify-between rounded-xl border p-3 transition ${
                   addonIds.includes(option.id) ? 'border-primary bg-primary/5' : 'border-border'
                 }`}
+                style={addonIds.includes(option.id) && accentColor ? { borderColor: accentColor, backgroundColor: `${accentColor}0D` } : undefined}
               >
                 <span className="flex items-center gap-2">
                   <input type="checkbox" checked={addonIds.includes(option.id)} onChange={() => toggleAddon(option.id)} />
@@ -101,11 +107,14 @@ export function ProductOptions({ product }: { product: Product }) {
         </div>
       )}
 
-      <div className="rounded-xl bg-muted p-4 text-center">
+      <div
+        className="rounded-2xl bg-muted p-4 text-center shadow-[var(--sb-shadow-soft)]"
+        style={accentColor ? { backgroundColor: `${accentColor}1A` } : undefined}
+      >
         {error ? (
           <span className="text-destructive">{error}</span>
         ) : (
-          <span className="text-lg font-semibold text-foreground">
+          <span className="text-lg font-semibold text-foreground" style={accentColor ? { color: accentColor } : undefined}>
             السعر: {isPending ? '...' : `${price} جنيه`}
           </span>
         )}
@@ -115,7 +124,8 @@ export function ProductOptions({ product }: { product: Product }) {
         type="button"
         onClick={handleAddToCart}
         disabled={addState === 'adding' || !!error}
-        className="rounded-xl bg-primary px-4 py-3 font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+        className="sb-press rounded-full bg-primary px-4 py-3 font-medium text-primary-foreground shadow-[var(--sb-shadow-pill)] transition hover:opacity-90 disabled:opacity-50"
+        style={accentColor ? { backgroundColor: accentColor } : undefined}
       >
         {addState === 'adding' ? 'جارٍ الإضافة...' : addState === 'added' ? 'أُضيف للسلة ✓' : 'أضف للسلة'}
       </button>

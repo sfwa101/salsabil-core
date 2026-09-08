@@ -27,7 +27,7 @@ export function ProductCard({ product, cartLine }: { product: Product; cartLine?
   const hasSizeOptions = product.options.some((o) => o.type === 'size');
 
   return (
-    <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-5 transition hover:border-primary hover:shadow-sm">
+    <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-5 transition hover:border-primary hover:shadow-[var(--sb-shadow-soft)]">
       <Link href={`/product/${product.id}`} className="flex flex-col gap-2">
         {product.imageUrl && (
           <span className="-mx-5 -mt-5 mb-1 block aspect-square overflow-hidden rounded-t-2xl bg-muted">

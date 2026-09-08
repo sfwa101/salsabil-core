@@ -40,10 +40,10 @@ export default async function CategoriesPage() {
               <Link
                 key={category.id}
                 href={`/${category.slug}`}
-                className="flex flex-col items-center gap-2 rounded-2xl border border-border bg-card p-5 text-center transition hover:border-primary hover:shadow-sm"
+                className="sb-press flex flex-col items-center gap-2 rounded-2xl border border-border bg-card p-5 text-center transition hover:border-primary hover:shadow-[var(--sb-shadow-soft)]"
               >
                 <span
-                  className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-primary bg-muted text-lg font-semibold text-primary"
+                  className="animate-sb-scale-pop flex h-14 w-14 items-center justify-center rounded-full border-2 border-primary bg-muted text-lg font-semibold text-primary"
                   style={identity ? { borderColor: identity.accentColor, color: identity.accentColor } : undefined}
                 >
                   {category.name.charAt(0)}
