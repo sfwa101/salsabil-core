@@ -41,9 +41,14 @@ source_of_truth: هذا الملف، SALSABIL_CONSTITUTION.md §21, §30.2 (ال
 
 ---
 
-## 3. Typography — Evidence: `PROPOSED`
+## 3. Typography — Evidence: `IMPLEMENTED` (2026-09-08، `EXTRACT-DESIGN-DNA-AND-APPLY-ACROSS-ALL-SCREENS`، قرار مؤسس مباشر)
 
-خطوط عربية مذكورة سابقاً في عمل تصميمي مرجعي: Tajawal / Cairo. **لم تُعتمد رسمياً بعد لسلسبيل تحديداً** — `PROPOSED`.
+خطوط عربية مذكورة سابقاً في عمل تصميمي مرجعي: Tajawal / Cairo — كانت `PROPOSED` منذ اليوم 6. **الآن
+مُطبَّقة فعلياً عالمياً** عبر `next/font/google` (`src/app/layout.tsx`، متغيّرا `--font-tajawal`/
+`--font-cairo` على `<html>`) و`--font-sans` في `src/app/globals.css` (`var(--font-tajawal),
+var(--font-cairo)` أولاً، ثم نفس مكدّس Tailwind الافتراضي القديم كشبكة أمان). يمس كل شاشة في التطبيق
+(ديوان/ريف/تاجر/إدارة معاً) — لا شاشات `(reef)` الجديدة فقط. راجع
+`src/config/design-tokens-registry.ts` → `TYPOGRAPHY_EXTRACTION_FINDING` للمصدر الكامل.
 
 ---
 
@@ -79,12 +84,13 @@ source_of_truth: هذا الملف، SALSABIL_CONSTITUTION.md §21, §30.2 (ال
   كما هو، بلا تخصيص. النتيجة موثَّقة في `src/config/design-tokens-registry.ts` →
   `TYPOGRAPHY_EXTRACTION_FINDING`. **هذا لا يعني "لا قرار" — يعني القرار الفعلي المكتشَف هو عدم وجود
   تخصيص، لا حاجة لاختراع مقياس جديد.**
-- ~~Border radius القياسي~~ **مُغلَق (2026-09-08):** سلسلة استدارة تراكمية (Additive Scale) مُستخرَجة
-  حرفياً من `--radius` في المرجع (أساس `1.5rem` + `sm/md/lg/xl/2xl/3xl` بفوارق ±px ثابتة) —
-  `src/config/design-tokens-registry.ts` → `RADIUS_SCALE` (+ `RADIUS_SCALE_SOFT` بديل بأساس
-  `1.75rem` للثيمات الباستيلية الأكثر "أنثوية"، غير مُطبَّق افتراضياً). القيم كـ CSS Custom
-  Properties إضافية بحتة (`--sb-radius-*`) في `src/app/globals.css` — **لم تُستبدَل** سلسلة
-  `--radius-*` الحالية المولَّدة من shadcn init، إضافة موازية جاهزة للاستخدام في شاشات جديدة فقط.
+- ~~Border radius القياسي~~ **مُغلَق (2026-09-08، مُطبَّق فعلياً عالمياً في المرحلة 2 — قرار مؤسس
+  مباشر):** سلسلة استدارة تراكمية (Additive Scale) مُستخرَجة حرفياً من `--radius` في المرجع (أساس
+  `1.5rem` + `sm/md/lg/xl/2xl/3xl` بفوارق ±px ثابتة) — `src/config/design-tokens-registry.ts` →
+  `RADIUS_SCALE` (+ `RADIUS_SCALE_SOFT` بديل بأساس `1.75rem` للثيمات الباستيلية الأكثر "أنثوية"، غير
+  مُطبَّق). **طُبِّقت مباشرة على `--radius`/`--radius-sm..3xl` القياسية** في `src/app/globals.css —
+  كانت `0.625rem` (افتراضي shadcn init)، أصبحت `1.5rem`. تغيير مرئي شامل يمس كل عنصر `rounded-*` في
+  التطبيق بأكمله (ديوان/ريف/تاجر/إدارة)، لا شاشات جديدة فقط — معلن صراحة، `AGENTS.md §13`.
 - ~~Shadows / Elevation levels~~ **مُغلَق (2026-09-08):** سلسلة ظلال مُستخرَجة حرفياً من `--shadow-*`
   في المرجع — `src/config/design-tokens-registry.ts` → `SHADOW_SCALE` (+ `GLASS_SURFACE`/
   `GLASS_SURFACE_STRONG` لسطح Glass Morphism، §4 أعلاه). القيم "المُلوَّنة بالعالم" (`pill`/`tinted`/

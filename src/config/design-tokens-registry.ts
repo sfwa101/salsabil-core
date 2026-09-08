@@ -12,10 +12,12 @@
 // shadow-pill مُلوَّن بلون العالم) مبنية عبر `var(--sb-primary)` مباشرة — لا Hex مباشر — لتبقى واعية
 // بأي [data-world] تلقائياً بلا تخصيص هنا.
 //
-// ⚠️ نطاق التطبيق: هذه القيم بيانات جاهزة للاستهلاك عبر Tailwind arbitrary values
-// (مثال: `rounded-[var(--radius-token-2xl)]`) في شاشات جديدة (المرحلة 2 من الموجّه) — **لا تُطبَّق هنا
-// تلقائياً على أي شاشة موجودة فعلياً** (Scope Lock، AGENTS.md §3). القيم الفعلية كـ CSS Custom
-// Properties مُضافة بشكل إضافي بحت (لا تُعدِّل أي متغيّر موجود) في src/app/globals.css تحت تعليق
+// ⚠️ نطاق التطبيق — تحديث (المرحلة 2، 2026-09-08، قرار مؤسس مباشر): RADIUS_SCALE لم تعد بيانات
+// خاملة بانتظار الاستهلاك — طُبِّقت فعلياً وحرفياً على `--radius`/`--radius-sm..3xl` القياسية في
+// src/app/globals.css (تغيير عالمي شامل، يمس كل عنصر `rounded-*` في التطبيق بأكمله، لا شاشات
+// (reef) الجديدة فقط — AGENTS.md §13، مُعلَن صراحة لا صامت). SHADOW_SCALE/GLASS_SURFACE/
+// MOTION_EASING تبقى بيانات إضافية موازية (--sb-shadow-*/--sb-ease-*) — لا مستهلك حي عالمي بعد،
+// جاهزة للاستخدام في شاشات المرحلة 2. القيم الفعلية الكاملة في src/app/globals.css تحت تعليق
 // "DESIGN TOKENS — EXTRACT-DESIGN-DNA" — يجب أن يبقى الملفان متطابقين، نفس عُرف theme-registry.ts.
 
 /** نصف قطر الاستدارة — سلسلة تراكمية (Additive Scale)، استخراج حرفي من --radius + الحسابات
@@ -25,7 +27,9 @@
  *  blush/lavender/mint/peach). عالم ريف عندنا (أخضر) أقرب دلالياً لعائلة "sage" الجادة — لذا
  *  `base` هنا يعكس 1.5rem، و`baseSoft` (1.75rem) محفوظة كخيار بديل موثَّق لأي ثيم/عالم مستقبلي أكثر
  *  "أنثوية/دافئة" (مثال محتمل مستقبلاً: reef-lavender الحالي يستخدم ألوان lavender الحقيقية من
- *  المرجع لكن دون هذا التحول في نصف القطر بعد — فجوة موثَّقة، لا قرار بتطبيقه الآن). */
+ *  المرجع لكن دون هذا التحول في نصف القطر بعد — فجوة موثَّقة، لا قرار بتطبيقه الآن).
+ *  ⚠️ **مُطبَّقة فعلياً الآن** حرفياً على `--radius`/`--radius-sm..3xl` القياسية في globals.css —
+ *  ليست بيانات موازية بادئتها `--sb-` (أُزيلت عمداً لتفادي تكرار مصدر الحقيقة). */
 export interface RadiusScale {
   /** القيمة الأساس (rem) التي تُشتَق منها كل الدرجات أدناه. */
   base: string;
@@ -122,15 +126,16 @@ export const MOTION_EASING: MotionEasing = {
  *  مكتشَفة. هذا يُغلِق OPEN_QUESTION (UI_UX_SYSTEM.md §6) بالنتيجة السلبية نفسها: **لا مقياس مسافات
  *  مخصَّص موجود للاستخراج — القرار الفعلي المكتشَف هو استخدام Tailwind الافتراضي كما هو، لا اختراع
  *  مقياس 8px أو غيره.** الخط: أسرة الخط الوحيدة المُطبَّقة فعلياً هي `'Tajawal', 'Cairo', system-ui`
- *  (body font-family حرفياً) — يطابق القيمة المذكورة أصلاً كـ PROPOSED في UI_UX_SYSTEM.md §3، هذا
- *  الاستخراج **يؤكدها كتطبيق حي في المرجع** لكنه لا يرفعها إلى IMPLEMENTED عندنا (تحميل خط فعلي عبر
- *  next/font قرار عالمي يمس كل شاشة موجودة، خارج نطاق "غلاف بصري لشاشات جديدة فقط" — راجع الأسئلة
- *  المفتوحة نهاية تقرير المرحلة 1). لا وزن خط (font-weight) مخصَّص مكتشَف خارج default/medium/
- *  semibold/bold القياسية لـ Tailwind. */
+ *  (body font-family حرفياً في المرجع). ⚠️ **مُطبَّقة فعلياً الآن عندنا أيضاً** (المرحلة 2،
+ *  2026-09-08، قرار مؤسس مباشر) — `next/font/google` في src/app/layout.tsx (متغيّرا
+ *  `--font-tajawal`/`--font-cairo`) + `--font-sans` في globals.css. كانت PROPOSED
+ *  (docs/UI_UX_SYSTEM.md §3) منذ اليوم 6 — الآن IMPLEMENTED. لا وزن خط (font-weight) مخصَّص مكتشَف
+ *  خارج default/medium/semibold/bold القياسية لـ Tailwind. */
 export const TYPOGRAPHY_EXTRACTION_FINDING = {
   customSpacingScaleFound: false,
   customFontSizeScaleFound: false,
   fontFamily: "'Tajawal', 'Cairo', system-ui, -apple-system, sans-serif",
+  status: 'IMPLEMENTED' as const,
   note:
-    'لا مقياس مسافات/خط مخصَّص في المرجع (Tailwind الافتراضي كما هو) — القيمة الوحيدة المُستخرَجة فعلياً هي أسرة الخط (Tajawal/Cairo)، تبقى PROPOSED لسلسبيل (UI_UX_SYSTEM.md §3) لأن تطبيقها الفعلي global.',
+    'لا مقياس مسافات/خط مخصَّص في المرجع (Tailwind الافتراضي كما هو). أسرة الخط (Tajawal/Cairo) مُطبَّقة فعلياً عبر next/font/google منذ 2026-09-08 — راجع src/app/layout.tsx وdocs/UI_UX_SYSTEM.md §3.',
 } as const;

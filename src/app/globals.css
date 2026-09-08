@@ -47,14 +47,18 @@
   --color-destructive-foreground: var(--sb-destructive-foreground);
   /*
    * إصلاح (ADR-025): shadcn init كانت كتبت هنا حرفياً `--font-sans: var(--font-sans);` — مرجع ذاتي
-   * فارغ يُسقِط مكدّس Tailwind الافتراضي الفعلي (`-apple-system, BlinkMacSystemFont, "Segoe UI"...`)
-   * ويجعل المتصفح يعرض النص بخط Times New Roman الافتراضي (تحقُّق حي: قورن مباشرة بالحالة قبل
-   * shadcn init عبر git stash). القيمة أدناه تُعيد بالضبط نفس مكدّس Tailwind v4 الافتراضي (نظام
-   * الجهاز، لا خط علامة تجارية) — لا تحسم سؤال الخط العربي المفتوح (Tajawal/Cairo،
-   * docs/UI_UX_SYSTEM.md §3 لا يزال PROPOSED)، فقط تُصلِح انكساراً حقيقياً.
+   * فارغ يُسقِط مكدّس Tailwind الافتراضي الفعلي ويجعل المتصفح يعرض النص بخط Times New Roman
+   * الافتراضي (تحقُّق حي وقتها: قورن مباشرة بالحالة قبل shadcn init عبر git stash).
+   *
+   * تحديث (EXTRACT-DESIGN-DNA-AND-APPLY-ACROSS-ALL-SCREENS، 2026-09-08): يحسم الآن سؤال الخط
+   * العربي المفتوح (كان PROPOSED، docs/UI_UX_SYSTEM.md §3) — `var(--font-tajawal)`/
+   * `var(--font-cairo)` (متغيّرا next/font/google، مُعرَّفان في src/app/layout.tsx على <html>)
+   * أولاً، ثم نفس مكدّس Tailwind v4 الافتراضي القديم كشبكة أمان (fallback) إن تأخر تحميل الخط أو
+   * لم يدعم المتصفح next/font لأي سبب — لا إزالة له، إضافة أمامه فقط.
    */
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Noto Sans',
-    Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --font-sans: var(--font-tajawal), var(--font-cairo), -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, 'Helvetica Neue', 'Noto Sans', Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    'Segoe UI Symbol', 'Noto Color Emoji';
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -73,13 +77,21 @@
   --color-input: var(--input);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
+  /*
+   * سلسلة استدارة تراكمية (Additive Scale) — استُبدلت (EXTRACT-DESIGN-DNA-AND-APPLY-ACROSS-ALL-SCREENS،
+   * 2026-09-08) بصيغة shadcn init الافتراضية المضاعِفة (calc(var(--radius) * 0.6/0.8/1.4/1.8/2.2))
+   * بالصيغة الحرفية المستخرجة من مرجع Lovable (--radius: ±Npx ثابتة) — مطابقة تماماً لـ
+   * src/config/design-tokens-registry.ts → RADIUS_SCALE. تغيير مرئي شامل (يمس كل عنصر يستخدم
+   * rounded-sm..rounded-3xl عبر التطبيق بالكامل، لا شاشات (reef) الجديدة فقط) — بطلب مؤسس مباشر
+   * (AGENTS.md §13، لا تغيير صامت).
+   */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px); /* امتداد لا وجود له في المرجع (يتوقف عند 3xl) — استمرار منطقي لنفس الفارق الثابت (+4px لكل درجة) */
 }
 
 /* destructive مشتركة عبر كل العوالم — لا تُخصَّص لكل عالم (§8.2) */
@@ -127,7 +139,8 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
+  /* 1.5rem — design-tokens-registry.ts → RADIUS_SCALE.base (كانت 0.625rem الافتراضي من shadcn init) */
+  --radius: 1.5rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -486,18 +499,14 @@ html[data-personal-theme='simplified'][data-personal-mode='dark'] {
  * src/config/design-tokens-registry.ts وsrc/config/animation-registry.ts، يجب أن يبقى هذا القسم
  * متطابقاً معهما. لا [data-world] هنا عمداً (قيم فيزيائية مشتركة عبر كل العوالم، لا لونية) — القيم
  * "المُلوَّنة بالعالم" (pill/tinted/glow) مبنية عبر var(--sb-primary) فتتكيّف تلقائياً.
- * لا مستهلك حي بعد لهذا القسم — جاهز للاستخدام في شاشات المرحلة 2 من نفس الموجّه.
+ *
+ * ⚠️ لا --sb-radius-* هنا: بعد تطبيق RADIUS_SCALE فعلياً على --radius/--radius-* الأصلية أعلاه
+ * (المرحلة 2، القرار الثالث)، أصبحت --radius-sm/md/lg/xl/2xl/3xl القياسية (Tailwind، لا بادئة --sb-)
+ * *هي نفسها* القيمة المُستخرَجة — تكرارها هنا كان سيخالف "مصدر واحد للحقيقة"
+ * (docs/DOCUMENTATION_RULES.md §6). استخدم rounded-sm..rounded-3xl القياسية مباشرة.
  */
 
 :root {
-  /* نصف القطر — design-tokens-registry.ts → RADIUS_SCALE (أساس 1.5rem) */
-  --sb-radius-sm: 1.25rem;
-  --sb-radius-md: 1.375rem;
-  --sb-radius-lg: 1.5rem;
-  --sb-radius-xl: 1.75rem;
-  --sb-radius-2xl: 2rem;
-  --sb-radius-3xl: 2.25rem;
-
   /* الظلال — design-tokens-registry.ts → SHADOW_SCALE */
   --sb-shadow-soft: 0 1px 2px hsl(150 20% 20% / 0.04), 0 8px 24px -8px hsl(150 25% 25% / 0.10);
   --sb-shadow-tile: 0 2px 4px hsl(150 20% 20% / 0.05), 0 24px 48px -16px hsl(142 40% 25% / 0.18);
