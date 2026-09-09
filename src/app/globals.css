@@ -299,10 +299,39 @@
  * نطاق CSS Variables منفصل كلياً (بادئة --sb-pt- بدل --sb-) مطبَّق على html[data-personal-theme]
  * [data-personal-mode] لا [data-world] — لو استُخدمت أسماء --sb- نفسها هنا لكسبها [data-world]
  * المتداخل دائماً (معرَّف مباشرة على عنصر أقرب)، وهو بالضبط الخلط الممنوع بين "أي عالم" و"أي تفضيل
- * شخصي للألوان". لا مستهلك واجهة بعد يقرأ --sb-pt-* (بنية تحتية فقط، نفس نمط [data-world] يوم 6).
+ * شخصي للألوان".
+ *
+ * ✅ تصحيح عطل حقيقي (COMPLETE-VISUAL-STENCIL-IMPORT-FULL-BATCH-NO-STOPS، بند 6، 2026-09-09):
+ * تشخيص حي أكّد أن هذا هو **السبب الجذري** لبلاغ "مكتبة الثيمات لا تعمل" — PersonalThemeSheet.tsx
+ * يكتب --sb-pt-* بنجاح فعلياً (تحقَّق منه: DOM/localStorage يتحدّثان صحيحاً عند كل اختيار)، لكن لا
+ * class/مكوّن في التطبيق يقرأ --sb-pt-* — كل مكوّن يستهلك --sb-* (مثال: bg-primary، عبر @theme inline
+ * أعلى هذا الملف)، فتبديل الثيم الشخصي كان يغيّر متغيّرات لا يراها أي عنصر فعلياً (font-size فقط
+ * كان يعمل، لأنه السطر الوحيد أدناه الذي يقرأ --sb-pt- مباشرة). الإصلاح: تعريف --sb-* (لا --sb-pt-)
+ * تحت مركِّب يطابق أي عنصر [data-world] (بما فيه <html> نفسها حين data-world='diwan' معرَّفة عليها
+ * مباشرة) بينما html يحمل data-personal-theme — تخصيصية هذا المركِّب (Compound Selector) على نفس
+ * العنصر المُستهدَف أعلى من [data-world='<slug>'] المفرد، فيربح بصرف النظر عن ترتيب المصدر، دون
+ * كسر عزل --sb-pt- كمصدر حقيقة (لا تكرار قيم Hex، فقط var() تشير إليها). destructive/-foreground
+ * مستبعَدان عمداً (لا حقل مقابل في PersonalThemeTokens — يبقيان مشتركين عبر كل العوالم كما وُثِّق).
  */
 html[data-personal-theme] {
   font-size: calc(16px * var(--sb-pt-font-scale, 1));
+}
+
+html[data-personal-theme][data-personal-mode][data-world],
+html[data-personal-theme][data-personal-mode] [data-world] {
+  --sb-background: var(--sb-pt-background);
+  --sb-foreground: var(--sb-pt-foreground);
+  --sb-card: var(--sb-pt-card);
+  --sb-card-foreground: var(--sb-pt-card-foreground);
+  --sb-primary: var(--sb-pt-primary);
+  --sb-primary-foreground: var(--sb-pt-primary-foreground);
+  --sb-secondary: var(--sb-pt-secondary);
+  --sb-secondary-foreground: var(--sb-pt-secondary-foreground);
+  --sb-accent: var(--sb-pt-accent);
+  --sb-accent-foreground: var(--sb-pt-accent-foreground);
+  --sb-muted: var(--sb-pt-muted);
+  --sb-muted-foreground: var(--sb-pt-muted-foreground);
+  --sb-border: var(--sb-pt-border);
 }
 
 /* رجالي — slug: masculine */
@@ -439,6 +468,149 @@ html[data-personal-theme='simplified'][data-personal-mode='dark'] {
   --sb-pt-muted-foreground: #ffffff;
   --sb-pt-border: #ffffff;
   --sb-pt-font-scale: 1.125;
+}
+
+/* العشرة الإضافية (بند 6، مُستخرَجة حرفياً من D:\temp\reefam-lovable-reference\src\styles.css —
+   راجع تعليق src/config/personal-theme-registry.ts للتفصيل الكامل ومصدر كل تحويل HSL→Hex) */
+
+/* ريفي (sage — الافتراضي الأصلي لريف المدينة في المرجع) */
+html[data-personal-theme='sage'][data-personal-mode='light'] {
+  --sb-pt-background: #f8fbf8; --sb-pt-foreground: #1e2924; --sb-pt-card: #ffffff; --sb-pt-card-foreground: #1e2924;
+  --sb-pt-primary: #3f8358; --sb-pt-primary-foreground: #fbfbf8; --sb-pt-secondary: #edf3ee; --sb-pt-secondary-foreground: #25372e;
+  --sb-pt-accent: #e0a752; --sb-pt-accent-foreground: #281f15; --sb-pt-muted: #eaf0ec; --sb-pt-muted-foreground: #63746b;
+  --sb-pt-border: #dce5df; --sb-pt-font-scale: 1;
+}
+html[data-personal-theme='sage'][data-personal-mode='dark'] {
+  --sb-pt-background: #121714; --sb-pt-foreground: #ecf3ed; --sb-pt-card: #1c221f; --sb-pt-card-foreground: #e8eee9;
+  --sb-pt-primary: #53c675; --sb-pt-primary-foreground: #101814; --sb-pt-secondary: #262c29; --sb-pt-secondary-foreground: #e8eee9;
+  --sb-pt-accent: #e0a752; --sb-pt-accent-foreground: #1b140e; --sb-pt-muted: #262c29; --sb-pt-muted-foreground: #94a89b;
+  --sb-pt-border: #2f3733; --sb-pt-font-scale: 1;
+}
+
+/* محيطي (ocean) */
+html[data-personal-theme='ocean'][data-personal-mode='light'] {
+  --sb-pt-background: #f7fbfd; --sb-pt-foreground: #1b2637; --sb-pt-card: #fbfdfe; --sb-pt-card-foreground: #1b2637;
+  --sb-pt-primary: #2084b6; --sb-pt-primary-foreground: #f6fbfe; --sb-pt-secondary: #e6f0f4; --sb-pt-secondary-foreground: #202c3c;
+  --sb-pt-accent: #eb9947; --sb-pt-accent-foreground: #281f15; --sb-pt-muted: #e3edf2; --sb-pt-muted-foreground: #5e6b78;
+  --sb-pt-border: #cfdfe8; --sb-pt-font-scale: 1;
+}
+html[data-personal-theme='ocean'][data-personal-mode='dark'] {
+  --sb-pt-background: #0d131c; --sb-pt-foreground: #e6ecf0; --sb-pt-card: #151d28; --sb-pt-card-foreground: #e6ecf0;
+  --sb-pt-primary: #4eb7da; --sb-pt-primary-foreground: #f6fbfe; --sb-pt-secondary: #1f2733; --sb-pt-secondary-foreground: #e6ecf0;
+  --sb-pt-accent: #eb9947; --sb-pt-accent-foreground: #281f15; --sb-pt-muted: #1f2733; --sb-pt-muted-foreground: #90a3ad;
+  --sb-pt-border: #263140; --sb-pt-font-scale: 1;
+}
+
+/* كهرماني (amber) */
+html[data-personal-theme='amber'][data-personal-mode='light'] {
+  --sb-pt-background: #fdfbf7; --sb-pt-foreground: #392618; --sb-pt-card: #fefdfa; --sb-pt-card-foreground: #392618;
+  --sb-pt-primary: #df7416; --sb-pt-primary-foreground: #fefbf6; --sb-pt-secondary: #f5ede0; --sb-pt-secondary-foreground: #3e2b1e;
+  --sb-pt-accent: #2da9d2; --sb-pt-accent-foreground: #152228; --sb-pt-muted: #f1eadf; --sb-pt-muted-foreground: #7b6b5b;
+  --sb-pt-border: #e6dccb; --sb-pt-font-scale: 1;
+}
+html[data-personal-theme='amber'][data-personal-mode='dark'] {
+  --sb-pt-background: #1e1610; --sb-pt-foreground: #f1ece4; --sb-pt-card: #292019; --sb-pt-card-foreground: #f1ece4;
+  --sb-pt-primary: #eb9e47; --sb-pt-primary-foreground: #fefbf6; --sb-pt-secondary: #342a23; --sb-pt-secondary-foreground: #f1ece4;
+  --sb-pt-accent: #2da9d2; --sb-pt-accent-foreground: #152228; --sb-pt-muted: #342a23; --sb-pt-muted-foreground: #ada290;
+  --sb-pt-border: #43362d; --sb-pt-font-scale: 1;
+}
+
+/* وردي ناعم (blush) */
+html[data-personal-theme='blush'][data-personal-mode='light'] {
+  --sb-pt-background: #fef8f9; --sb-pt-foreground: #3e1e29; --sb-pt-card: #fffcfd; --sb-pt-card-foreground: #3e1e29;
+  --sb-pt-primary: #df497b; --sb-pt-primary-foreground: #fffafb; --sb-pt-secondary: #fae5ea; --sb-pt-secondary-foreground: #4c2432;
+  --sb-pt-accent: #f7a76e; --sb-pt-accent-foreground: #342419; --sb-pt-muted: #f7e8ec; --sb-pt-muted-foreground: #8d6874;
+  --sb-pt-border: #f2d9df; --sb-pt-font-scale: 1;
+}
+html[data-personal-theme='blush'][data-personal-mode='dark'] {
+  --sb-pt-background: #201317; --sb-pt-foreground: #f4ebed; --sb-pt-card: #2c1c21; --sb-pt-card-foreground: #f4ebed;
+  --sb-pt-primary: #ec799f; --sb-pt-primary-foreground: #fffafb; --sb-pt-secondary: #36262b; --sb-pt-secondary-foreground: #f4ebed;
+  --sb-pt-accent: #f7a76e; --sb-pt-accent-foreground: #342419; --sb-pt-muted: #36262b; --sb-pt-muted-foreground: #b1959c;
+  --sb-pt-border: #422e35; --sb-pt-font-scale: 1;
+}
+
+/* لافندر (lavender) */
+html[data-personal-theme='lavender'][data-personal-mode='light'] {
+  --sb-pt-background: #fbf9fd; --sb-pt-foreground: #2e203c; --sb-pt-card: #fefdff; --sb-pt-card-foreground: #2e203c;
+  --sb-pt-primary: #9561d1; --sb-pt-primary-foreground: #fdfaff; --sb-pt-secondary: #f1e8f7; --sb-pt-secondary-foreground: #382749;
+  --sb-pt-accent: #ec79c6; --sb-pt-accent-foreground: #321b2a; --sb-pt-muted: #f1eaf6; --sb-pt-muted-foreground: #7a6c89;
+  --sb-pt-border: #e7dbf0; --sb-pt-font-scale: 1;
+}
+html[data-personal-theme='lavender'][data-personal-mode='dark'] {
+  --sb-pt-background: #1a1320; --sb-pt-foreground: #f0ecf4; --sb-pt-card: #241c2c; --sb-pt-card-foreground: #f0ecf4;
+  --sb-pt-primary: #b889e6; --sb-pt-primary-foreground: #fdfaff; --sb-pt-secondary: #2e2636; --sb-pt-secondary-foreground: #f0ecf4;
+  --sb-pt-accent: #ec79c6; --sb-pt-accent-foreground: #321b2a; --sb-pt-muted: #2e2636; --sb-pt-muted-foreground: #a598ae;
+  --sb-pt-border: #382e42; --sb-pt-font-scale: 1;
+}
+
+/* نعناعي (mint) */
+html[data-personal-theme='mint'][data-personal-mode='light'] {
+  --sb-pt-background: #f7fdfb; --sb-pt-foreground: #1d3531; --sb-pt-card: #fafefd; --sb-pt-card-foreground: #1d3531;
+  --sb-pt-primary: #30a68e; --sb-pt-primary-foreground: #f6fefb; --sb-pt-secondary: #e5f5f0; --sb-pt-secondary-foreground: #203c37;
+  --sb-pt-accent: #eb7099; --sb-pt-accent-foreground: #321b22; --sb-pt-muted: #e3f2ed; --sb-pt-muted-foreground: #5e7874;
+  --sb-pt-border: #cfe8df; --sb-pt-font-scale: 1;
+}
+html[data-personal-theme='mint'][data-personal-mode='dark'] {
+  --sb-pt-background: #111d1b; --sb-pt-foreground: #e6f0ec; --sb-pt-card: #1a2826; --sb-pt-card-foreground: #e6f0ec;
+  --sb-pt-primary: #54d4b4; --sb-pt-primary-foreground: #f6fefb; --sb-pt-secondary: #243331; --sb-pt-secondary-foreground: #e6f0ec;
+  --sb-pt-accent: #eb7099; --sb-pt-accent-foreground: #321b22; --sb-pt-muted: #243331; --sb-pt-muted-foreground: #92aaa2;
+  --sb-pt-border: #2e423f; --sb-pt-font-scale: 1;
+}
+
+/* خوخي (peach) */
+html[data-personal-theme='peach'][data-personal-mode='light'] {
+  --sb-pt-background: #fefaf8; --sb-pt-foreground: #40271c; --sb-pt-card: #fffefc; --sb-pt-card-foreground: #40271c;
+  --sb-pt-primary: #ec7551; --sb-pt-primary-foreground: #fffcfa; --sb-pt-secondary: #fbeae0; --sb-pt-secondary-foreground: #4f2f22;
+  --sb-pt-accent: #52b1e0; --sb-pt-accent-foreground: #152228; --sb-pt-muted: #f7ebe3; --sb-pt-muted-foreground: #8d7368;
+  --sb-pt-border: #f0dcd1; --sb-pt-font-scale: 1;
+}
+html[data-personal-theme='peach'][data-personal-mode='dark'] {
+  --sb-pt-background: #211712; --sb-pt-foreground: #f4eeeb; --sb-pt-card: #2d201b; --sb-pt-card-foreground: #f4eeeb;
+  --sb-pt-primary: #ef8f6c; --sb-pt-primary-foreground: #fffcfa; --sb-pt-secondary: #372a25; --sb-pt-secondary-foreground: #f4eeeb;
+  --sb-pt-accent: #52b1e0; --sb-pt-accent-foreground: #152228; --sb-pt-muted: #372a25; --sb-pt-muted-foreground: #b1a095;
+  --sb-pt-border: #43342d; --sb-pt-font-scale: 1;
+}
+
+/* ليلي (midnight) */
+html[data-personal-theme='midnight'][data-personal-mode='light'] {
+  --sb-pt-background: #f8f9fc; --sb-pt-foreground: #151a32; --sb-pt-card: #fbfcfe; --sb-pt-card-foreground: #151a32;
+  --sb-pt-primary: #27369b; --sb-pt-primary-foreground: #f6f7fe; --sb-pt-secondary: #e8eaf3; --sb-pt-secondary-foreground: #1c2240;
+  --sb-pt-accent: #f4c434; --sb-pt-accent-foreground: #2b2112; --sb-pt-muted: #e6e7f0; --sb-pt-muted-foreground: #5e6378;
+  --sb-pt-border: #d2d5e4; --sb-pt-font-scale: 1;
+}
+html[data-personal-theme='midnight'][data-personal-mode='dark'] {
+  --sb-pt-background: #0b0d19; --sb-pt-foreground: #ecedf4; --sb-pt-card: #121526; --sb-pt-card-foreground: #ecedf4;
+  --sb-pt-primary: #6778e4; --sb-pt-primary-foreground: #f6f7fe; --sb-pt-secondary: #1f2133; --sb-pt-secondary-foreground: #ecedf4;
+  --sb-pt-accent: #f4c434; --sb-pt-accent-foreground: #2b2112; --sb-pt-muted: #1f2133; --sb-pt-muted-foreground: #959ab1;
+  --sb-pt-border: #262a40; --sb-pt-font-scale: 1;
+}
+
+/* بنفسجي ملكي (plum) */
+html[data-personal-theme='plum'][data-personal-mode='light'] {
+  --sb-pt-background: #faf4fa; --sb-pt-foreground: #321b37; --sb-pt-card: #fefbfe; --sb-pt-card-foreground: #321b37;
+  --sb-pt-primary: #85358d; --sb-pt-primary-foreground: #fdf6fe; --sb-pt-secondary: #f2e8f3; --sb-pt-secondary-foreground: #391e3e;
+  --sb-pt-accent: #f5c73d; --sb-pt-accent-foreground: #2b2112; --sb-pt-muted: #efe6f0; --sb-pt-muted-foreground: #745e78;
+  --sb-pt-border: #e3d2e4; --sb-pt-font-scale: 1;
+}
+html[data-personal-theme='plum'][data-personal-mode='dark'] {
+  --sb-pt-background: #160c18; --sb-pt-foreground: #f3ecf4; --sb-pt-card: #221325; --sb-pt-card-foreground: #f3ecf4;
+  --sb-pt-primary: #de7cde; --sb-pt-primary-foreground: #200f24; --sb-pt-secondary: #2f2032; --sb-pt-secondary-foreground: #f3ecf4;
+  --sb-pt-accent: #ecc551; --sb-pt-accent-foreground: #2b2112; --sb-pt-muted: #2f2032; --sb-pt-muted-foreground: #af95b1;
+  --sb-pt-border: #402c44; --sb-pt-font-scale: 1;
+}
+
+/* أزرق ليلي (navy) */
+html[data-personal-theme='navy'][data-personal-mode='light'] {
+  --sb-pt-background: #f4f7fb; --sb-pt-foreground: #141e34; --sb-pt-card: #fbfcfe; --sb-pt-card-foreground: #141e34;
+  --sb-pt-primary: #18428b; --sb-pt-primary-foreground: #f6f9fe; --sb-pt-secondary: #e7ecf3; --sb-pt-secondary-foreground: #192743;
+  --sb-pt-accent: #2bbdee; --sb-pt-accent-foreground: #142229; --sb-pt-muted: #e4eaf1; --sb-pt-muted-foreground: #5b677b;
+  --sb-pt-border: #d1dae6; --sb-pt-font-scale: 1;
+}
+html[data-personal-theme='navy'][data-personal-mode='dark'] {
+  --sb-pt-background: #080c17; --sb-pt-foreground: #eceff4; --sb-pt-card: #0e1525; --sb-pt-card-foreground: #eceff4;
+  --sb-pt-primary: #5e9aed; --sb-pt-primary-foreground: #0a111f; --sb-pt-secondary: #1b2232; --sb-pt-secondary-foreground: #eceff4;
+  --sb-pt-accent: #47c2eb; --sb-pt-accent-foreground: #142229; --sb-pt-muted: #1b2232; --sb-pt-muted-foreground: #96a3b6;
+  --sb-pt-border: #242d42; --sb-pt-font-scale: 1;
 }
 /*
  ---break---

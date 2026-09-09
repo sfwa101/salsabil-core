@@ -2,13 +2,19 @@
 // آلية التخزين/التطبيق لمحور التفضيل الشخصي للثيمات (اليوم 30، BAYAN-HOME-FEED-001).
 // localStorage فقط — بلا قاعدة بيانات (قرار مسبق). يضبط data-personal-theme/data-personal-mode
 // على <html> — مستقل تماماً عن data-world (src/config/theme-registry.ts).
-
+//
+// ✅ تصحيح عطل حقيقي (COMPLETE-VISUAL-STENCIL-IMPORT-FULL-BATCH-NO-STOPS، بند 6، 2026-09-09):
+// readStoredPersonalTheme() كانت تُعيد 'masculine' دائماً (DEFAULT_PERSONAL_THEME) حتى لزائر لم
+// يفتح شيت الاختيار إطلاقاً — كان هذا بلا أثر بصري قبل إصلاح globals.css (--sb-pt-* غير مستهلَكة)،
+// فمرّ بلا اكتشاف. بعد ربط --sb-pt-* بـ--sb-* فعلياً، كانت ستعني أن كل زائر جديد يرى تلقائياً هوية
+// "رجالي" بدل هوية عالمه (أخضر ريف مثلاً) بلا أي اختيار منه — انحدار بصري حقيقي صامت. الإصلاح:
+// "لم يُختَر ثيم بعد" حالة صريحة (`null`) لا تطبَّق كـ'masculine' — بلا اختيار فعلي = هوية العالم
+// الافتراضية كما هي، تماماً كما كانت تظهر (نظرياً) قبل بناء هذا المحور أصلاً.
 import { PERSONAL_THEMES, type PersonalColorMode, type PersonalThemeSlug } from '@/config/personal-theme-registry';
 
 export const PERSONAL_THEME_STORAGE_KEY = 'sb_personal_theme';
 export const PERSONAL_MODE_STORAGE_KEY = 'sb_personal_mode';
 
-export const DEFAULT_PERSONAL_THEME: PersonalThemeSlug = 'masculine';
 export const DEFAULT_PERSONAL_MODE: PersonalColorMode = 'light';
 
 function isPersonalThemeSlug(value: string | null): value is PersonalThemeSlug {
@@ -19,10 +25,12 @@ function isPersonalColorMode(value: string | null): value is PersonalColorMode {
   return value === 'light' || value === 'dark';
 }
 
-export function readStoredPersonalTheme(): PersonalThemeSlug {
-  if (typeof window === 'undefined') return DEFAULT_PERSONAL_THEME;
+// null = لا تفضيل شخصي مخزَّن بعد (لم يفتح المستخدم الشيت أو لم يختر شيئاً) — الفارق الآن حقيقي
+// بصرياً (راجع تعليق أعلى الملف)، لا مجرد تفصيل نوع (Type) نظري.
+export function readStoredPersonalTheme(): PersonalThemeSlug | null {
+  if (typeof window === 'undefined') return null;
   const stored = window.localStorage.getItem(PERSONAL_THEME_STORAGE_KEY);
-  return isPersonalThemeSlug(stored) ? stored : DEFAULT_PERSONAL_THEME;
+  return isPersonalThemeSlug(stored) ? stored : null;
 }
 
 export function readStoredPersonalMode(): PersonalColorMode {
@@ -31,10 +39,17 @@ export function readStoredPersonalMode(): PersonalColorMode {
   return isPersonalColorMode(stored) ? stored : DEFAULT_PERSONAL_MODE;
 }
 
-export function applyPersonalThemeToDocument(theme: PersonalThemeSlug, mode: PersonalColorMode): void {
+// theme = null → إزالة السمتين كلياً من <html> (لا "تطبيق ثيم افتراضي") — يسمح لتوكنز [data-world]
+// العادية بالظهور بلا أي تدخل، بدل فرض 'masculine' على من لم يختر شيئاً بعد.
+export function applyPersonalThemeToDocument(theme: PersonalThemeSlug | null, mode: PersonalColorMode): void {
   if (typeof document === 'undefined') return;
-  document.documentElement.dataset.personalTheme = theme;
-  document.documentElement.dataset.personalMode = mode;
+  if (theme) {
+    document.documentElement.dataset.personalTheme = theme;
+    document.documentElement.dataset.personalMode = mode;
+  } else {
+    delete document.documentElement.dataset.personalTheme;
+    delete document.documentElement.dataset.personalMode;
+  }
 }
 
 export function persistPersonalTheme(theme: PersonalThemeSlug): void {
