@@ -12,6 +12,7 @@
 // صور متعددة فعلياً (راجع نهاية تقرير المرحلة 2 لهذه الفجوة).
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { ImageOff } from 'lucide-react';
 import { catalogService } from '@/core/modules/catalog/catalog.service';
@@ -45,8 +46,14 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         {/* الهيرو — صورة واحدة (لا معرض حقيقي، راجع تعليق أعلى الملف) بشارة هوية الحي عائمة فوقها */}
         <div className="animate-sb-fade-scale-in relative aspect-square overflow-hidden rounded-3xl bg-muted shadow-[var(--sb-shadow-tile)] md:aspect-[4/5]">
           {product.imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element -- نفس نمط ProductCard.tsx/PostCard.tsx القائم (img خام، لا next/image)
-            <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+            <Image
+              src={product.imageUrl}
+              alt={product.name}
+              fill
+              priority
+              sizes="(max-width: 768px) 100vw, 50vw"
+              className="object-cover"
+            />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-muted-foreground">
               <ImageOff size={40} />

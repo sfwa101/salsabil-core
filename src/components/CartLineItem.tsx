@@ -17,6 +17,7 @@
 // FIX-STALE-PRODUCT-REFS-PERFORMANCE-AND-CATEGORY-VISUALS (الجزء 2) — markup الأزرار +/- استُخرج
 // إلى QuantityStepper.tsx (مكوّن مشترك) — بطاقة المنتج في صفحة الحي تستهلك نفس المكوّن الآن.
 
+import Image from 'next/image';
 import { Trash2 } from 'lucide-react';
 import { CartActionButton } from '@/components/CartActionButton';
 import { QuantityStepper } from '@/components/QuantityStepper';
@@ -29,10 +30,11 @@ export function CartLineItem({ line }: { line: CartLineSummary }) {
   return (
     <div className="flex gap-3 rounded-xl border border-border bg-background p-3">
       {product.imageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element -- نفس نمط ProductCard.tsx/PostCard.tsx القائم
-        <img
+        <Image
           src={product.imageUrl}
           alt={product.name}
+          width={80}
+          height={80}
           loading="lazy"
           className="h-20 w-20 shrink-0 rounded-lg object-cover"
         />

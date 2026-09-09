@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { Plus } from 'lucide-react';
 import type { Product } from '@/core/modules/catalog/types';
 import type { CartLineSummary } from '@/core/modules/cart/types';
@@ -30,9 +31,15 @@ export function ProductCard({ product, cartLine }: { product: Product; cartLine?
     <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-5 transition hover:border-primary hover:shadow-[var(--sb-shadow-soft)]">
       <Link href={`/product/${product.id}`} className="flex flex-col gap-2">
         {product.imageUrl && (
-          <span className="-mx-5 -mt-5 mb-1 block aspect-square overflow-hidden rounded-t-2xl bg-muted">
-            {/* eslint-disable-next-line @next/next/no-img-element -- نفس نمط PostCard.tsx القائم (img خام، لا next/image) */}
-            <img src={product.imageUrl} alt={product.name} loading="lazy" className="h-full w-full object-cover" />
+          <span className="relative -mx-5 -mt-5 mb-1 block aspect-square overflow-hidden rounded-t-2xl bg-muted">
+            <Image
+              src={product.imageUrl}
+              alt={product.name}
+              fill
+              loading="lazy"
+              sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1280px) 25vw, 20vw"
+              className="object-cover"
+            />
           </span>
         )}
         <span className="text-base font-medium text-card-foreground">{product.name}</span>

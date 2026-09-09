@@ -10,6 +10,7 @@
 // تفاعل (لا cursor pointer، لا onClick) — نفس السلوك القديم بالضبط لهذه الحالة.
 
 import { useRef, useState } from 'react';
+import Image from 'next/image';
 import type { PostMediaLink, PostWithDetails } from '@/core/modules/bayan/types';
 import type { Product } from '@/core/modules/catalog/types';
 import { HorizontalShelf } from './HorizontalShelf';
@@ -47,17 +48,17 @@ export function PostCard({ post, products }: PostCardProps) {
           >
             {post.media.map((m) =>
               m.link.type === 'none' ? (
-                <div key={m.id} className="aspect-square w-full shrink-0 snap-center">
-                  <img src={m.imageUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
+                <div key={m.id} className="relative aspect-square w-full shrink-0 snap-center">
+                  <Image src={m.imageUrl} alt="" fill loading="lazy" sizes="100vw" className="object-cover" />
                 </div>
               ) : (
                 <button
                   key={m.id}
                   type="button"
                   onClick={() => setOpenSheet(m.link as OpenSheet)}
-                  className="aspect-square w-full shrink-0 snap-center"
+                  className="relative aspect-square w-full shrink-0 snap-center"
                 >
-                  <img src={m.imageUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
+                  <Image src={m.imageUrl} alt="" fill loading="lazy" sizes="100vw" className="object-cover" />
                 </button>
               )
             )}

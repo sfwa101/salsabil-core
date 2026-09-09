@@ -1532,6 +1532,38 @@ Related: src/core/modules/orders/orders.integration.test.ts، .husky/pre-push، 
 
 ---
 
+### DD-012
+```
+Decision: هل يُثبَّت صراحة Region لدوال Vercel Serverless (`preferredRegion`/`vercel.json` →
+          regions) بحيث يطابق Region الفعلي لمشروع Supabase، لتقليل زمن الرحلة ذهاباً-وعودة بين
+          الدالة وقاعدة البيانات على كل طلب SSR؟
+Reason: قِياس حي على staging.reefam.com (COMPLETE-VISUAL-STENCIL-IMPORT-FULL-BATCH-NO-STOPS، بند 1،
+          2026-09-09): TTFB لصفحات SSR الرئيسية (/`, `/[category]`) ~1.0-1.1 ثانية بثبات عبر عدة
+          قياسات متتالية (بعد استقرار Cold Start)، رغم أن استعلامات Supabase نفسها مُجمَّعة بالفعل
+          (`Promise.all`) — لا Waterfall متتالٍ متبقٍّ فعلياً في الكود (تحقَّق منه بقراءة
+          `bayan.service.ts`/`[category]/page.tsx`/`cart/page.tsx`، كلها موازية بالفعل من دفعات
+          سابقة: FIX-STALE-PRODUCT-REFS-PERFORMANCE-AND-CATEGORY-VISUALS، FIX-DD-010-CART-QUANTITY-
+          UI-STALE). ترويسة `X-Vercel-Id` على طلب فعلي أظهرت `fra1::iad1` — الدالة نفّذت فعلياً في
+          `iad1` (فرجينيا، الساحل الشرقي الأمريكي) رغم أن أقرب Edge للطلب كان `fra1` (فرانكفورت) —
+          إن كان مشروع Supabase (`liolnkdmjfkvawnkwhje.supabase.co`) في منطقة أخرى (أوروبا/آسيا/إلخ)،
+          فكل استعلام SSR يدفع كمون شبكي عابر للقارات مرتين (Vercel↔Supabase) فوق أي كمون طلب
+          المستخدم نفسه. **لم يُحسَم لأنه يحتاج تأكيداً من لوحة تحكم Supabase (Settings → General →
+          Region) لا يملكه الوكيل هنا** — تخمين قيمة `region` خطأ قد لا يُغيّر شيئاً أو يُسوّئ الوضع
+          صامتاً (AGENTS.md §5: Never Infer Missing Architecture).
+Risk: TTFB بطيء (~1s+) يبقى قائماً على كل صفحة SSR تلمس Supabase — أهم أثر ملموس فعلي على "سرعة
+          البرق" المطلوبة صراحة في هذه الدفعة، ولا يُحلّ بأي تحسين على مستوى الكود (الاستعلامات نفسها
+          موازية ومُفهرسة أصلاً حسب docs/DATABASE.md §10) بل ببنية تحتية/إعداد نشر فقط.
+Owner: Founder
+Created: 2026-09-09
+Review by: فور تأكيد Region الفعلي لمشروع Supabase من لوحة التحكم — لا تاريخ ثابت
+Blocking: NO — لا يمنع أي عمل حالي، لكنه أكبر مكسب أداء متبقٍّ غير مُنفَّذ من بند 1 في هذه الدفعة
+Status: OPEN
+Related: next.config.ts، docs/DATABASE.md §10 (Known Indexing Gaps)، هذا الملف §COMPLETE-VISUAL-
+          STENCIL-IMPORT-FULL-BATCH-NO-STOPS (تقرير المهمة الكامل، بند 1)
+```
+
+---
+
 ### مراجَع ولم يُحوَّل إلى Decision Debt (مع التبرير)
 
 - **BR-016 (الحد الأدنى لقيمة الطلب، `docs/BUSINESS_RULES.md`):** `OPEN_QUESTION` قائم، لكن التنفيذ
