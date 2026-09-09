@@ -16,6 +16,16 @@
 //
 // FIX-STALE-PRODUCT-REFS-PERFORMANCE-AND-CATEGORY-VISUALS (الجزء 2) — markup الأزرار +/- استُخرج
 // إلى QuantityStepper.tsx (مكوّن مشترك) — بطاقة المنتج في صفحة الحي تستهلك نفس المكوّن الآن.
+//
+// COMPLETE-VISUAL-STENCIL-IMPORT-FULL-BATCH-NO-STOPS (بند 8) — تفاصيل بصرية متبقية من مرجع
+// Lovable (Cart.tsx → CartLineItem المحلي هناك)، فوق البنية الوظيفية الموجودة فعلاً بلا تغيير: ظل
+// ناعم + خلفية بطاقة مرتفعة (كانت bg-background مسطَّحة بلا ظل، تبدو "غارقة" داخل خلفية
+// CartVendorGroup المطابقة لها لوناً) — الآن تبرز كبطاقة مستقلة فوق صينية المجموعة (راجع تعديل
+// CartVendorGroup.tsx المصاحب). زر الحذف مربع ناعم بخلفية destructive/10 (كان دائرة شفافة) — يطابق
+// `h-7 w-7 rounded-[10px] bg-destructive/10` في المرجع حرفياً. إجمالي البند أكبر/أثقل (كان
+// text-sm، أصبح text-base) ليبرز كرقم أساسي في الصف، لا رقماً ثانوياً بجانب العدّاد. لا سحب للحذف
+// (framer-motion) ولا تحديث متفائل — كلاهما محظور صراحة (قيود الدفعة)، البنية الوظيفية (Server
+// Actions) بلا تغيير.
 
 import Image from 'next/image';
 import { Trash2 } from 'lucide-react';
@@ -28,7 +38,7 @@ export function CartLineItem({ line }: { line: CartLineSummary }) {
   const { item, product, unitPrice, lineTotal } = line;
 
   return (
-    <div className="flex gap-3 rounded-xl border border-border bg-background p-3">
+    <div className="flex gap-3 rounded-xl bg-card p-3 shadow-[var(--sb-shadow-soft)] ring-1 ring-border/50">
       {product.imageUrl ? (
         <Image
           src={product.imageUrl}
@@ -62,7 +72,7 @@ export function CartLineItem({ line }: { line: CartLineSummary }) {
               ariaLabel="حذف"
               variant="ghost"
               size="icon-xs"
-              className="shrink-0 text-destructive hover:bg-destructive/10"
+              className="shrink-0 rounded-[10px] bg-destructive/10 text-destructive hover:bg-destructive/20"
             >
               <Trash2 size={14} />
             </CartActionButton>
@@ -70,7 +80,7 @@ export function CartLineItem({ line }: { line: CartLineSummary }) {
         </div>
 
         <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-primary">{lineTotal} جنيه</span>
+          <span className="text-base font-extrabold text-primary">{lineTotal} جنيه</span>
           <QuantityStepper
             quantity={item.quantity}
             onDecrement={async () => {

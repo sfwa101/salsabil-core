@@ -108,15 +108,25 @@ export default async function CartPage() {
           <CartVendorGroup key={group.key} merchantName={group.merchantName} lines={group.lines} />
         ))}
 
-        <div className="rounded-xl bg-muted p-4 text-center text-lg font-semibold text-foreground">
-          الإجمالي: {summary.total} جنيه
-        </div>
+        {/* COMPLETE-VISUAL-STENCIL-IMPORT-FULL-BATCH-NO-STOPS (بند 8) — بطاقة ملخّص بدل صندوق
+            مسطَّح واحد، يطابق قسم "Summary" في مرجع Lovable (Cart.tsx) بصرياً — بلا صفوف توصيل/
+            خصم/إكرامية (لا حقول مقابلة في نظامنا، لا تُضاف صفوف بقيمة صفر لميزات غير موجودة). */}
+        <section className="rounded-2xl bg-card p-4 shadow-[var(--sb-shadow-soft)] ring-1 ring-border/50">
+          <div className="my-1 h-px bg-border" />
+          <div className="flex items-baseline justify-between pt-2">
+            <span className="text-base font-bold text-foreground">الإجمالي</span>
+            <span className="text-2xl font-extrabold text-primary">
+              {summary.total} <span className="text-sm font-medium text-muted-foreground">جنيه</span>
+            </span>
+          </div>
+        </section>
 
         <Link
           href="/checkout"
-          className="rounded-xl bg-primary px-4 py-3 text-center font-medium text-primary-foreground transition hover:opacity-90"
+          className="flex items-center justify-between rounded-2xl bg-primary px-4 py-3.5 font-extrabold text-primary-foreground shadow-[var(--sb-shadow-pill)] transition hover:opacity-90"
         >
-          إتمام الطلب
+          <span>إتمام الطلب</span>
+          <span className="rounded-xl bg-primary-foreground/15 px-3 py-1.5 text-sm">{summary.total} جنيه</span>
         </Link>
       </div>
 
