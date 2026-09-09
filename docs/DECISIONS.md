@@ -1,7 +1,7 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.27
+version: 1.28
 authority: Security & Correctness (قسم DECISION DEBT REGISTRY) + Engineering Decision Log (باقي الملف)
 last_updated: 2026-09-09
 last_verified: 2026-09-09
@@ -1090,6 +1090,66 @@ Related Documents: specs/identity/PASSWORD_AUTH_SPEC.md (التصميم الكا
 
 ---
 
+## ADR-027
+```
+Title: Optimistic UI لتفاعلات السلة (useOptimistic) — CartLineItem.tsx/ProductCard.tsx تصبحان
+          'use client'، hook مشترك (useOptimisticCartLine) يوحّد منطق التزامن
+Status: ACCEPTED
+Date: 2026-09-09 (IMPLEMENT-OPTIMISTIC-UI-CART-INTERACTIONS)
+Decision: (أ) `CartLineItem.tsx` و`ProductCard.tsx` أصبحا `'use client'` صراحة (كان `ProductCard.tsx`
+          يُبنى كعميل فعلياً بالفعل ضمنياً عبر استيراده من `PostCard.tsx` — الآن صريح لا ضمني).
+          أزرار +/- و"أضف للسلة" تستخدم `useOptimistic` (React 19) حقيقياً بدل الاعتماد على مؤشر
+          Pending فقط (`CartActionButton.tsx`، `useFormStatus`) — الرقم/الحالة على الشاشة يتغيّر
+          فوراً (مُقاس حياً: ~6.5ms، أقل من فريم واحد)، وaddToCartAction/updateCartItemAction
+          (بلا أي تعديل على منطقهما) يُرسَلان في الخلفية بالتوازي. فشل نادر (نفاد مخزون) يُعيد
+          الحالة تلقائياً للقيمة الحقيقية (useOptimistic نفسه، بلا كود تراجع يدوي) + توست بالسبب
+          (`useCartToast.tsx`، نفس نمط `WorldSwitcher.tsx` — state+setTimeout+createPortal).
+          (ب) `useOptimisticCartLine.ts` (جديد) يوحّد منطق "زيادة/إنقاص كمية بند موجود أو إضافة أول
+          وحدة لمنتج غير موجود بعد" — مُستهلَك من كلا الملفين (نفس الشكل حرفياً في كليهما). طابور
+          تسلسلي داخلي (`queueRef`) يضمن وصول طلبات السيرفر بترتيب النقرات حتى مع نقر سريع متكرر.
+          (ج) `QuantityStepper.tsx` غيَّر عقده من `onIncrement/onDecrement: () => Promise<unknown>`
+          مربوطة بـServer Action عبر `<form action>` إلى `() => void` تُستدعى مباشرة (onClick) —
+          لا مستهلك ثالث له غير هذين الملفين (تحقَّق منه بالبحث)، فالتغيير آمن. لم يعد يستخدم
+          `CartActionButton` (`useFormStatus` يتطلّب `<form>` فعلياً؛ التحديث الفوري نفسه يُغني عن
+          مؤشر Pending) — `Button` (shadcn/ui) مباشرة بدل ذلك، بلا أي تغيير بصري.
+          (د) `ProductOptions.tsx` (الملف الفعلي خلف زر الإضافة في `ProductSheetContent.tsx`
+          **و**`product/[id]/page.tsx` معاً) حوَّل حالة `addState` اليدوية (idle/adding/added/error)
+          إلى `useOptimistic` حقيقي — قاعدته (`added`) حقيقة مؤكَّدة من السيرفر فقط (`setAdded(true)`
+          بعد نجاح فعلي، لا قيمة ثابتة — خطأ استخدام شائع لـ`useOptimistic` كان سيُعيد تراجع النص حتى
+          بعد النجاح، تحقِّق منه قبل التنفيذ). زر الحذف (`Trash2`) في `CartLineItem.tsx` **خارج
+          النطاق** — يبقى `<form>`+`CartActionButton` كما كان تماماً (الموجّه ذكر +/- والإضافة فقط).
+Context: المؤسس رصد بطئاً حقيقياً (~1-1.4 ثانية، مُوثَّق ومُقاس فعلياً في هذا الملف → `DD-010`) في كل
+          ضغطة +/- أو "أضف للسلة". الإصلاح السابق (`CartActionButton.tsx`، `DD-010`، 2026-09-07)
+          عالج فقط **الإحساس** بالتجمّد عبر مؤشر Pending — لم يُلغِ الانتظار الفعلي (`DD-010` نفسه
+          وثَّق هذا صراحة كـ"تحسين مستقبلي اختياري"). طلب المؤسس هذه المرة الحل الجذري تحديداً عبر
+          `useOptimistic`، بلا لمس منطق Server Actions (حماية المخزون/عزل التجار/حساب السعر).
+Alternatives: (أ) الإبقاء على `useFormStatus`/`CartActionButton` فقط (حل `DD-010` الحالي) — مرفوض
+          صراحة بالموجّه: يعالج الإحساس لا السبب. (ب) `useState` يدوية محلية بدل `useOptimistic`
+          (تحديث متفائل يدوي + تراجع يدوي عند الفشل) — مرفوض: الموجّه طلب `useOptimistic` تحديداً
+          ("لا تخترع حلاً يدوياً معقداً")؛ كما أن التراجع التلقائي المدمَج في `useOptimistic` عند فشل
+          الـtransition أبسط وأقل عرضة لخطأ من تتبّع القيمة الأصلية يدوياً لكل حالة. (ج) تكرار منطق
+          الطابور التسلسلي/`useOptimistic` في كل من `CartLineItem.tsx`/`ProductCard.tsx` بدل استخراج
+          `useOptimisticCartLine.ts` — مرفوض: نفس المنطق حرفياً مطلوب في كليهما، التكرار مخالفة أوضح
+          لـ"لا نبني الشيء نفسه مرتين" من الاستخراج.
+Consequences: `CartCapsule.tsx` (عدّاد/إجمالي الهيدر) بلا تغيير — يبقى غير تفاؤلي (يتحدّث بعد الجولة
+          الحقيقية فقط)، خارج النطاق المُعلَن صراحة (لم يُطلَب، صفحة مختلفة تماماً عن الثلاثة
+          المذكورة في الموجّه). حركات `plus-one-pop`/`qtyCapsuleIn` المسجَّلة مسبقاً في
+          `animation-registry.ts` تبقى غير مُستهلَكة (لم تُطلَب هنا). تحقُّق حي فعلي (Playwright ضد
+          `next dev` والقاعدة الحقيقية على `dev`): زمن التغيّر البصري ~6.5ms (قياس داخل المتصفح،
+          `performance.now()`+`MutationObserver`، بمعزل عن أي overhead خارجي) مقابل ~1000-1400ms
+          الموثَّقة في `DD-010`؛ سيناريو فشل حقيقي (تخفيض `inventory.quantity_available` لمنتج
+          تجريبي مؤقتاً إلى 1 عبر service_role، محاولة زيادة الكمية لـ2) أثبت التراجع البصري الصحيح
+          + ظهور رسالة الخطأ الحقيقية من `cart.service.ts` بلا تعديل، والمخزون أُعيد لقيمته الأصلية
+          فوراً بعد الاختبار. `GP-001` (`INVARIANTS.md`،
+          `reef-city-journey.integration.test.ts`) أُعيد تشغيله — 8/8 ناجح، بلا تأثر (طبقة عرض فقط).
+Related Documents: DD-010 (السبب المباشر لهذه المهمة)، INVARIANTS.md → GP-001،
+          src/components/{CartLineItem.tsx,ProductCard.tsx,QuantityStepper.tsx,ProductOptions.tsx,
+          useOptimisticCartLine.ts,useCartToast.tsx}، src/app/(reef)/cart/actions.ts (بلا تعديل)،
+          src/core/modules/cart/cart.service.ts (بلا تعديل)
+```
+
+---
+
 ## سجل التعارضات (CONFLICT LOG)
 
 ### CONFLICT-001
@@ -1499,6 +1559,11 @@ Risk (الآن، بعد الإصلاح): لا خطر متبقٍّ يمنع نش�
           الآن مؤشراً فورياً أن نقرته سُجِّلت، حتى مع بقاء زمن استجابة الخادم قرابة ثانية واحدة (لا
           يزال أبطأ من المثالي، لكن لم يعد "يبدو معطوباً"). تحسين الزمن الفعلي (لا الإدراكي فقط)
           إلى ما دون ثانية واحدة يبقى تحسيناً مستقبلياً اختيارياً، لا BLOCKER.
+
+⚠️ تحديث 2026-09-09 (ADR-027): "التحسين المستقبلي الاختياري" أعلاه أصبح IMPLEMENTED — useOptimistic
+          حقيقي يُلغي الانتظار المُدرَك بالكامل (~6.5ms مقاسة حياً بدل ~1000-1400ms)، لا مجرد مؤشر
+          Pending فوقه. CartActionButton/useFormStatus يبقى مستخدَماً فقط لزر حذف بند السلة (خارج
+          نطاق ADR-027). راجع ADR-027 للتفصيل الكامل.
 Owner: Founder
 Created: 2026-09-07
 Resolved: 2026-09-07 — FIX-DD-010-CART-QUANTITY-UI-STALE

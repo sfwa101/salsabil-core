@@ -1,8 +1,9 @@
 'use client';
 
-import { Fragment, useEffect, useState, useTransition } from 'react';
+import { Fragment, useEffect, useOptimistic, useState, useTransition } from 'react';
 import { calculatePriceAction } from '@/app/(reef)/product/[id]/actions';
 import { addToCartAction } from '@/app/(reef)/cart/actions';
+import { useCartToast } from '@/components/useCartToast';
 import type { Product } from '@/core/modules/catalog/types';
 import { getVisibleProductPageBlockIds, type ProductPageBlockId } from '@/config/product-page-blocks-registry';
 
@@ -15,6 +16,12 @@ import { getVisibleProductPageBlockIds, type ProductPageBlockId } from '@/config
 // الإضافات، السعر، زر الإضافة) لم يعد ثابتاً مكتوباً يدوياً هنا — يُستهلَك الآن من
 // src/config/product-page-blocks-registry.ts (location='options'). محتوى/تفاعل كل بلوك (state،
 // معالجات) يبقى في هذا الملف كما كان — السجل يقرر فقط "أيّها يظهر وبأي ترتيب"، لا "كيف يبدو".
+//
+// IMPLEMENT-OPTIMISTIC-UI-CART-INTERACTIONS — زر "أضف للسلة" أصبح useOptimistic حقيقياً بدل حالة
+// addState يدوية (idle/adding/added/error): النقر يعرض "✓ أُضيف للسلة" فوراً، addToCartAction (بلا
+// تعديل على منطقه) يُرسَل في الخلفية، والنجاح يبقى صامتاً. فشل نادر (نفاد مخزون) يُعيد الزر تلقائياً
+// لـ"أضف للسلة" + توست بالسبب (useCartToast.tsx، نفس نمط WorldSwitcher.tsx). هذا الملف نفسه يُستهلَك
+// من ProductSheetContent.tsx **و** product/[id]/page.tsx معاً — التغيير يسري على كليهما.
 export function ProductOptions({ product, accentColor }: { product: Product; accentColor?: string }) {
   const sizeOptions = product.options.filter((o) => o.type === 'size');
   const addonOptions = product.options.filter((o) => o.type === 'addon');
@@ -24,8 +31,16 @@ export function ProductOptions({ product, accentColor }: { product: Product; acc
   const [price, setPrice] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [addState, setAddState] = useState<'idle' | 'adding' | 'added' | 'error'>('idle');
-  const [addError, setAddError] = useState<string | null>(null);
+  // transition منفصل عن حساب السعر أعلاه عمداً — لو استخدمنا نفس startTransition، isPending (الذي
+  // يتحكم بعرض "..." في بلوك السعر) كان سيصبح true أثناء إضافة السلة أيضاً، فيظهر السعر "..." زوراً
+  // أثناء عملية لا علاقة لها بحساب السعر إطلاقاً.
+  const [, startAddTransition] = useTransition();
+  const { showToast, toastNode } = useCartToast();
+  // IMPLEMENT-OPTIMISTIC-UI-CART-INTERACTIONS — added هو الحقيقة المؤكَّدة من السيرفر فقط (تُحدَّث في
+  // setAdded(true) بعد نجاح فعلي)؛ optimisticAdded يُحدَّث فوراً عند النقر عبر useOptimistic، ويتراجع
+  // تلقائياً لقيمة added الحقيقية بمجرد انتهاء الـtransition — بلا حاجة لكود تراجع يدوي عند الفشل.
+  const [added, setAdded] = useState(false);
+  const [optimisticAdded, setOptimisticAdded] = useOptimistic(added, (_: boolean, next: boolean) => next);
 
   useEffect(() => {
     startTransition(async () => {
@@ -44,16 +59,16 @@ export function ProductOptions({ product, accentColor }: { product: Product; acc
     setAddonIds((prev) => (prev.includes(addonId) ? prev.filter((id) => id !== addonId) : [...prev, addonId]));
   }
 
-  async function handleAddToCart() {
-    setAddState('adding');
-    setAddError(null);
-    const result = await addToCartAction({ productId: product.id, quantity: 1, selection: { sizeId, addonIds } });
-    if ('error' in result) {
-      setAddState('error');
-      setAddError(result.error);
-    } else {
-      setAddState('added');
-    }
+  function handleAddToCart() {
+    startAddTransition(async () => {
+      setOptimisticAdded(true);
+      const result = await addToCartAction({ productId: product.id, quantity: 1, selection: { sizeId, addonIds } });
+      if ('error' in result) {
+        showToast(result.error);
+      } else {
+        setAdded(true);
+      }
+    });
   }
 
   function renderBlock(blockId: ProductPageBlockId) {
@@ -133,13 +148,12 @@ export function ProductOptions({ product, accentColor }: { product: Product; acc
             <button
               type="button"
               onClick={handleAddToCart}
-              disabled={addState === 'adding' || !!error}
+              disabled={!!error}
               className="sb-press rounded-full bg-primary px-4 py-3 font-medium text-primary-foreground shadow-[var(--sb-shadow-pill)] transition hover:opacity-90 disabled:opacity-50"
               style={accentColor ? { backgroundColor: accentColor } : undefined}
             >
-              {addState === 'adding' ? 'جارٍ الإضافة...' : addState === 'added' ? 'أُضيف للسلة ✓' : 'أضف للسلة'}
+              {optimisticAdded ? 'أُضيف للسلة ✓' : 'أضف للسلة'}
             </button>
-            {addState === 'error' && addError && <span className="text-center text-sm text-destructive">{addError}</span>}
           </Fragment>
         );
 
@@ -150,5 +164,10 @@ export function ProductOptions({ product, accentColor }: { product: Product; acc
     }
   }
 
-  return <div className="flex flex-col gap-6">{getVisibleProductPageBlockIds(product, 'options').map(renderBlock)}</div>;
+  return (
+    <div className="flex flex-col gap-6">
+      {getVisibleProductPageBlockIds(product, 'options').map(renderBlock)}
+      {toastNode}
+    </div>
+  );
 }

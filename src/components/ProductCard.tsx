@@ -1,11 +1,14 @@
+'use client';
+
 import Link from 'next/link';
 import Image from 'next/image';
 import { ImageOff, Plus } from 'lucide-react';
 import type { Product } from '@/core/modules/catalog/types';
 import type { CartLineSummary } from '@/core/modules/cart/types';
-import { CartActionButton } from '@/components/CartActionButton';
+import { Button } from '@/components/ui/button';
 import { QuantityStepper } from '@/components/QuantityStepper';
-import { addToCartAction, updateCartItemAction } from '@/app/(reef)/cart/actions';
+import { useOptimisticCartLine } from '@/components/useOptimisticCartLine';
+import { useCartToast } from '@/components/useCartToast';
 
 // HEADER-BOTTOMNAV-REDESIGN-AND-REAL-PRODUCT-IMPORT دفعة 2: إضافة معاينة صورة — product.imageUrl
 // كان موجوداً في types.ts/DB منذ البداية لكن بلا أي مستهلك واجهة فعلياً (product_images غير مرتبطة
@@ -17,13 +20,17 @@ import { addToCartAction, updateCartItemAction } from '@/app/(reef)/cart/actions
 // البطاقة (صفحة الحي)، بلا حاجة لفتح صفحة المنتج أولاً. `cartLine` اختياري (من [category]/page.tsx،
 // عبر getCartSummaryIfExistsAction — قراءة فقط، آمنة أثناء عرض RSC، لا استعلام جديد): وجوده يعني
 // "هذا المنتج في السلة فعلاً"، فتُعرَض QuantityStepper (نفس مكوّن السلة حرفياً)؛ غيابه يعرض زر "+"
-// وحيداً يستدعي addToCartAction بكمية 1. **مُستبعَد عمداً لمنتجات بخيارات حجم** (راجع تعليق
-// QuantityStepper.tsx للسبب الكامل — .bind() على Server Action مُصدَّرة لا closure محلية، ProductCard
-// يصل أحياناً عبر PostCard.tsx 'use client'). **مُستبعَد أيضاً لمنتجات بخيارات حجم**
-// (product.options من نوع 'size') — إضافة سريعة بلا اختيار حجم تفشل فعلياً في
-// CatalogService.validateSelection (يتطلب sizeId صراحة)؛ هذه المنتجات (مثال: "دجاجة كاملة طازجة")
-// تبقى بلا تغيير — البطاقة كاملة رابط لصفحة المنتج كما كانت دائماً. الرابط والزر عنصران منفصلان (لا
-// زر داخل <Link>، HTML غير صالح لعناصر تفاعلية متداخلة).
+// وحيداً. **مُستبعَد عمداً لمنتجات بخيارات حجم** (product.options من نوع 'size') — إضافة سريعة بلا
+// اختيار حجم تفشل فعلياً في CatalogService.validateSelection (يتطلب sizeId صراحة)؛ هذه المنتجات
+// (مثال: "دجاجة كاملة طازجة") تبقى بلا تغيير — البطاقة كاملة رابط لصفحة المنتج كما كانت دائماً.
+// الرابط والزر عنصران منفصلان (لا زر داخل <Link>، HTML غير صالح لعناصر تفاعلية متداخلة).
+//
+// IMPLEMENT-OPTIMISTIC-UI-CART-INTERACTIONS — 'use client' أصبح صريحاً هنا (كان ضمنياً فقط عبر
+// استيراد PostCard.tsx 'use client' لهذا الملف — تصنيف Next.js على مستوى الملف لا موضع الاستخدام،
+// فكان هذا الملف يُبنى كعميل فعلياً بالفعل في كل استخداماته، فقط بلا توجيه صريح). useOptimisticCartLine
+// يدير كلا الحالتين (منتج غير مُضاف بعد / مُضاف فعلاً بكمية N) عبر useOptimistic حقيقي — الضغط على
+// "+" أو أي زر في QuantityStepper يُحدِّث الرقم فوراً، وaddToCartAction/updateCartItemAction (بلا أي
+// تعديل على منطقهما) يُرسَلان في الخلفية. فشل نادر (نفاد مخزون) يُعيد الحالة تلقائياً + توست بالسبب.
 //
 // COMPLETE-VISUAL-STENCIL-IMPORT-FULL-BATCH-NO-STOPS (بند 2) — `onOpenSheet` اختياري جديد: عند
 // تمريره (رفوف بيان — منتجات المنشور، Upsell) تفتح البطاقة Bottom Sheet المنتج بدل التنقل لصفحة
@@ -54,6 +61,12 @@ export function ProductCard({
   onOpenSheet?: (productId: string) => void;
 }) {
   const hasSizeOptions = product.options.some((o) => o.type === 'size');
+  const { showToast, toastNode } = useCartToast();
+  const { quantity, setQuantity } = useOptimisticCartLine(
+    product.id,
+    cartLine ? { itemId: cartLine.item.id, quantity: cartLine.item.quantity } : undefined,
+    showToast
+  );
 
   // COMPLETE-VISUAL-STENCIL-IMPORT-FULL-BATCH-NO-STOPS (بند 7) — الحاوية دائماً aspect-square الآن
   // (بدل تخطّي منطقة الصورة كلياً لمنتج بلا صورة كما كان سابقاً) لبقاء ارتفاع كل بطاقات الشبكة
@@ -116,22 +129,28 @@ export function ProductCard({
           </span>
 
           {!hasSizeOptions &&
-            (cartLine ? (
+            (quantity > 0 ? (
               <QuantityStepper
                 variant="pill"
-                quantity={cartLine.item.quantity}
-                onDecrement={updateCartItemAction.bind(null, cartLine.item.id, cartLine.item.quantity - 1)}
-                onIncrement={updateCartItemAction.bind(null, cartLine.item.id, cartLine.item.quantity + 1)}
+                quantity={quantity}
+                onDecrement={() => setQuantity(quantity - 1)}
+                onIncrement={() => setQuantity(quantity + 1)}
               />
             ) : (
-              <form action={addToCartAction.bind(null, { productId: product.id, quantity: 1 }) as () => void}>
-                <CartActionButton ariaLabel="أضف للسلة" variant="default" size="icon" className="h-9 w-9 rounded-full shadow-[var(--sb-shadow-pill)]">
-                  <Plus size={16} strokeWidth={3} />
-                </CartActionButton>
-              </form>
+              <Button
+                type="button"
+                onClick={() => setQuantity(1)}
+                aria-label="أضف للسلة"
+                variant="default"
+                size="icon"
+                className="h-9 w-9 rounded-full shadow-[var(--sb-shadow-pill)]"
+              >
+                <Plus size={16} strokeWidth={3} />
+              </Button>
             ))}
         </div>
       </div>
+      {toastNode}
     </div>
   );
 }

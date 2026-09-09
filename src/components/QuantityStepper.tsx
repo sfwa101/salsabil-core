@@ -4,23 +4,18 @@
 // الحي ([category]/page.tsx → ProductCard.tsx) تستهلك **نفس هذا المكوّن بالضبط**، لا نسخة موازية.
 // لا منطق سلة هنا إطلاقاً — فقط markup + استدعاء الدالتين المُمرَّرتين.
 //
-// ⚠️ onDecrement/onIncrement **يجب** أن تكونا مرجعاً مُقيَّداً (.bind()) لـServer Action مُصدَّرة
-// فعلياً من ملف `'use server'` (مثال: `updateCartItemAction.bind(null, itemId, qty)`) — لا closure
-// عادية مُعرَّفة محلياً حتى بلا توجيه 'use server'. السبب: ProductCard.tsx يُستهلَك أيضاً من
-// PostCard.tsx ('use client') فيُصبح جزءاً من حزمة العميل عبر كل استخداماته في المشروع (تصنيف
-// Next.js على مستوى الملف لا موضع الاستخدام) — تمرير closure عادية (غير Server Action معترَف بها)
-// من مكوّن خادم إلى مكوّن أصبح عميلاً يفشل فعلياً وقت التصيير: "Functions cannot be passed directly
-// to Client Components unless you explicitly expose it by marking it with 'use server'" — اكتُشف
-// حياً، مُختبَر. `.bind()` على Server Action مُصدَّرة يبقى مُعترَفاً به عبر حدود الخادم/العميل (نمط
-// React الموثَّق رسمياً لتمرير معطيات إضافية لفعل نموذج). عائد `.bind()` (Promise<ActionResult> لا
-// Promise<void>) يُهمَل بأمان وقت التشغيل من React نفسه — التحويل النوعي أدناه صوري فقط.
+// IMPLEMENT-OPTIMISTIC-UI-CART-INTERACTIONS — onDecrement/onIncrement لم تعودا Server Actions
+// مربوطة عبر <form action> (القيد القديم بخصوص .bind() على Server Action مُصدَّرة لم يعد ينطبق).
+// كلا مستهلكي هذا المكوّن (CartLineItem.tsx، ProductCard.tsx) أصبحا 'use client' صراحة يديران
+// useOptimistic بأنفسهما (useOptimisticCartLine.ts) — الدالتان الآن closures عادية متزامنة (onClick)
+// تُطلِق التحديث التفاؤلي فوراً، لا Promise يُنتظَر هنا. لا فرق بصري، فقط آلية النقر.
 import { Minus, Plus } from 'lucide-react';
-import { CartActionButton } from '@/components/CartActionButton';
+import { Button } from '@/components/ui/button';
 
 interface QuantityStepperProps {
   quantity: number;
-  onDecrement: () => Promise<unknown>;
-  onIncrement: () => Promise<unknown>;
+  onDecrement: () => void;
+  onIncrement: () => void;
   /**
    * 'separate' (افتراضي) — دائرتان مستقلتان، يطابق CartLineItem.tsx/ButcherSheet.tsx (مرجع Lovable،
    * FULL-VISUAL-PARITY-AUDIT-AND-FIX بند 4) — سياق سطر سلة واسع. 'pill' — كبسولة واحدة تحوي الزرين
@@ -35,34 +30,40 @@ export function QuantityStepper({ quantity, onDecrement, onIncrement, variant = 
   if (variant === 'pill') {
     return (
       <div className="flex h-9 items-center gap-1 rounded-full bg-primary text-primary-foreground shadow-[var(--sb-shadow-pill)]">
-        <form action={onDecrement as () => void}>
-          <CartActionButton ariaLabel="إنقاص" variant="ghost" size="icon" className="h-9 w-8 rounded-full text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground">
-            <Minus size={14} />
-          </CartActionButton>
-        </form>
+        <Button
+          type="button"
+          onClick={onDecrement}
+          aria-label="إنقاص"
+          variant="ghost"
+          size="icon"
+          className="h-9 w-8 rounded-full text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+        >
+          <Minus size={14} />
+        </Button>
         <span className="min-w-[1ch] text-center text-sm font-extrabold tabular-nums">{quantity}</span>
-        <form action={onIncrement as () => void}>
-          <CartActionButton ariaLabel="زيادة" variant="ghost" size="icon" className="h-9 w-8 rounded-full text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground">
-            <Plus size={14} />
-          </CartActionButton>
-        </form>
+        <Button
+          type="button"
+          onClick={onIncrement}
+          aria-label="زيادة"
+          variant="ghost"
+          size="icon"
+          className="h-9 w-8 rounded-full text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+        >
+          <Plus size={14} />
+        </Button>
       </div>
     );
   }
 
   return (
     <div className="flex items-center gap-2">
-      <form action={onDecrement as () => void}>
-        <CartActionButton ariaLabel="إنقاص" variant="outline" size="icon" className="rounded-full shadow-sm">
-          <Minus size={14} />
-        </CartActionButton>
-      </form>
+      <Button type="button" onClick={onDecrement} aria-label="إنقاص" variant="outline" size="icon" className="rounded-full shadow-sm">
+        <Minus size={14} />
+      </Button>
       <span className="min-w-[1.5ch] text-center text-sm font-bold tabular-nums text-foreground">{quantity}</span>
-      <form action={onIncrement as () => void}>
-        <CartActionButton ariaLabel="زيادة" variant="default" size="icon" className="rounded-full shadow-sm">
-          <Plus size={14} />
-        </CartActionButton>
-      </form>
+      <Button type="button" onClick={onIncrement} aria-label="زيادة" variant="default" size="icon" className="rounded-full shadow-sm">
+        <Plus size={14} />
+      </Button>
     </div>
   );
 }
