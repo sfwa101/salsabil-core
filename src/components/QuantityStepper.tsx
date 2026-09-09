@@ -21,9 +21,35 @@ interface QuantityStepperProps {
   quantity: number;
   onDecrement: () => Promise<unknown>;
   onIncrement: () => Promise<unknown>;
+  /**
+   * 'separate' (افتراضي) — دائرتان مستقلتان، يطابق CartLineItem.tsx/ButcherSheet.tsx (مرجع Lovable،
+   * FULL-VISUAL-PARITY-AUDIT-AND-FIX بند 4) — سياق سطر سلة واسع. 'pill' — كبسولة واحدة تحوي الزرين
+   * والعدّاد، يطابق ProductCard.tsx (مرجع Lovable، COMPLETE-VISUAL-STENCIL-IMPORT-FULL-BATCH-NO-STOPS
+   * بند 7) — سياق بطاقة شبكة مضغوطة. مرجعان مختلفان لسياقين مختلفين فعلياً في نفس مرجع Lovable
+   * (ليس تناقضاً) — لا يُغيَّر الافتراضي حفاظاً على تطابق CartLineItem القائم فعلاً.
+   */
+  variant?: 'separate' | 'pill';
 }
 
-export function QuantityStepper({ quantity, onDecrement, onIncrement }: QuantityStepperProps) {
+export function QuantityStepper({ quantity, onDecrement, onIncrement, variant = 'separate' }: QuantityStepperProps) {
+  if (variant === 'pill') {
+    return (
+      <div className="flex h-9 items-center gap-1 rounded-full bg-primary text-primary-foreground shadow-[var(--sb-shadow-pill)]">
+        <form action={onDecrement as () => void}>
+          <CartActionButton ariaLabel="إنقاص" variant="ghost" size="icon" className="h-9 w-8 rounded-full text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground">
+            <Minus size={14} />
+          </CartActionButton>
+        </form>
+        <span className="min-w-[1ch] text-center text-sm font-extrabold tabular-nums">{quantity}</span>
+        <form action={onIncrement as () => void}>
+          <CartActionButton ariaLabel="زيادة" variant="ghost" size="icon" className="h-9 w-8 rounded-full text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground">
+            <Plus size={14} />
+          </CartActionButton>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-2">
       <form action={onDecrement as () => void}>
