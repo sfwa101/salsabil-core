@@ -1,7 +1,7 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.28
+version: 1.29
 authority: Security & Correctness (قسم DECISION DEBT REGISTRY) + Engineering Decision Log (باقي الملف)
 last_updated: 2026-09-09
 last_verified: 2026-09-09
@@ -1150,6 +1150,53 @@ Related Documents: DD-010 (السبب المباشر لهذه المهمة)، IN
 
 ---
 
+## ADR-028
+```
+Title: مزامنة CartCapsule.tsx مع التحديث التفاؤلي — CartTotalProvider.tsx (Context)، (reef)/layout.tsx
+          يغلّف الشجرة بالكامل بحالة إجمالي سلة تفاؤلية مشتركة
+Status: ACCEPTED
+Date: 2026-09-09 (FIX-CART-CAPSULE-SYNC-AND-NAVIGATION-LAG-CRITICAL، الجزء 1)
+Decision: `src/components/CartTotalProvider.tsx` (جديد) — `useOptimistic` واحد على مستوى Context
+          يغلّف `(reef)/layout.tsx` بالكامل (الكبسولة + `{children}` معاً). القاعدة الحقيقية (`total`)
+          تبقى نفس مصدرها القديم تماماً (`getCartTotalAction()` في `layout.tsx`، Server Component،
+          بلا تعديل على طريقة جلبه) — التغيير الوحيد أن `CartCapsule.tsx` لم يعد يستقبله كـ prop
+          مباشر، بل عبر `useCartTotal()`. `useOptimisticCartLine.ts` (ADR-027) يستدعي الآن
+          `applyOptimisticDelta(unitPrice * (next - quantity))` **داخل نفس `startTransition`** الذي
+          يُحدِّث الكمية المحلية للبند — `ProductOptions.tsx` كذلك (`applyOptimisticDelta(price)` داخل
+          `startAddTransition` نفسه). كلا التحديثين (المحلي والمشترك) يعتمدان على نفس الـtransition
+          فيظهران معاً فوراً (~13.5ms مقاسة حياً) ويتراجعان معاً تلقائياً عند فشل نادر — لا مصدري
+          حقيقة منفصلين قد يتزامنان خطأً أو يتعارضان.
+Context: المؤسس رصد فجوة حقيقية بعد ADR-027: التحديث التفاؤلي يعمل داخل CartLineItem/ProductCard/
+          ProductOptions، لكن CartCapsule.tsx (إجمالي الهيدر) بقي يعتمد على `total` كـ prop من
+          `layout.tsx` (Server Component) — لا يتحرّك إلا بعد اكتمال الجولة الحقيقية للسيرفر (~1-2+
+          ثانية على `staging.reefam.com`، راجع `DD-012`/`DD-014` أدناه)، فيظهر تناقضاً بصرياً حقيقياً:
+          رقم السلة/بطاقة المنتج يتغيّر فوراً، بينما رقم الهيدر يبقى قديماً لثوانٍ.
+Alternatives: (أ) `useState` محلية في `CartCapsule.tsx` + دالة تحديث تُمرَّر يدوياً عبر props لكل
+          استدعاء `ProductCard`/`CartLineItem`/`ProductOptions` — مرفوض: `CartCapsule.tsx` بعيد
+          معمارياً عن نقاط النقر الثلاث (شجرات مختلفة تماماً تحت `layout.tsx`)، تمرير callback عبر كل
+          هذه الطبقات (Prop Drilling عبر Server Components التي لا يمكنها حمل دوال عميل) غير ممكن
+          أصلاً بلا Context أو ما يعادله. (ب) `localStorage`/`window` event مخصَّص للتواصل بين
+          المكوّنات — مرفوض: أعقد وأقل موثوقية من Context المدمَج في React لنفس الغرض بالضبط، يخالف
+          "لا تخترع حلاً يدوياً معقداً" (نفس روح قيد ADR-027). (ج) استدعاء `applyOptimisticDelta` من
+          داخل `startTransition` منفصل خاص بـ`CartTotalProvider.tsx` نفسه (`bumpTotal` مُغلَّف) بدل
+          كشف الدالة الخام — **جُرِّب فعلياً وفشل نظرياً**: `startTransition` مُغلَّف بمحتوى متزامن
+          بحت (`() => setOptimisticDelta(delta)`) يستقرّ فوراً (لا `await` بداخله)، فيتراجع التحديث
+          التفاؤلي لحظياً بدل البقاء معلَّقاً بمدة الطلب الفعلي — الحل الصحيح كشف الدالة الخام لتُستدعى
+          **داخل** transition المتصل الفعلي (نفس نمط React الموثَّق: عدة تحديثات تفاؤلية من مكوّنات
+          مختلفة داخل transition واحد تُطبَّق وتستقرّ معاً).
+Consequences: تحقُّق حي فعلي (Playwright ضد `next dev` والقاعدة الحقيقية): زمن ظهور تغيّر كبسولة
+          الهيدر بعد النقر ~13.5ms (قياس داخل المتصفح)؛ سيناريو فشل حقيقي (نفاد مخزون، نفس منهجية
+          ADR-027) أثبت تراجع الكبسولة تلقائياً لقيمتها الصحيحة بالتزامن مع تراجع الكمية المحلية.
+          `useOptimisticCartLine`/`useCartTotal` الآن يتطلبان وجود `CartTotalProvider` أباً في الشجرة
+          (يرمي خطأ صريح فوراً إن غاب — Fail Closed، لا قيمة افتراضية صامتة قد تُخفي خطأ تركيب مستقبلي).
+          `GP-001` أُعيد تشغيله بعد هذا التعديل أيضاً — 8/8 ناجح.
+Related Documents: ADR-027 (الأساس المباشر)، src/components/CartTotalProvider.tsx (جديد)،
+          src/components/{CartCapsule.tsx,useOptimisticCartLine.ts,ProductOptions.tsx}،
+          src/app/(reef)/layout.tsx، DD-014 (تشخيص بطء التنقل، أدناه)
+```
+
+---
+
 ## سجل التعارضات (CONFLICT LOG)
 
 ### CONFLICT-001
@@ -1677,6 +1724,84 @@ Status: OPEN
 Related: src/config/neighborhood-identity-registry.ts (ADR-024، CONFLICT-009)،
           src/config/product-page-blocks-registry.ts، src/components/ProductSheetContent.tsx،
           src/app/(reef)/product/[id]/page.tsx، ideas/IDEAS.md → IDEA-002
+```
+
+---
+
+### DD-014
+```
+Decision: تشخيص مؤكَّد حياً (لا افتراض) — بعد أي Server Action سلة (addToCartAction/
+          updateCartItemAction)، أي تنقّل (نقر رابط BottomNav/CartCapsule) خلال نافذة ~1-3 ثوانٍ
+          التالية يتجمّد فعلياً لثوانٍ إضافية — بصرف النظر عن الوجهة، حتى وجهات لا يمسّها
+          `revalidatePath` إطلاقاً (مثال: `/categories`). لا قرار حسم بعد على أي إصلاح — يحتاج قراراً
+          مؤسس (نطاق الحل: `docs/DATABASE.md`/بنية تحتية، أم تعديل `cart.service.ts` بحد ذاته، أم
+          كلاهما).
+Reason: طلب مؤسس مباشر (FIX-CART-CAPSULE-SYNC-AND-NAVIGATION-LAG-CRITICAL، الجزء 2) — "تشخيص فوري:
+          بطء متقطع في التنقل... قِس فعلياً على staging... اعرض تشخيصاً دقيقاً بالأرقام + السبب
+          الجذري المؤكَّد قبل أي إصلاح". قياس حي كامل على `staging.reefam.com` (Playwright، 3 تجارب
+          منفصلة، 2026-09-09):
+          (1) **خط الأساس (بلا أي فعل سلة)، 10 عيّنات/رابط:** `/account` (بلا استعلام قاعدة بيانات
+          إطلاقاً — `AccountPage` ليست حتى `async`) ثابتة تماماً (avg=298ms، تذبذب=144ms).
+          `/categories` (استعلام واحد) avg=494ms، تذبذب=342ms. `/` و`/cart` (عدة استعلامات متتالية
+          لكل منهما، DD-010) الأبطأ والأكثر تذبذباً: avg=765ms/994ms، تذبذب حتى 1904ms، قمة واحدة
+          2511ms — يطابق تماماً كمّية استعلامات Supabase لكل مسار (لا شيء غامض).
+          (2) **فور فعل سلة (نقر "أضف للسلة" ثم نقر تنقّل خلال <500ms)، 8 عيّنات/رابط:** `/`
+          avg=2297ms (حتى 3770ms)، `/cart` avg=2646ms (حتى 3894ms)، **و`/categories` (مجموعة ضبط، لا
+          تُمسّ بـrevalidatePath إطلاقاً من أي فعل سلة) avg=2731ms (حتى 5722ms)** — أبطأ من الجزء
+          (1) بمقدار ~6× **لكل الروابط الثلاثة بلا استثناء**، بما فيها الرابط غير المتأثر. هذا يستبعد
+          فرضية "الإبطاء بسبب `revalidatePath` تحديداً على `/` و`/cart`" — الأثر عام على أي تنقّل، لا
+          خاص بالمسارات المُعاد التحقق منها.
+          (3) **عزل السبب (بلا أي فعل سلة، تنقّل سريع متتالٍ فور تحميل صفحة ثقيلة)، 6 عيّنات:**
+          `/daily-food`→`/categories` وَ`/account`→`/categories` وَ`/categories`→`/account` كلها ثابتة
+          وسريعة (avg 278-466ms) — يستبعد فرضية "أي تنقّل سريع متتالٍ بطيء بطبيعته"، ويؤكد أن السبب
+          مرتبط **تحديداً** بوجود Server Action سلة معلَّقة وقت النقر.
+          (4) **الدليل الحاسم (تتبّع الشبكة الدقيق، حادثة واحدة كاملة):** طلب `POST /daily-food`
+          (نداء `addToCartAction` نفسه) استغرق فعلياً **2405ms** (من الإرسال حتى الاستجابة). طلب
+          `GET /categories?_rsc=...` (بيانات صفحة الوجهة) وصل ورَدَّ **خلال 167ms فقط** (عند 673ms من
+          لحظة نقر "أضف للسلة"، أي مبكراً جداً) — **لكن التنقّل الفعلي (تغيّر `window.location.pathname`)
+          لم يكتمل إلا عند 3589ms**، أي بعد اكتمال `POST /daily-food` (عند 2388ms) بفارق بسيط فقط، لا
+          بعد وصول بيانات `/categories` نفسها (673ms). الفجوة (2916ms) بين "البيانات وصلت" و"التنقّل
+          اكتمل فعلياً" مصدرها العميل (المتصفح/Next.js Router) لا الشبكة — البيانات كانت جاهزة، لكن
+          Next.js App Router لم يُطبِّق (Commit) تنقّل Link الجديد قبل استقرار Server Action سلة سابقة
+          معلَّقة، رغم أنهما غير مرتبطين منطقياً (وجهة مختلفة تماماً، لا تبعية بيانات بينهما).
+Risk: **السبب الجذري ذو طبقتين مؤكَّدتين، لا طبقة واحدة:**
+          (أ) **طبقة الشبكة (السبب الأعمق):** `addToCartAction`/`updateCartItemAction` يستغرقان
+          ثانيتين+ فعلياً على `staging` لأن `cart.service.ts` (`addItem`/`updateItemQuantity`) ينفّذ
+          عدة استعلامات Supabase **متتالية** (`getProductById`→`findItems`→`isAvailable`→
+          `insert/updateItemQuantity`→`getSummary`→`findItemsWithProducts`)، لا موازية — كل استعلام
+          يدفع كمون عابر للمناطق (Vercel `iad1`↔Supabase، **مطابق تماماً لـ`DD-012` الموجودة أصلاً
+          وغير المحسومة بعد** — نفس السبب الجذري، مظهر مختلف). هذا موجود بصرف النظر عن `ADR-027`/
+          `ADR-028` — كان قائماً قبلهما بالضبط بنفس الحدّة (السلوك نفسه، لم يُختبَر بهذا التحديد من
+          قبل).
+          (ب) **طبقة العميل (تضاعِف الأثر المُدرَك، لا تُنشئه):** Next.js App Router يُظهِر ميلاً
+          حقيقياً (مؤكَّداً بالقياس أعلاه) لتأخير تطبيق تنقّل جديد حتى استقرار معاملة Server Action
+          سلة معلَّقة سابقة، حتى لو بيانات الوجهة الجديدة جاهزة فعلياً قبل ذلك بكثير — سلوك منصة
+          (React `startTransition`/Next.js Router queuing) لا كود خاص بهذا المستودع، وكان سيظهر بنفس
+          الحدّة تقريباً مع النمط القديم (`<form action>` قبل `ADR-027`، الذي يُغلَّف بمعاملة مماثلة
+          داخلياً أيضاً) — **لكن `ADR-027` رفع احتمالية أن يُلاحَظ فعلياً**: قبل التحديث التفاؤلي كانت
+          الواجهة كلها تبدو بطيئة أثناء أي فعل سلة (`DD-010`)، فيميل المستخدم فطرياً للانتظار قبل
+          التنقّل التالي؛ الآن يبدو التفاعل المحلي فورياً تماماً، فيتنقّل المستخدم أسرع وأثناء نافذة
+          الخطر بالضبط — `ADR-027` غيَّر **سلوك المستخدم المتوقَّع**، لا آلية العطل نفسها.
+          **الخطر المتبقي إن لم يُحسَم:** أي مستخدم حقيقي ينقر "أضف للسلة" ثم فوراً أيقونة تنقّل
+          (نمط استخدام شائع جداً، لا نادر) يواجه تجمّداً 2-4 ثوانٍ متكرراً — أسوأ انطباع أداء ممكن
+          مباشرة بعد إصلاح ADR-027/ADR-028 اللذين حسّنا نفس المسار.
+Owner: Founder
+Created: 2026-09-09
+Review by: قرار مؤسس على اتجاه الحل — مرشَّحان غير حصريَّين ولا متعارضين (كلاهما يعالج طبقة مختلفة):
+          (1) حسم `DD-012` (تأكيد/مطابقة Region حقيقي بين Vercel وSupabase) يقلّص نافذة الخطر من
+          ~1-2+ ثانية إلى مئات المللي ثانية على الأرجح — يُخفِّف الأثر الملحوظ بشدة حتى بلا لمس طبقة
+          (ب). (2) موازاة استعلامات `cart.service.ts` المتتالية غير المترابطة منطقياً (مثال:
+          `getProductById`/`findItems` عبر `Promise.all` بدل تتابع) — يقلّص زمن الفعل نفسه، لكنه
+          Guardian Matrix `Inventory Concurrency = DEEP` (`AGENTS.md §17`) لأنه يمسّ ترتيب القراءة
+          قبل قرار الكتابة في مسار حماية المخزون — يحتاج تصميماً ومراجعة منفصلين، لا تعديلاً عرضياً.
+          (3) خيار معماري أعمق (خارج نطاق هذا التشخيص): فحص إن كان بالإمكان فصل تنقّل الرابط عن معاملة
+          Server Action المعلَّقة صراحة (خارج `startTransition` المشترك) — يحتاج بحثاً في نمط Next.js
+          الموصى به لهذه الحالة تحديداً، لم يُبحَث بعد.
+Blocking: NO — لا يمنع أي عمل حالي، لكنه خطر تجربة مستخدم حقيقي ومقاس بأرقام دقيقة، لا نظري
+Status: OPEN
+Related: DD-012 (نفس السبب الجذري الأعمق، غير محسومة)، DD-010 (وثَّق بطء نفس المسار من زاوية مختلفة)،
+          ADR-027، ADR-028، src/core/modules/cart/cart.service.ts، src/app/(reef)/cart/actions.ts،
+          AGENTS.md §17 (Guardian Matrix → Inventory Concurrency)
 ```
 
 ---

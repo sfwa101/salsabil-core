@@ -18,17 +18,24 @@
 //    تبقى ظاهرة دائماً بصرف النظر عن اتجاه التمرير أو حالة الهيدر.
 //
 // آلية النبضة: CSS transition بحت (scale + ring مؤقتان عبر className مشروط)، بلا Framer Motion —
-// قيد صريح. تعمل فقط لأن addToCartAction (cart/actions.ts) يستدعي أيضاً revalidatePath('/') —
-// بدونها الغلاف (طبقة مشتركة عبر layout.tsx) لا يُعاد جلبه بعد الإضافة، والإجمالي يبقى قديماً حتى
-// تنقّل فعلي لاحق.
+// قيد صريح.
+//
+// FIX-CART-CAPSULE-SYNC-AND-NAVIGATION-LAG-CRITICAL (الجزء 1) — `total` لم يعد prop من layout.tsx
+// (كان ينتظر اكتمال الجولة الحقيقية للسيرفر فقط، فيتناقض بصرياً مع التحديث الفوري في CartLineItem/
+// ProductCard/ProductOptions، ADR-027) — يُقرَأ الآن من useCartTotal() (CartTotalProvider.tsx، يغلّف
+// (reef)/layout.tsx بالكامل): نفس القيمة التفاؤلية التي تُحدِّثها كل نقاط التفاعل الثلاث فوراً، لا
+// مصدر منفصل. النبضة (pulsing) تبقى تعمل بنفس الآلية بلا تغيير — فقط تتفاعل الآن مع تغيّر فوري بدل
+// تغيّر بعد ثانية أو أكثر.
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ShoppingCart } from 'lucide-react';
+import { useCartTotal } from '@/components/CartTotalProvider';
 
 const PULSE_DURATION_MS = 500;
 
-export function CartCapsule({ total }: { total: number }) {
+export function CartCapsule() {
+  const { total } = useCartTotal();
   const [pulsing, setPulsing] = useState(false);
   const prevTotal = useRef(total);
 

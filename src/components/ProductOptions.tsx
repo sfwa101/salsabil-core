@@ -4,6 +4,7 @@ import { Fragment, useEffect, useOptimistic, useState, useTransition } from 'rea
 import { calculatePriceAction } from '@/app/(reef)/product/[id]/actions';
 import { addToCartAction } from '@/app/(reef)/cart/actions';
 import { useCartToast } from '@/components/useCartToast';
+import { useCartTotal } from '@/components/CartTotalProvider';
 import type { Product } from '@/core/modules/catalog/types';
 import { getVisibleProductPageBlockIds, type ProductPageBlockId } from '@/config/product-page-blocks-registry';
 
@@ -41,6 +42,9 @@ export function ProductOptions({ product, accentColor }: { product: Product; acc
   // تلقائياً لقيمة added الحقيقية بمجرد انتهاء الـtransition — بلا حاجة لكود تراجع يدوي عند الفشل.
   const [added, setAdded] = useState(false);
   const [optimisticAdded, setOptimisticAdded] = useOptimistic(added, (_: boolean, next: boolean) => next);
+  // FIX-CART-CAPSULE-SYNC-AND-NAVIGATION-LAG-CRITICAL (الجزء 1) — applyOptimisticDelta يُستدعى داخل
+  // نفس startAddTransition أدناه، فإجمالي كبسولة الهيدر يتحرّك بنفس لحظة "✓ أُضيف للسلة" بالضبط.
+  const { applyOptimisticDelta } = useCartTotal();
 
   useEffect(() => {
     startTransition(async () => {
@@ -62,6 +66,7 @@ export function ProductOptions({ product, accentColor }: { product: Product; acc
   function handleAddToCart() {
     startAddTransition(async () => {
       setOptimisticAdded(true);
+      applyOptimisticDelta(price ?? 0);
       const result = await addToCartAction({ productId: product.id, quantity: 1, selection: { sizeId, addonIds } });
       if ('error' in result) {
         showToast(result.error);

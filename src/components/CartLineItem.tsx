@@ -45,6 +45,7 @@ export function CartLineItem({ line }: { line: CartLineSummary }) {
   const { showToast, toastNode } = useCartToast();
   const { quantity, setQuantity } = useOptimisticCartLine(
     product.id,
+    unitPrice,
     { itemId: item.id, quantity: item.quantity },
     showToast
   );

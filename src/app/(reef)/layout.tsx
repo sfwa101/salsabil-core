@@ -6,33 +6,39 @@
 import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
 import { CartCapsule } from '@/components/CartCapsule';
+import { CartTotalProvider } from '@/components/CartTotalProvider';
 import { getCartTotalAction } from '@/app/(reef)/cart/actions';
 
 export default async function ReefLayout({ children }: { children: React.ReactNode }) {
   const cartTotal = await getCartTotalAction();
 
   return (
-    <div data-world="reef-lavender" className="min-h-screen bg-background text-foreground">
-      <Header />
+    // FIX-CART-CAPSULE-SYNC-AND-NAVIGATION-LAG-CRITICAL (الجزء 1) — يغلّف الشجرة بالكامل (الكبسولة
+    // نفسها + كل الصفحات) بحالة السلة التفاؤلية المشتركة — CartLineItem/ProductCard/ProductOptions
+    // (في {children}) وCartCapsule (هنا) يقرآن/يكتبان نفس القيمة الآن، لا مصدرين منفصلين قد يتعارضان.
+    <CartTotalProvider total={cartTotal}>
+      <div data-world="reef-lavender" className="min-h-screen bg-background text-foreground">
+        <Header />
 
-      {/* FIX-STALE-PRODUCT-REFS-PERFORMANCE-AND-CATEGORY-VISUALS (الجزء 5) — كبسولة السلة عنصر عائم
-          مستقل تماماً عن Header/ScrollHideBar — لا تختفي أبداً بالتمرير (بعكس الهيدر)، تبقى ثابتة في
-          أعلى اليسار طوال الوقت. `justify-end` (لا start) عمداً — في RTL هذا يضعها في أقصى اليسار،
-          نفس موضعها القديم داخل صف الهيدر بالضبط (نفس max-width/padding). `pointer-events-none` على
-          الغلاف الخارجي يمنعها من حجب أي نقر آخر في هذا الشريط الأفقي؛ `pointer-events-auto` يعيد
-          التفعيل للكبسولة نفسها فقط. */}
-      <div className="pointer-events-none fixed inset-x-0 top-0 z-30">
-        <div className="mx-auto flex max-w-2xl justify-end px-4 pt-4 md:max-w-4xl xl:max-w-6xl">
-          <div className="pointer-events-auto">
-            <CartCapsule total={cartTotal} />
+        {/* FIX-STALE-PRODUCT-REFS-PERFORMANCE-AND-CATEGORY-VISUALS (الجزء 5) — كبسولة السلة عنصر عائم
+            مستقل تماماً عن Header/ScrollHideBar — لا تختفي أبداً بالتمرير (بعكس الهيدر)، تبقى ثابتة في
+            أعلى اليسار طوال الوقت. `justify-end` (لا start) عمداً — في RTL هذا يضعها في أقصى اليسار،
+            نفس موضعها القديم داخل صف الهيدر بالضبط (نفس max-width/padding). `pointer-events-none` على
+            الغلاف الخارجي يمنعها من حجب أي نقر آخر في هذا الشريط الأفقي؛ `pointer-events-auto` يعيد
+            التفعيل للكبسولة نفسها فقط. */}
+        <div className="pointer-events-none fixed inset-x-0 top-0 z-30">
+          <div className="mx-auto flex max-w-2xl justify-end px-4 pt-4 md:max-w-4xl xl:max-w-6xl">
+            <div className="pointer-events-auto">
+              <CartCapsule />
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* pb-20: يمنع BottomNav (fixed bottom-0، BAYAN-CLOSEOUT-UI-GAPS) من تغطية آخر عنصر في أي
-          صفحة (reef) */}
-      <div className="pb-20">{children}</div>
-      <BottomNav />
-    </div>
+        {/* pb-20: يمنع BottomNav (fixed bottom-0، BAYAN-CLOSEOUT-UI-GAPS) من تغطية آخر عنصر في أي
+            صفحة (reef) */}
+        <div className="pb-20">{children}</div>
+        <BottomNav />
+      </div>
+    </CartTotalProvider>
   );
 }
