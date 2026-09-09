@@ -24,29 +24,59 @@ import { addToCartAction, updateCartItemAction } from '@/app/(reef)/cart/actions
 // CatalogService.validateSelection (يتطلب sizeId صراحة)؛ هذه المنتجات (مثال: "دجاجة كاملة طازجة")
 // تبقى بلا تغيير — البطاقة كاملة رابط لصفحة المنتج كما كانت دائماً. الرابط والزر عنصران منفصلان (لا
 // زر داخل <Link>، HTML غير صالح لعناصر تفاعلية متداخلة).
-export function ProductCard({ product, cartLine }: { product: Product; cartLine?: CartLineSummary }) {
+//
+// COMPLETE-VISUAL-STENCIL-IMPORT-FULL-BATCH-NO-STOPS (بند 2) — `onOpenSheet` اختياري جديد: عند
+// تمريره (رفوف بيان — منتجات المنشور، Upsell) تفتح البطاقة Bottom Sheet المنتج بدل التنقل لصفحة
+// كاملة (يطابق "الضغط على منتج مفرد من رف يفتح ProductSheetContent" من موجّه المهمة). بلا تمريره
+// (شبكة صفحة الحي، سلة "غالباً ما يُشترى معه") السلوك القديم كما هو حرفياً — صفر تغيير لأي مستهلك
+// حالي، إضافة خالصة (Additive).
+export function ProductCard({
+  product,
+  cartLine,
+  onOpenSheet,
+}: {
+  product: Product;
+  cartLine?: CartLineSummary;
+  onOpenSheet?: (productId: string) => void;
+}) {
   const hasSizeOptions = product.options.some((o) => o.type === 'size');
+
+  const imageAndTitle = (
+    <>
+      {product.imageUrl && (
+        <span className="relative -mx-5 -mt-5 mb-1 block aspect-square overflow-hidden rounded-t-2xl bg-muted">
+          <Image
+            src={product.imageUrl}
+            alt={product.name}
+            fill
+            loading="lazy"
+            sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1280px) 25vw, 20vw"
+            className="object-cover"
+          />
+        </span>
+      )}
+      <span className="text-base font-medium text-card-foreground">{product.name}</span>
+      <span className="text-sm text-muted-foreground">
+        يبدأ من <span className="font-semibold text-primary">{product.basePrice} جنيه</span>
+      </span>
+    </>
+  );
 
   return (
     <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-5 transition hover:border-primary hover:shadow-[var(--sb-shadow-soft)]">
-      <Link href={`/product/${product.id}`} className="flex flex-col gap-2">
-        {product.imageUrl && (
-          <span className="relative -mx-5 -mt-5 mb-1 block aspect-square overflow-hidden rounded-t-2xl bg-muted">
-            <Image
-              src={product.imageUrl}
-              alt={product.name}
-              fill
-              loading="lazy"
-              sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1280px) 25vw, 20vw"
-              className="object-cover"
-            />
-          </span>
-        )}
-        <span className="text-base font-medium text-card-foreground">{product.name}</span>
-        <span className="text-sm text-muted-foreground">
-          يبدأ من <span className="font-semibold text-primary">{product.basePrice} جنيه</span>
-        </span>
-      </Link>
+      {onOpenSheet ? (
+        <button
+          type="button"
+          onClick={() => onOpenSheet(product.id)}
+          className="flex flex-col gap-2 text-right"
+        >
+          {imageAndTitle}
+        </button>
+      ) : (
+        <Link href={`/product/${product.id}`} className="flex flex-col gap-2">
+          {imageAndTitle}
+        </Link>
+      )}
 
       {!hasSizeOptions &&
         (cartLine ? (
