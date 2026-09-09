@@ -27,16 +27,6 @@ export class MerchantService {
   }
 
   /**
-   * ينشئ صف merchants — مُستهلَك من scripts/create-merchant-account.ts فقط
-   * (URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH). تمريرة رقيقة لـ merchantRepository.create
-   * (كانت بلا أي مستدعٍ فعلياً قبل هذه الدفعة) — تُبقي scripts/ خارج الوصول المباشر لـ
-   * merchantRepository، نفس مبدأ khalilService.createUser.
-   */
-  async register(input: MerchantRegistrationInput): Promise<Merchant> {
-    return merchantRepository.create(input);
-  }
-
-  /**
    * تسجيل دخول تاجر بالهاتف + كلمة مرور (URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH — يُغلق
    * DD-001/INV-AUTHN-001 الذي كان يقبل الهاتف وحده). بالهاتف الشخصي لمالك التاجر (role:
    * merchant_owner في users)، لا هاتف العمل التجاري في merchants.phone. يرفض بصمت (null، لا

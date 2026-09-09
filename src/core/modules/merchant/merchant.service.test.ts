@@ -46,7 +46,6 @@ vi.mock('./merchant.repository', () => ({
     findByOwnerId: vi.fn(),
     findAll: vi.fn(async () => [activeMerchant]),
     setActiveStatus: vi.fn(async (id: string, isActive: boolean) => ({ ...activeMerchant, id, isActive })),
-    create: vi.fn(async () => activeMerchant),
   },
 }));
 
@@ -155,17 +154,6 @@ describe('MerchantService.loginOwnerByPhone', () => {
     expect(auditService.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'auth.login_failed', metadata: expect.objectContaining({ reason: 'merchant_inactive' }) })
     );
-  });
-});
-
-describe('MerchantService.register (URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH)', () => {
-  it('يفوّض مباشرة لـ merchantRepository.create بنفس المدخلات (مُستهلَك من scripts/create-merchant-account.ts)', async () => {
-    const input = { ownerId: owner.id, businessName: 'محل جديد', phone: '01055555555', slug: 'new-shop', commissionRate: 8 };
-
-    const result = await merchantService.register(input);
-
-    expect(merchantRepository.create).toHaveBeenCalledWith(input);
-    expect(result).toEqual(activeMerchant);
   });
 });
 

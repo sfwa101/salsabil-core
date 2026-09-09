@@ -134,25 +134,10 @@ export class KhalilRepository {
     return data ? toUser(data as UserRow) : null;
   }
 
-  // URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH — passwordHash/mustChangePassword اختياريان
-  // (لا يُمرَّران من findOrCreateCustomerByPhone القائمة، تبقى بلا كلمة مرور كعميل عادي كما هي
-  // اليوم تماماً) — مُستهلَكان فقط من scripts/create-merchant-account.ts الجديد.
-  async createUser(input: {
-    fullName: string;
-    phone: string;
-    role: UserRole;
-    passwordHash?: string;
-    mustChangePassword?: boolean;
-  }): Promise<User> {
+  async createUser(input: { fullName: string; phone: string; role: UserRole }): Promise<User> {
     const { data, error } = await supabaseAdmin
       .from('users')
-      .insert({
-        full_name: input.fullName,
-        phone: input.phone,
-        role: input.role,
-        ...(input.passwordHash !== undefined ? { password_hash: input.passwordHash } : {}),
-        ...(input.mustChangePassword !== undefined ? { must_change_password: input.mustChangePassword } : {}),
-      })
+      .insert({ full_name: input.fullName, phone: input.phone, role: input.role })
       .select('*')
       .single();
     if (error) throw error;

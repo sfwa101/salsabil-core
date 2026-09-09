@@ -1,7 +1,7 @@
 ---
 title: Spec — كلمة مرور حقيقية لدخول التاجر/الإدارة (إغلاق DD-001 / AUTH-SECURITY-BLOCKER)
-status: IMPLEMENTED (كود + اختبارات وحدة) — PENDING (SQL/Backfill يدويان + Guardian Review DEEP)
-version: 1.0
+status: IMPLEMENTED AND LIVE-VERIFIED (200/200 اختباراً) — PENDING Guardian Review DEEP فقط
+version: 1.1
 last_updated: 2026-09-09
 owner: Claude (صياغة وتنفيذ) + المؤسس (اعتماد Spec + تشغيل SQL يدوياً)
 source_of_truth: ADR-026 (docs/DECISIONS.md) للقرار النهائي، الكود الفعلي لتفاصيل التنفيذ
@@ -172,17 +172,21 @@ Spec؛ الأهم اليوم: يعمل لحساب واحد يدوياً 70 مر�
   --commission-rate 10
   --role merchant_owner     (أو platform_admin لحساب إدارة، بلا --business-name/--slug/--commission-rate عندها)
 
-الخطوات داخلياً (كل خطوة تعيد استخدام قدرة موجودة فعلياً — صفر تكرار):
-  1. generateTempPassword() — 10 محارف عشوائية آمنة (node:crypto.randomBytes)، مجموعة أحرف تستبعد
-     المتشابه بصرياً (0/O، 1/l/I) — أسهل إملاءً عبر مكالمة/واتساب صوتي
-  2. hashPassword(tempPassword) — scrypt (§7)
-  3. khalilRepository.createUser({ fullName: businessName, phone, role }) + تحديث فوري
-     لـpassword_hash/must_change_password=true (توسيع بسيط لـcreateUser لقبول هذين الحقلين
-     اختيارياً — الاستدعاءات الحالية الأخرى، مثل findOrCreateCustomerByPhone، لا تمرّرهما فتبقى
-     كما هي بلا كسر)
-  4. إن كان role=merchant_owner: merchantRepository.create({ ownerId: user.id, businessName, phone,
-     slug, commissionRate }) — نفس الدالة الموجودة فعلياً، بلا أي تعديل عليها
-  5. console.log الأخير فقط (لا console.log وسيطة قد تُسجَّل في نظام مراقبة خارجي لاحقاً):
+الخطوات داخلياً — **مُحدَّثة بعد تحقُّق حي فعلي كشف قيداً معمارياً حقيقياً** (راجع `ADR-026` بند و
+للتفصيل الكامل): `khalilRepository`/`merchantRepository` (وأي `service.ts` يستوردهما) تمر عبر
+`supabase-admin-client.ts` المحمي بحزمة `server-only` — يرمي فوراً خارج سياق خادم Next.js حقيقي،
+فلا يعمل من سكربت `tsx` مباشر. **الحل المطابق للعُرف القائم فعلياً** في
+`scripts/seed-daily-food-demo-content.ts`: عميل `@supabase/supabase-js` خاص بالسكربت نفسه، بلا أي
+استيراد من `src/core/` يمسّ الملف المحمي (`password.ts` وحدها استثناء آمن — `node:crypto` بحتة):
+  1. `generateTempPassword()` — 10 محارف عشوائية آمنة (`node:crypto.randomBytes`)، مجموعة أحرف
+     تستبعد المتشابه بصرياً (0/O، 1/l/I) — أسهل إملاءً عبر مكالمة/واتساب صوتي
+  2. `hashPassword(tempPassword)` — scrypt (§7)
+  3. إدراج مباشر في `users` (`full_name`, `phone`, `role`, `password_hash`, `must_change_password:
+     true`) عبر عميل Supabase الخاص بالسكربت
+  4. إن كان `role=merchant_owner`: إدراج مباشر في `merchants` (نفس الأعمدة التي يكتبها
+     `merchantRepository.create` بالضبط، بلا أي تعديل على تلك الدالة نفسها — تبقى للاستخدام من
+     داخل التطبيق فقط)
+  5. `console.log` الأخير فقط (لا `console.log` وسيطة قد تُسجَّل في نظام مراقبة خارجي لاحقاً):
      "التاجر: {businessName} | الهاتف: {phone} | كلمة المرور المؤقتة: {tempPassword} — أبلغه الآن،
      لن تُطبَع مرة أخرى."
 ```
@@ -302,14 +306,15 @@ IDOR + Zod + Rate Limiting، ويوم جلسات `ADR-012`: جدول جديد + 
 
 ## Status
 
-`IMPLEMENTED` (كود + 161/161 اختبار وحدة، `arch:check` نظيف) — `PENDING` حتى:
-1. تشغيل `scripts/password-auth-schema.sql` يدوياً عبر Supabase SQL Editor (dev) — الوكيل بلا
-   صلاحية تنفيذ DDL آلية، نفس قيد كل Migration سابق في هذا المشروع.
-2. تشغيل `scripts/backfill-existing-owner-passwords.ts` فوراً بعده (وإلا يُقفَل على الحسابين
-   التجريبيين — `password_hash is null` = رفض دخول دائم).
-3. نجاح اختبارات التكامل الحية الثلاثة المُحدَّثة (فشلت محلياً حالياً بـ"column does not exist"،
-   متوقَّع تماماً قبل الخطوة 1).
-4. Guardian Review `DEEP` مستقل فعلي (`AGENTS.md §17`) — لم يبدأ بعد.
+`IMPLEMENTED AND LIVE-VERIFIED` — كود + 200/200 اختبار (159 وحدة + 41 تكامل حي)، `arch:check`
+نظيف. `scripts/password-auth-schema.sql` طُبِّق فعلياً على dev (+ `NOTIFY pgrst, 'reload schema'`
+لزم فعلياً لإعادة تحميل ذاكرة PostgREST المؤقتة)، `scripts/backfill-existing-owner-passwords.ts`
+شُغِّل بنجاح (كلمتا مرور مؤقتتان جديدتان للحسابين التجريبيين، سُلِّمتا للمؤسس مباشرة).
 
-راجع `docs/DECISIONS.md → ADR-026` للقرار والتصميم النهائي الكامل (طابق §0-§11 أعلاه حرفياً، بلا
-انحراف عن الـSpec المعتمد).
+**`PENDING` لسبب واحد فقط الآن:** Guardian Review `DEEP` مستقل فعلي (`AGENTS.md §17`) — لم يبدأ
+بعد. لا يُعتبَر `DD-001` مُغلقاً، ولا تسجيل تاجر ثانٍ حقيقي، قبل اكتماله.
+
+راجع `docs/DECISIONS.md → ADR-026` للقرار والتصميم النهائي الكامل، بما فيه تصحيح تصميمي اكتُشف
+أثناء التحقُّق الحي (بند و): السكربتان لا يستوردان `khalilService`/`merchantService` (حزمة
+`server-only` ترفض ذلك خارج سياق Next.js) — عميل Supabase خاص بكل سكربت مباشرة بدلاً من ذلك، نفس
+عُرف `scripts/seed-daily-food-demo-content.ts` القائم.

@@ -57,16 +57,6 @@ export class KhalilService {
   }
 
   /**
-   * إنشاء مستخدم صريح بدور مُحدَّد (لا customer دائماً كما findOrCreateCustomerByPhone) —
-   * مُستهلَك من scripts/create-merchant-account.ts فقط (إنشاء حسابات تاجر/إدارة جديدة). تمريرة
-   * رقيقة تُبقي scripts/ خارج الوصول المباشر لـ khalilRepository (احتراماً لقاعدة الاعتماد نفسها
-   * المفروضة داخل src/، حتى لو dependency-cruiser لا يفحص scripts/).
-   */
-  async createUser(input: { fullName: string; phone: string; role: UserRole }): Promise<User> {
-    return khalilRepository.createUser(input);
-  }
-
-  /**
    * كل العوالم النشطة من جدول worlds — مُستهلَكة أولاً عبر bayan.service.ts (اليوم 23) لتحديد
    * عالم individuals، ولاحقاً عبر مبدّل العوالم في الواجهة (اليوم 29). تمريرة رقيقة فقط —
    * dependency-cruiser يمنع أي نطاق خارج kernel/khalil/ من استيراد khalilRepository مباشرة.

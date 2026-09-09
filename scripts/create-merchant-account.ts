@@ -4,6 +4,13 @@
 // مؤقتة عشوائية، يطبعها مرة واحدة فقط لتُبلَّغ يدوياً عبر واتساب/مكالمة. راجع
 // specs/identity/PASSWORD_AUTH_SPEC.md §6 للتصميم الكامل.
 //
+// ⚠️ ملاحظة معمارية: لا يستورد khalilService/merchantService (كلاهما يستوردان عبر
+// khalilRepository/merchantRepository → src/core/kernel/database/supabase-admin-client.ts، المحمي
+// بحزمة `server-only` — يرمي فوراً خارج سياق خادم Next.js حقيقي). نفس نمط
+// scripts/seed-daily-food-demo-content.ts القائم بالضبط: عميل Supabase خاص بالسكربت مباشرة عبر
+// @supabase/supabase-js، منطق الأعمال (تحقق الحقول، توليد/تجزئة كلمة المرور) مُكرَّر هنا بأقل قدر
+// ممكن (password.ts وحدها آمنة للاستيراد المباشر — node:crypto بحتة، لا Supabase).
+//
 // استخدام — تاجر جديد:
 //   npx tsx scripts/create-merchant-account.ts --role merchant_owner \
 //     --business-name "اسم المحل" --phone 01xxxxxxxxx --slug unique-slug --commission-rate 10
@@ -12,10 +19,25 @@
 //   npx tsx scripts/create-merchant-account.ts --role platform_admin \
 //     --business-name "اسم المدير" --phone 01xxxxxxxxx
 
-import { khalilService } from '../src/core/kernel/khalil/service';
-import { merchantService } from '../src/core/modules/merchant/merchant.service';
-import { generateTempPassword } from '../src/core/kernel/security/password';
-import type { UserRole } from '../src/core/kernel/khalil/types';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const dirname = path.dirname(fileURLToPath(import.meta.url));
+const envPath = path.resolve(dirname, '..', '.env.local');
+if (existsSync(envPath)) {
+  process.loadEnvFile(envPath);
+}
+
+const { createClient } = await import('@supabase/supabase-js');
+const { hashPassword, generateTempPassword } = await import('../src/core/kernel/security/password');
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!supabaseUrl || !serviceRoleKey) {
+  throw new Error('Missing Supabase admin environment variables');
+}
+const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
 function getArg(name: string): string | undefined {
   const prefix = `--${name}`;
@@ -24,7 +46,7 @@ function getArg(name: string): string | undefined {
 }
 
 async function main() {
-  const role = (getArg('role') ?? 'merchant_owner') as UserRole;
+  const role = getArg('role') ?? 'merchant_owner';
   const businessName = getArg('business-name');
   const phone = getArg('phone');
   const slug = getArg('slug');
@@ -43,25 +65,37 @@ async function main() {
     process.exit(1);
   }
 
-  const existing = await khalilService.findUserByPhone(phone);
+  const { data: existing, error: findError } = await supabaseAdmin.from('users').select('id, role').eq('phone', phone).maybeSingle();
+  if (findError) throw findError;
   if (existing) {
     console.error(`❌ رقم الهاتف ${phone} مسجَّل بالفعل (المستخدم ${existing.id}، الدور ${existing.role})`);
     process.exit(1);
   }
 
   const tempPassword = generateTempPassword();
-  const user = await khalilService.createUser({ fullName: businessName, phone, role });
-  await khalilService.setTemporaryPassword(user.id, tempPassword);
+  const passwordHash = await hashPassword(tempPassword);
+
+  const { data: user, error: userError } = await supabaseAdmin
+    .from('users')
+    .insert({ full_name: businessName, phone, role, password_hash: passwordHash, must_change_password: true })
+    .select('id')
+    .single();
+  if (userError) throw userError;
 
   if (role === 'merchant_owner') {
-    const merchant = await merchantService.register({
-      ownerId: user.id,
-      businessName,
-      phone,
-      slug: slug!,
-      commissionRate: Number(commissionRateArg),
-    });
-    console.log(`✅ تاجر جديد: ${merchant.businessName} (${merchant.id})`);
+    const { data: merchant, error: merchantError } = await supabaseAdmin
+      .from('merchants')
+      .insert({
+        owner_id: user.id,
+        business_name: businessName,
+        phone,
+        slug,
+        commission_rate: Number(commissionRateArg),
+      })
+      .select('id, business_name')
+      .single();
+    if (merchantError) throw merchantError;
+    console.log(`✅ تاجر جديد: ${merchant.business_name} (${merchant.id})`);
   } else {
     console.log(`✅ حساب إدارة جديد: ${businessName} (${user.id})`);
   }

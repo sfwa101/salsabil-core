@@ -1,7 +1,7 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.26
+version: 1.27
 authority: Security & Correctness (قسم DECISION DEBT REGISTRY) + Engineering Decision Log (باقي الملف)
 last_updated: 2026-09-09
 last_verified: 2026-09-09
@@ -1000,7 +1000,8 @@ Related Documents: docs/DECISIONS.md → CONFLICT-005 (SUPERSEDED)، ADR-007 (ن
 ```
 Title: كلمة مرور حقيقية لدخول التاجر/الإدارة — يُغلق DD-001/INV-AUTHN-001 (BLOCKER)، scrypt بلا
           تبعية جديدة، password_hash على users لا merchants
-Status: IMPLEMENTED (كود + اختبارات وحدة) — PENDING (SQL/Backfill يدويان + Guardian Review DEEP)
+Status: IMPLEMENTED AND LIVE-VERIFIED (كود + 200/200 اختبار وحدة+تكامل، SQL مُطبَّق على dev،
+          Backfill شُغِّل) — PENDING Guardian Review DEEP فقط (الشرط الأخير المتبقي)
 Date: 2026-09-09 (URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH)
 Decision: (أ) عمودان جديدان على `users` (`password_hash text` nullable، `must_change_password
           boolean not null default false`)، وعمود واحد على `sessions` (`must_change_password`، نسخة
@@ -1033,11 +1034,19 @@ Decision: (أ) عمودان جديدان على `users` (`password_hash text` nu
           backfill-existing-owner-passwords.ts` (مؤقت، يُحذَف بعد الاستخدام) لضبط كلمة مرور مؤقتة
           للحسابين التجريبيين القائمين (وإلا يُقفَل عليهما فوراً — `password_hash is null` = رفض
           دخول دائم، Fail Closed، `AGENTS.md §8`، لا قيد `not null` على DB).
-          (و) تمريرتان رقيقتان جديدتان أضيفتا لإبقاء `scripts/` خارج الوصول المباشر لطبقة
-          Repository (نفس قاعدة الاعتماد المفروضة داخل `src/` عبر dependency-cruiser، رغم أنه لا
-          يفحص `scripts/`): `KhalilService.createUser` (كانت حصراً داخل `khalil.repository.ts`)،
-          `MerchantService.register` (كانت `merchantRepository.create` بلا أي مستدعٍ فعلياً قبل
-          هذه الدفعة — قدرة ميتة أُحيِيت، لا مُكرَّرة).
+          (و) **تصحيح اكتُشف أثناء التحقُّق الحي الفعلي (لا افتراضاً):** المحاولة الأولى أضافت
+          تمريرتين رقيقتين (`KhalilService.createUser`، `MerchantService.register`) ليستهلكهما
+          كلا السكربتين بدل الوصول المباشر لـ Repository. **فشلت فعلياً عند التشغيل** —
+          `khalilService`/`merchantService` يستوردان (عبر `khalilRepository`/`merchantRepository`)
+          `src/core/kernel/database/supabase-admin-client.ts`، المحمي بحزمة `server-only` التي
+          ترمي فوراً خارج سياق خادم Next.js حقيقي (بيئة `tsx` مباشرة ليست كذلك). **الحل المطابق
+          للعُرف القائم فعلياً** في `scripts/seed-daily-food-demo-content.ts` (اكتُشف بالمقارنة بعد
+          الفشل): كل سكربت CLI يبني عميل `@supabase/supabase-js` خاصاً به مباشرة، لا يستورد أي شيء
+          من `src/core/` يمسّ `supabase-admin-client.ts` — فقط `password.ts` (بلا اعتماد Supabase،
+          `node:crypto` بحتة) آمنة للاستيراد المباشر هنا. **التمريرتان أُزيلتا بالكامل** (كانتا
+          ستبقيان كوداً ميتاً بلا مستهلك فعلي بعد هذا التصحيح) — منطق إنشاء المستخدم/التاجر مُكرَّر
+          بأقل قدر ممكن داخل كل سكربت مباشرة، مطابقاً لنفس القيد المعماري الذي يحكم كل سكربت آخر في
+          هذا المستودع.
 Context: طلب مؤسس مباشر عاجل (`URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH`) — إطلاق ريف المدينة
           خلال أيام لاستقبال 70 تاجراً حقيقياً (`docs/ROADMAP.md → 🚨 أولوية عاجلة`) يجعل
           `DD-001`/`INV-AUTHN-001` (دخول بلا كلمة مرور، مقبول صراحة "لتاجر/إدارة تجريبيَين واحدَين
@@ -1051,18 +1060,25 @@ Alternatives: (أ) OTP أو مزوّد SMS خارجي — مرفوض صراحة 
           المرور" ذاتي الخدمة — مرفوض لهذه الدفعة (يحتاج قناة تحقق ثانية غير موجودة، خارج النطاق
           المُعلَن)؛ البديل المؤقت المعتمد: إعادة تعيين يدوية من المؤسس عبر نفس السكربتين (قرار مؤسس
           صريح على سؤال مفتوح 1 من الـSpec).
-Consequences: **لا يُعتبَر `DD-001` مُغلقاً بعد** — يبقى `OPEN` حتى: (1) تشغيل
-          `scripts/password-auth-schema.sql` يدوياً عبر Supabase SQL Editor (الوكيل بلا صلاحية
-          تنفيذ DDL آلية، نفس قيد كل Migration سابق في هذا المشروع)، (2) تشغيل
-          `scripts/backfill-existing-owner-passwords.ts` فوراً بعده، (3) التحقق الحي الكامل
-          (اختبارات التكامل الثلاثة المُحدَّثة — `merchant.integration.test.ts`،
-          `admin.integration.test.ts`، `reef-city-journey.integration.test.ts` — لم تُشغَّل
-          بنجاح بعد، فشلت محلياً بخطأ "column does not exist" قبل تطبيق SQL، كما هو متوقَّع)، و(4)
-          Guardian Review `DEEP` مستقل فعلي (`AGENTS.md §17`) — لم يبدأ بعد. الاختبارات الوحدوية
-          (161/161) وفحص المعمارية (`arch:check`) نظيفان بالكامل ومُتحقَّق منهما فعلياً في هذه
-          الجلسة. رسالة خطأ دخول التاجر/الإدارة تغيَّرت (سلوك ملحوظ، `AGENTS.md §13`) — من "رقم
-          الهاتف غير مسجَّل كتاجر، أو الحساب غير مفعَّل" إلى "رقم الهاتف أو كلمة المرور غير صحيحة"،
-          مُعلَن صراحة هنا. `AuditAction` union أُضيف إليه `'auth.password_changed'` (إضافي، لا كسر).
+Consequences: **لا يُعتبَر `DD-001` مُغلقاً بعد** — الخطوات (1) تشغيل
+          `scripts/password-auth-schema.sql` (المؤسس، Supabase SQL Editor على dev، + `NOTIFY
+          pgrst, 'reload schema'` لإعادة تحميل ذاكرة PostgREST المؤقتة — لزم فعلياً، أول محاولة
+          للـBackfill فشلت بخطأ "column does not exist" رغم نجاح الـALTER، إلى أن أُعيد تحميل
+          الـcache)، (2) `scripts/backfill-existing-owner-passwords.ts` (كلمتا مرور مؤقتتان
+          جُدِّدتا فعلياً للحسابين التجريبيين، سُلِّمتا للمؤسس مباشرة)، و(3) التحقق الحي الكامل
+          (`merchant.integration.test.ts`/`admin.integration.test.ts`/
+          `reef-city-journey.integration.test.ts` — **الآن 200/200 اختباراً ناجحاً إجمالاً، وحدة
+          وتكامل معاً**، بعد فشل متوقَّع أولي بخطأ "column does not exist" قبل تطبيق SQL) — **اكتملت
+          الثلاثة جميعاً.** **الشرط الرابع والأخير المتبقي فقط:** (4) Guardian Review `DEEP` مستقل
+          فعلي (`AGENTS.md §17`) — لم يبدأ بعد، هو وحده ما يبقي `DD-001` مفتوحاً الآن.
+          **تصحيح تصميمي اكتُشف أثناء التحقُّق الحي (بند و أعلاه):** المحاولة الأولى لـ
+          `scripts/create-merchant-account.ts`/`backfill-existing-owner-passwords.ts` استهلكت
+          `khalilService`/`merchantService` مباشرة — فشلت فعلياً (حزمة `server-only` ترفض
+          الاستيراد خارج سياق Next.js) — أُصلِحت بعميل `@supabase/supabase-js` خاص بكل سكربت، نفس
+          عُرف `scripts/seed-daily-food-demo-content.ts` القائم. رسالة خطأ دخول التاجر/الإدارة
+          تغيَّرت (سلوك ملحوظ، `AGENTS.md §13`) — من "رقم الهاتف غير مسجَّل كتاجر، أو الحساب غير
+          مفعَّل" إلى "رقم الهاتف أو كلمة المرور غير صحيحة"، مُعلَن صراحة هنا. `AuditAction` union
+          أُضيف إليه `'auth.password_changed'` (إضافي، لا كسر).
 Related Documents: specs/identity/PASSWORD_AUTH_SPEC.md (التصميم الكامل)، DD-001 (يبقى OPEN)،
           INV-AUTHN-001 (INVARIANTS.md، انتقل WAIVED→PARTIAL)، ADR-012، ADR-013، ADR-014،
           docs/DATABASE.md (users/sessions)، docs/SECURITY.md §1،
@@ -1271,12 +1287,11 @@ Owner: Founder
 Created: 2026-09-05
 Review by: قبل إنشاء أي حساب merchant_owner أو platform_admin ثانٍ حقيقي (شرط، لا تاريخ ثابت)
 Blocking: YES — يمنع توسّع آمن لعدد التجار/حسابات الإدارة
-Status: OPEN — تحديث 2026-09-09: القرار حُسم (كلمة مرور، لا OTP/Supabase Auth كاملة — راجع ADR-026)
-          والكود/الاختبارات الوحدوية مكتملان (161/161)، لكن **لا يُغلَق بعد** حتى: (1) تشغيل
-          scripts/password-auth-schema.sql يدوياً (ALTER TABLE — الوكيل بلا صلاحية DDL آلية)، (2)
-          scripts/backfill-existing-owner-passwords.ts فوراً بعده، (3) نجاح اختبارات التكامل الحية
-          (فشلت محلياً حالياً بـ"column does not exist"، متوقَّع قبل تطبيق SQL)، و(4) Guardian
-          Review DEEP مستقل فعلي — لم يبدأ بعد. لا تسجيل تاجر ثانٍ حقيقي قبل اكتمال الأربعة.
+Status: OPEN — تحديث 2026-09-09: القرار حُسم (كلمة مرور، لا OTP/Supabase Auth كاملة — راجع ADR-026)،
+          SQL طُبِّق فعلياً على dev، scripts/backfill-existing-owner-passwords.ts شُغِّل بنجاح
+          (كلمتا مرور مؤقتتان جديدتان للحسابين التجريبيين)، ومجموعة الاختبارات كاملة (وحدة+تكامل)
+          200/200 ناجحة حياً. **الشرط الوحيد المتبقي لإغلاقه فعلياً: Guardian Review DEEP مستقل** —
+          لم يبدأ بعد. لا تسجيل تاجر ثانٍ حقيقي قبل اكتماله.
 Related: INV-AUTHN-001 (INVARIANTS.md، انتقل WAIVED→PARTIAL)، ADR-012، ADR-013، ADR-026 (القرار
           والتصميم الكامل)، docs/SECURITY.md §1، specs/identity/PASSWORD_AUTH_SPEC.md
 ```

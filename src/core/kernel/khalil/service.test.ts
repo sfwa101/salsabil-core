@@ -248,17 +248,6 @@ describe('KhalilService.setNewPassword', () => {
   });
 });
 
-describe('KhalilService.createUser', () => {
-  it('يفوّض مباشرة لـ khalilRepository.createUser بنفس المدخلات (مُستهلَك من scripts/create-merchant-account.ts)', async () => {
-    vi.mocked(khalilRepository.createUser).mockResolvedValue(user);
-
-    const result = await khalilService.createUser({ fullName: user.fullName, phone: user.phone, role: 'merchant_owner' });
-
-    expect(khalilRepository.createUser).toHaveBeenCalledWith({ fullName: user.fullName, phone: user.phone, role: 'merchant_owner' });
-    expect(result).toEqual(user);
-  });
-});
-
 describe('KhalilService.setTemporaryPassword', () => {
   it('يُجزّئ كلمة مرور مؤقتة ويستدعي khalilRepository.setPassword بـ mustChangePassword=true صراحة', async () => {
     await khalilService.setTemporaryPassword('user-1', 'temp-password-abc');

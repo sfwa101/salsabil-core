@@ -577,28 +577,33 @@ setTemporaryPassword/createUser)، merchant.service.test.ts/admin.service.test.t
 reef-city-journey.integration.test.ts (محدَّثة لتستهلك كلمة مرور حقيقية).
 
 Guardian:
-Required (DEEP) — **لم يُنفَّذ بعد وقت هذا التحديث.** التنفيذ + الاختبارات الوحدوية مكتملان
-ومُتحقَّق منهما (161/161)، لكن الاختبارات التكاملية (ضد Supabase حياً) **لم تُشغَّل بنجاح بعد** —
-تتطلب تشغيل scripts/password-auth-schema.sql (ALTER TABLE يدوي، لا صلاحية DDL آلية لدى الوكيل) ثم
-scripts/backfill-existing-owner-passwords.ts أولاً. لا يُعتبَر هذا البند مُغلَقاً (لا ENFORCED) قبل:
-(أ) اكتمال هذين الخطوتين والتحقق الحي، و(ب) Guardian Review DEEP مستقل فعلي.
+Required (DEEP) — **لم يبدأ بعد.** التنفيذ + الاختبارات الوحدوية والتكاملية معاً مكتملة ومُتحقَّق
+منها حياً (200/200، راجع Evidence). لا يُعتبَر هذا البند ENFORCED قبل مراجعة Guardian DEEP مستقلة
+فعلية (AGENTS.md §17) — هذا الشرط الوحيد المتبقي الآن.
 
 Evidence:
-- Type: Automated Test (وحدة) + Code Inspection
-- Source: الملفات أعلاه
-- Executed: 2026-09-09 (هذه الجلسة) — وحدة فقط (161/161 نجحت، `npm run arch:check` نظيف).
-  تكامل: لم يُنفَّذ بنجاح بعد (يتطلب SQL يدوي أولاً، راجع Guardian أعلاه).
-- Scope: منطق التحقق/التجزئة/تدفق الدخول مُثبَت وحدياً بالكامل؛ السلوك الحي ضد قاعدة بيانات
-  حقيقية بعد تطبيق Schema الجديد **غير مُثبَت بعد**.
-- Result: PASS (وحدة) — PENDING (تكامل + Guardian)
+- Type: Automated Test (وحدة + تكامل حي) + Code Inspection
+- Source: الملفات أعلاه + scripts/password-auth-schema.sql (مُطبَّق فعلياً على dev)،
+  scripts/backfill-existing-owner-passwords.ts (شُغِّل فعلياً — كلمتا مرور مؤقتتان جديدتان
+  للحسابين التجريبيين، مسلَّمتان للمؤسس مباشرة، غير مخزَّنتين هنا)
+- Executed: 2026-09-09 (هذه الجلسة) — SQL طُبِّق يدوياً عبر Supabase SQL Editor (dev) + NOTIFY
+  pgrst لإعادة تحميل الـschema cache. Backfill نجح (كلا الحسابين). مجموعة الاختبارات الكاملة
+  200/200 نجحت (159 وحدة + 41 تكامل، بما فيها الثلاثة التي كانت تفشل قبل SQL بخطأ "column does
+  not exist" — الآن تنجح ضد بيانات حية فعلاً). `npm run arch:check` نظيف.
+- Scope: منطق التحقق/التجزئة/تدفق الدخول/دوران الجلسة/إجبار تغيير كلمة المرور — كل ذلك مُثبَت
+  وحدياً وحياً معاً. النطاق غير المُغطَّى: لا اختبار Playwright حي عبر متصفح حقيقي لتدفق تغيير
+  كلمة المرور في الواجهة (صفحتا change-password) — الخدمة/الفعل (Server Action) مُختبَران فقط عبر
+  مسار الجلسة، لا النموذج البصري نفسه.
+- Result: PASS (وحدة + تكامل بالكامل) — Guardian DEEP لا يزال PENDING
 
 Status:
-PARTIAL — IMPLEMENTED PENDING VERIFICATION. الكود/الاختبارات الوحدوية مكتملة؛ لا يُرفَع إلى
-ENFORCED قبل تشغيل SQL/Backfill والتحقق الحي + Guardian Review DEEP. راجع DD-001 في
-docs/DECISIONS.md (يبقى OPEN حتى اكتمال الشرطين).
+PARTIAL — IMPLEMENTED AND LIVE-VERIFIED, PENDING GUARDIAN. الكود/الاختبارات (وحدة + تكامل)
+مكتملة ومُتحقَّق منها حياً بالكامل؛ لا يُرفَع إلى ENFORCED قبل Guardian Review DEEP مستقل فعلي.
+راجع DD-001 في docs/DECISIONS.md (يبقى OPEN حتى اكتمال Guardian تحديداً الآن).
 
 Owner:
-Founder (تشغيل SQL يدوي) + Guardian مستقل (المراجعة) + Claude (نفَّذ الكود/الاختبارات الوحدوية)
+Guardian مستقل (المراجعة المتبقية الوحيدة) + Claude (نفَّذ الكود/الاختبارات، طبَّق SQL بمساعدة
+المؤسس، شغَّل Backfill والتحقق الحي)
 ```
 
 ---
@@ -772,9 +777,9 @@ staging.reefam.com** — "ملاحظة دقة صريحة" في ROADMAP.md تقر
 | VIOLATED (جزئياً) | 1 | INV-AUDIT-001 |
 
 > **تحديث 2026-09-09:** INV-AUTHN-001 انتقل من WAIVED إلى PARTIAL —
-> URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH نفَّذ كلمة مرور حقيقية (لم يعد الخطر مقبولاً بلا
-> تخفيف)، لكنه لم يصل ENFORCED بعد (SQL/Backfill يدويان لم يُشغَّلا، Guardian DEEP لم يبدأ). راجع
-> الإدخال الكامل أعلاه.
+> URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH نفَّذ كلمة مرور حقيقية، طبَّق SQL على dev فعلياً،
+> شغَّل Backfill، وتحقَّق حياً (200/200 اختباراً، وحدة + تكامل معاً). **الشرط الوحيد المتبقي قبل
+> ENFORCED الآن: Guardian Review DEEP مستقل.** راجع الإدخال الكامل أعلاه.
 
 **15 إدخالاً إجمالاً.** لا ادعاء بأن هذا شامل لكل خاصية في المشروع — هذه أول دفعة مُستخرَجة من نطاق
 القراءة المُصرَّح به لهذه المهمة (orders, inventory, khalil, RLS, architecture boundaries, security
