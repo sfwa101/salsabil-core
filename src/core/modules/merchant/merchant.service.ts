@@ -9,8 +9,10 @@ import type { Merchant, MerchantAgreement, MerchantRegistrationInput } from './t
 
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
-// TODO: مدة الجلسة (7 أيام) قيمة عملية غير معتمدة رسمياً من المؤسس بعد — نفس نمط BR-016 (OPEN_QUESTION)
-const MERCHANT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
+// مدة الجلسة (7 أيام) — قرار مؤسس صريح (URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH، سؤال مفتوح 3
+// من specs/identity/PASSWORD_AUTH_SPEC.md): تبقى كما هي، لا تُغيَّر. مُصدَّرة لاستهلاكها من
+// src/app/merchant/change-password/actions.ts (إعادة إنشاء الجلسة بعد تغيير كلمة المرور).
+export const MERCHANT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 export class MerchantService {
   /**
@@ -25,51 +27,77 @@ export class MerchantService {
   }
 
   /**
-   * تسجيل دخول تاجر بلا كلمة مرور (اليوم 10) — بالهاتف الشخصي لمالك التاجر (role: merchant_owner
-   * في users)، لا هاتف العمل التجاري في merchants.phone. يرفض بصمت (null، لا استثناء) عند أي
-   * فشل — رقم غير مسجَّل، دور غير merchant_owner، لا تاجر مرتبط، أو تاجر معطَّل — بلا تمييز
-   * الأسباب للمستدعي (يمنع تسريب معلومة "هذا الرقم مسجَّل لكن ليس تاجراً" لطرف خبيث).
+   * ينشئ صف merchants — مُستهلَك من scripts/create-merchant-account.ts فقط
+   * (URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH). تمريرة رقيقة لـ merchantRepository.create
+   * (كانت بلا أي مستدعٍ فعلياً قبل هذه الدفعة) — تُبقي scripts/ خارج الوصول المباشر لـ
+   * merchantRepository، نفس مبدأ khalilService.createUser.
    */
-  async loginOwnerByPhone(phone: string): Promise<{ token: string; session: Session } | null> {
-    const user = await khalilService.findUserByPhone(phone);
-    if (!user || user.role !== 'merchant_owner') {
+  async register(input: MerchantRegistrationInput): Promise<Merchant> {
+    return merchantRepository.create(input);
+  }
+
+  /**
+   * تسجيل دخول تاجر بالهاتف + كلمة مرور (URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH — يُغلق
+   * DD-001/INV-AUTHN-001 الذي كان يقبل الهاتف وحده). بالهاتف الشخصي لمالك التاجر (role:
+   * merchant_owner في users)، لا هاتف العمل التجاري في merchants.phone. يرفض بصمت (null، لا
+   * استثناء) عند أي فشل — رقم غير مسجَّل، كلمة مرور خاطئة/غير مضبوطة، دور غير merchant_owner، لا
+   * تاجر مرتبط، أو تاجر معطَّل — **رسالة رفض موحَّدة واحدة للمستدعي الخارجي** (يمنع تعداد أرقام
+   * هواتف تجار حقيقيين، Enumeration Attack)، لكن تدقيق داخلي دقيق (`reason`) لكل حالة —
+   * راجع specs/identity/PASSWORD_AUTH_SPEC.md §5.
+   */
+  async loginOwnerByPhone(phone: string, password: string): Promise<{ token: string; session: Session } | null> {
+    const auth = await khalilService.verifyPasswordForPhone(phone, password);
+    if (!auth.ok) {
       await auditService.log({
-        actorId: user?.id ?? null,
-        actorRole: user?.role ?? 'anonymous',
+        actorId: auth.user?.id ?? null,
+        actorRole: auth.user?.role ?? 'anonymous',
         action: 'auth.login_failed',
         entityType: 'user',
-        entityId: user?.id ?? null,
+        entityId: auth.user?.id ?? null,
+        metadata: { phone, attemptedRole: 'merchant_owner', reason: auth.reason },
+      });
+      return null;
+    }
+
+    if (auth.user.role !== 'merchant_owner') {
+      await auditService.log({
+        actorId: auth.user.id,
+        actorRole: auth.user.role,
+        action: 'auth.login_failed',
+        entityType: 'user',
+        entityId: auth.user.id,
         metadata: { phone, attemptedRole: 'merchant_owner' },
       });
       return null;
     }
 
-    const merchant = await merchantRepository.findByOwnerId(user.id);
+    const merchant = await merchantRepository.findByOwnerId(auth.user.id);
     if (!merchant || !merchant.isActive) {
       await auditService.log({
-        actorId: user.id,
-        actorRole: user.role,
+        actorId: auth.user.id,
+        actorRole: auth.user.role,
         action: 'auth.login_failed',
         entityType: 'user',
-        entityId: user.id,
+        entityId: auth.user.id,
         metadata: { phone, reason: merchant ? 'merchant_inactive' : 'no_merchant_linked' },
       });
       return null;
     }
 
     const result = await khalilService.createSession({
-      userId: user.id,
+      userId: auth.user.id,
       tenantId: merchant.id,
-      role: user.role,
+      role: auth.user.role,
       ttlSeconds: MERCHANT_SESSION_TTL_SECONDS,
+      mustChangePassword: auth.mustChangePassword,
     });
 
     await auditService.log({
-      actorId: user.id,
-      actorRole: user.role,
+      actorId: auth.user.id,
+      actorRole: auth.user.role,
       action: 'auth.login_success',
       entityType: 'user',
-      entityId: user.id,
+      entityId: auth.user.id,
       metadata: { phone },
     });
 

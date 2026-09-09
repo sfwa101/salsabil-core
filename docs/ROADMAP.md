@@ -1,8 +1,8 @@
 ---
 title: خارطة الطريق
 status: ACTIVE
-version: 1.31
-last_updated: 2026-09-08
+version: 1.32
+last_updated: 2026-09-09
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTION.md §23 (الخطة الأصلية + تصحيح 14→18 يوماً)
 ---
@@ -138,6 +138,12 @@ source_of_truth: هذا الملف (التتبع الحي)، SALSABIL_CONSTITUTI
 الاستيراد الجماعي) **قبل** الانتقال للمرحلة 3 (السلة المتقدمة) من موجّه
 `EXTRACT-DESIGN-DNA-AND-APPLY-ACROSS-ALL-SCREENS` الجاري — لا تنفيذ لأي من الأسئلة الثلاثة أعلاه قبل
 تلك المناقشة.
+
+**✅ تحديث (2026-09-09، `URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH`):** بند "المصادقة" أعلاه —
+كلمة مرور حقيقية لدخول التاجر/الإدارة مُنفَّذة ومختبَرة وحدياً بالكامل (161/161)، **لا تُعتبَر
+مُغلَقة بعد**: تحتاج تشغيل `scripts/password-auth-schema.sql` يدوياً + `scripts/
+backfill-existing-owner-passwords.ts` + Guardian Review `DEEP` مستقل. راجع `docs/DECISIONS.md →
+ADR-026`، `DD-001` (يبقى `OPEN`). بندا "الكتالوج الموحَّد" و"الاستيراد الجماعي" يبقيان بلا تنفيذ.
 
 ---
 

@@ -16,9 +16,20 @@ import { supabaseAdmin } from '../../kernel/database/supabase-admin-client';
 
 const TEST_ADMIN_PHONE = '01000000001';
 const TEST_MERCHANT_OWNER_PHONE = '01000000000';
+// URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH — كلمة مرور معروفة تُضبَط idempotently في beforeAll
+// لكلا الحسابين التجريبيين المشتركين أدناه؛ بيانات اختبار بحتة بلا قيمة أمنية حقيقية.
+const TEST_PASSWORD = 'Test-Password-123';
 
 describe('Admin login integration (Supabase حقيقي، اليوم 11)', () => {
   const tokensToClean: string[] = [];
+
+  beforeAll(async () => {
+    for (const phone of [TEST_ADMIN_PHONE, TEST_MERCHANT_OWNER_PHONE]) {
+      const user = await khalilService.findUserByPhone(phone);
+      if (!user) throw new Error(`حساب اختبار مشترك غير موجود: ${phone}`);
+      await khalilService.setNewPassword(user.id, TEST_PASSWORD);
+    }
+  });
 
   afterAll(async () => {
     for (const token of tokensToClean) {
@@ -27,7 +38,7 @@ describe('Admin login integration (Supabase حقيقي، اليوم 11)', () => 
   });
 
   it('ينجح: هاتف مدير منصة حقيقي → token وجلسة بـ tenantId: null', async () => {
-    const result = await adminService.loginByPhone(TEST_ADMIN_PHONE);
+    const result = await adminService.loginByPhone(TEST_ADMIN_PHONE, TEST_PASSWORD);
     expect(result).not.toBeNull();
     tokensToClean.push(result!.token);
 
@@ -37,12 +48,17 @@ describe('Admin login integration (Supabase حقيقي، اليوم 11)', () => 
 
   it('يرفض (null) رقم هاتف غير مسجَّل إطلاقاً', async () => {
     const randomPhone = `0198${Math.floor(1000000 + Math.random() * 8999999)}`;
-    const result = await adminService.loginByPhone(randomPhone);
+    const result = await adminService.loginByPhone(randomPhone, TEST_PASSWORD);
     expect(result).toBeNull();
   });
 
-  it('اختبار أمني حاسم: هاتف تاجر حقيقي (merchant_owner) يُرفض من دخول الإدارة رغم كونه مستخدماً حقيقياً وفعالاً', async () => {
-    const result = await adminService.loginByPhone(TEST_MERCHANT_OWNER_PHONE);
+  it('يرفض (null) كلمة مرور خاطئة لحساب إدارة حقيقي وفعال', async () => {
+    const result = await adminService.loginByPhone(TEST_ADMIN_PHONE, 'wrong-password-123');
+    expect(result).toBeNull();
+  });
+
+  it('اختبار أمني حاسم: هاتف تاجر حقيقي (merchant_owner) يُرفض من دخول الإدارة رغم كونه مستخدماً حقيقياً وفعالاً وكلمة المرور صحيحة', async () => {
+    const result = await adminService.loginByPhone(TEST_MERCHANT_OWNER_PHONE, TEST_PASSWORD);
     expect(result).toBeNull();
   });
 
@@ -51,7 +67,7 @@ describe('Admin login integration (Supabase حقيقي، اليوم 11)', () => 
     // ثم التحقق من role === 'platform_admin'. الكوكي نفسها لا تُختبَر هنا (تتطلب سياق طلب Next.js
     // حقيقي، مُتحقَّق منه بمتصفح حقيقي بدلاً من ذلك) — لكن قرار الرفض الفعلي (المنطق الحساس أمنياً)
     // يُختبَر هنا حياً ضد جلسة تاجر حقيقية، لا بيانات وهمية.
-    const merchantLogin = await merchantService.loginOwnerByPhone(TEST_MERCHANT_OWNER_PHONE);
+    const merchantLogin = await merchantService.loginOwnerByPhone(TEST_MERCHANT_OWNER_PHONE, TEST_PASSWORD);
     expect(merchantLogin).not.toBeNull();
     tokensToClean.push(merchantLogin!.token);
 
@@ -131,6 +147,14 @@ describe('Admin merchant management integration (Supabase حقيقي، اليو�
 describe('Admin/Merchant login audit trail integration (اليوم 12، ADR-014، Supabase حقيقي)', () => {
   const tokensToClean: string[] = [];
 
+  beforeAll(async () => {
+    // idempotent — نفس القيمة المضبوطة في describe الأول أعلاه (Vitest لا يضمن ترتيب beforeAll
+    // عبر describe منفصلة في نفس الملف)
+    const adminUser = await khalilService.findUserByPhone(TEST_ADMIN_PHONE);
+    if (!adminUser) throw new Error(`حساب اختبار مشترك غير موجود: ${TEST_ADMIN_PHONE}`);
+    await khalilService.setNewPassword(adminUser.id, TEST_PASSWORD);
+  });
+
   afterAll(async () => {
     for (const token of tokensToClean) {
       await khalilService.destroySession(token);
@@ -138,7 +162,7 @@ describe('Admin/Merchant login audit trail integration (اليوم 12، ADR-014�
   });
 
   it('دخول إدارة ناجح يُسجَّل في audit_log كـ auth.login_success', async () => {
-    const result = await adminService.loginByPhone(TEST_ADMIN_PHONE);
+    const result = await adminService.loginByPhone(TEST_ADMIN_PHONE, TEST_PASSWORD);
     tokensToClean.push(result!.token);
 
     // مفلترة بـ actor_id أيضاً لا الفعل فقط — بلا هذا الفلتر، تسجيل دخول ناجح آخر من ملف اختبار
@@ -160,7 +184,7 @@ describe('Admin/Merchant login audit trail integration (اليوم 12، ADR-014�
 
   it('محاولة دخول إدارة برقم هاتف غير مسجَّل تُسجَّل في audit_log كـ auth.login_failed بفاعل anonymous', async () => {
     const randomPhone = `0198${Math.floor(1000000 + Math.random() * 8999999)}`;
-    await adminService.loginByPhone(randomPhone);
+    await adminService.loginByPhone(randomPhone, TEST_PASSWORD);
 
     const { data: rows, error } = await supabaseAdmin
       .from('audit_log')

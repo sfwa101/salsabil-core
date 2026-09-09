@@ -2,7 +2,16 @@
 // منطق الأعمال الخاص بخليل — لا استدعاء لقاعدة بيانات هنا مباشرة، فقط عبر khalilRepository
 
 import { khalilRepository } from './khalil.repository';
+import { hashPassword, verifyPassword } from '../security/password';
 import type { User, Session, UserRole, UserPersona, World } from './types';
+
+// URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH — نتيجة تمييزية (Discriminated Union) عمداً بدل
+// null بسيط: تسمح للمستدعي (merchant.service/admin.service) بتسجيل تدقيق دقيق داخلياً (سبب الفشل
+// الحقيقي) بينما يبقى الرد الخارجي للمتصفح رسالة رفض موحَّدة واحدة (specs/identity/PASSWORD_AUTH_SPEC.md
+// §5) — لا تناقض: التمييز الداخلي في السجل لا يُسرَّب للعميل أبداً، فقط يُستهلَك داخل service.ts.
+export type PasswordVerificationResult =
+  | { ok: true; user: User; mustChangePassword: boolean }
+  | { ok: false; reason: 'not_found' | 'no_password_set' | 'wrong_password'; user: User | null };
 
 // اليوم 19 (ADR-018) — الصف الوحيد المزروع في worlds حتى الآن. راجع docs/DECISIONS.md → CONFLICT-006
 // لسبب حصر النطاق (لا عالم "أعمال" أو غيره بعد).
@@ -48,6 +57,16 @@ export class KhalilService {
   }
 
   /**
+   * إنشاء مستخدم صريح بدور مُحدَّد (لا customer دائماً كما findOrCreateCustomerByPhone) —
+   * مُستهلَك من scripts/create-merchant-account.ts فقط (إنشاء حسابات تاجر/إدارة جديدة). تمريرة
+   * رقيقة تُبقي scripts/ خارج الوصول المباشر لـ khalilRepository (احتراماً لقاعدة الاعتماد نفسها
+   * المفروضة داخل src/، حتى لو dependency-cruiser لا يفحص scripts/).
+   */
+  async createUser(input: { fullName: string; phone: string; role: UserRole }): Promise<User> {
+    return khalilRepository.createUser(input);
+  }
+
+  /**
    * كل العوالم النشطة من جدول worlds — مُستهلَكة أولاً عبر bayan.service.ts (اليوم 23) لتحديد
    * عالم individuals، ولاحقاً عبر مبدّل العوالم في الواجهة (اليوم 29). تمريرة رقيقة فقط —
    * dependency-cruiser يمنع أي نطاق خارج kernel/khalil/ من استيراد khalilRepository مباشرة.
@@ -56,8 +75,46 @@ export class KhalilService {
     return khalilRepository.listActiveWorlds();
   }
 
-  async createSession(input: { userId: string; tenantId: string | null; role: UserRole; ttlSeconds: number }): Promise<{ token: string; session: Session }> {
+  async createSession(input: {
+    userId: string;
+    tenantId: string | null;
+    role: UserRole;
+    ttlSeconds: number;
+    mustChangePassword?: boolean;
+  }): Promise<{ token: string; session: Session }> {
     return khalilRepository.createSession(input);
+  }
+
+  /**
+   * تحقق كلمة مرور موحَّد لتدفقَي دخول التاجر/الإدارة معاً (URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH) —
+   * لا فحص دور هنا عمداً (مسؤولية المستدعي: merchant.service يتوقع merchant_owner، admin.service
+   * يتوقع platform_admin، نفس فصل المسؤولية القائم أصلاً في findUserByPhone). راجع
+   * specs/identity/PASSWORD_AUTH_SPEC.md §5.
+   */
+  async verifyPasswordForPhone(phone: string, password: string): Promise<PasswordVerificationResult> {
+    const auth = await khalilRepository.findAuthByPhone(phone);
+    if (!auth) return { ok: false, reason: 'not_found', user: null };
+    if (!auth.passwordHash) return { ok: false, reason: 'no_password_set', user: auth.user };
+
+    const matches = await verifyPassword(password, auth.passwordHash);
+    if (!matches) return { ok: false, reason: 'wrong_password', user: auth.user };
+
+    return { ok: true, user: auth.user, mustChangePassword: auth.mustChangePassword };
+  }
+
+  /** يُجزّئ كلمة مرور جديدة ويحفظها — يُسقِط mustChangePassword على users (المستخدم غيَّرها طواعية). */
+  async setNewPassword(userId: string, newPasswordPlain: string): Promise<void> {
+    const hash = await hashPassword(newPasswordPlain);
+    await khalilRepository.setPassword(userId, hash, false);
+  }
+
+  /**
+   * يُجزّئ كلمة مرور مؤقتة (صادرة من النظام، لا من المستخدم) ويحفظها مع رفع علم "يجب التغيير" —
+   * مُستهلَكة من scripts/create-merchant-account.ts وscripts/backfill-existing-owner-passwords.ts.
+   */
+  async setTemporaryPassword(userId: string, tempPasswordPlain: string): Promise<void> {
+    const hash = await hashPassword(tempPasswordPlain);
+    await khalilRepository.setPassword(userId, hash, true);
   }
 
   /**

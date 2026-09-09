@@ -11,3 +11,8 @@ export const egyptianPhoneSchema = z
   .regex(/^01[0125]\d{8}$/, 'رقم هاتف غير صحيح — يجب أن يكون رقماً مصرياً من 11 رقماً');
 
 export const uuidSchema = z.uuid('معرّف غير صحيح');
+
+// URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH — 8 أحرف حد أدنى بلا قواعد تعقيد إضافية (حروف
+// كبيرة/أرقام/رموز إلزامية)، قرار مؤسس صريح (specs/identity/PASSWORD_AUTH_SPEC.md سؤال مفتوح 2) —
+// يطابق توصية NIST 800-63B (الطول أهم من قواعد التعقيد المعقَّدة).
+export const passwordSchema = z.string().min(8, 'كلمة المرور يجب أن تكون 8 أحرف على الأقل');

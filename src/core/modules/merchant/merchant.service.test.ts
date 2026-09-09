@@ -32,11 +32,11 @@ const activeMerchant: Merchant = {
   createdAt: new Date().toISOString(),
 };
 
-const session: Session = { userId: owner.id, tenantId: activeMerchant.id, role: 'merchant_owner', expiresAt: new Date(Date.now() + 1000).toISOString() };
+const session: Session = { userId: owner.id, tenantId: activeMerchant.id, role: 'merchant_owner', expiresAt: new Date(Date.now() + 1000).toISOString(), mustChangePassword: false };
 
 vi.mock('../../kernel/khalil/service', () => ({
   khalilService: {
-    findUserByPhone: vi.fn(),
+    verifyPasswordForPhone: vi.fn(),
     createSession: vi.fn(async () => ({ token: 'session-token-1', session })),
   },
 }));
@@ -46,6 +46,7 @@ vi.mock('./merchant.repository', () => ({
     findByOwnerId: vi.fn(),
     findAll: vi.fn(async () => [activeMerchant]),
     setActiveStatus: vi.fn(async (id: string, isActive: boolean) => ({ ...activeMerchant, id, isActive })),
+    create: vi.fn(async () => activeMerchant),
   },
 }));
 
@@ -65,11 +66,11 @@ beforeEach(() => {
 });
 
 describe('MerchantService.loginOwnerByPhone', () => {
-  it('ينجح: هاتف صاحب تاجر نشط → token وجلسة صحيحة، ويُسجَّل auth.login_success', async () => {
-    vi.mocked(khalilService.findUserByPhone).mockResolvedValue(owner);
+  it('ينجح: هاتف+كلمة مرور صاحب تاجر نشط → token وجلسة صحيحة، ويُسجَّل auth.login_success', async () => {
+    vi.mocked(khalilService.verifyPasswordForPhone).mockResolvedValue({ ok: true, user: owner, mustChangePassword: false });
     vi.mocked(merchantRepository.findByOwnerId).mockResolvedValue(activeMerchant);
 
-    const result = await merchantService.loginOwnerByPhone(owner.phone);
+    const result = await merchantService.loginOwnerByPhone(owner.phone, 'correct-password');
 
     expect(result).not.toBeNull();
     expect(result!.token).toBe('session-token-1');
@@ -78,28 +79,50 @@ describe('MerchantService.loginOwnerByPhone', () => {
       tenantId: activeMerchant.id,
       role: 'merchant_owner',
       ttlSeconds: expect.any(Number),
+      mustChangePassword: false,
     });
     expect(auditService.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'auth.login_success', actorId: owner.id, actorRole: 'merchant_owner' })
     );
   });
 
-  it('يرفض (null) رقماً غير مسجَّل إطلاقاً، ويُسجَّل auth.login_failed بفاعل anonymous', async () => {
-    vi.mocked(khalilService.findUserByPhone).mockResolvedValue(null);
+  it('ينجح ويمرّر mustChangePassword: true فعلياً لإنشاء الجلسة (كلمة مرور مؤقتة لم تُغيَّر بعد)', async () => {
+    vi.mocked(khalilService.verifyPasswordForPhone).mockResolvedValue({ ok: true, user: owner, mustChangePassword: true });
+    vi.mocked(merchantRepository.findByOwnerId).mockResolvedValue(activeMerchant);
 
-    const result = await merchantService.loginOwnerByPhone('01099999999');
+    await merchantService.loginOwnerByPhone(owner.phone, 'temp-password');
+
+    expect(khalilService.createSession).toHaveBeenCalledWith(expect.objectContaining({ mustChangePassword: true }));
+  });
+
+  it('يرفض (null) رقماً غير مسجَّل إطلاقاً، ويُسجَّل auth.login_failed بفاعل anonymous وسبب not_found', async () => {
+    vi.mocked(khalilService.verifyPasswordForPhone).mockResolvedValue({ ok: false, reason: 'not_found', user: null });
+
+    const result = await merchantService.loginOwnerByPhone('01099999999', 'any-password');
 
     expect(result).toBeNull();
     expect(khalilService.createSession).not.toHaveBeenCalled();
     expect(auditService.log).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'auth.login_failed', actorId: null, actorRole: 'anonymous' })
+      expect.objectContaining({ action: 'auth.login_failed', actorId: null, actorRole: 'anonymous', metadata: expect.objectContaining({ reason: 'not_found' }) })
+    );
+  });
+
+  it('يرفض (null) كلمة مرور خاطئة لمالك تاجر حقيقي، ويُسجَّل auth.login_failed بفاعله الحقيقي وسبب wrong_password', async () => {
+    vi.mocked(khalilService.verifyPasswordForPhone).mockResolvedValue({ ok: false, reason: 'wrong_password', user: owner });
+
+    const result = await merchantService.loginOwnerByPhone(owner.phone, 'wrong-password');
+
+    expect(result).toBeNull();
+    expect(khalilService.createSession).not.toHaveBeenCalled();
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'auth.login_failed', actorId: owner.id, actorRole: 'merchant_owner', metadata: expect.objectContaining({ reason: 'wrong_password' }) })
     );
   });
 
   it('يرفض (null) مستخدماً مسجَّلاً لكن ليس merchant_owner (عميل عادي)', async () => {
-    vi.mocked(khalilService.findUserByPhone).mockResolvedValue(customer);
+    vi.mocked(khalilService.verifyPasswordForPhone).mockResolvedValue({ ok: true, user: customer, mustChangePassword: false });
 
-    const result = await merchantService.loginOwnerByPhone(customer.phone);
+    const result = await merchantService.loginOwnerByPhone(customer.phone, 'correct-password');
 
     expect(result).toBeNull();
     expect(merchantRepository.findByOwnerId).not.toHaveBeenCalled();
@@ -109,10 +132,10 @@ describe('MerchantService.loginOwnerByPhone', () => {
   });
 
   it('يرفض (null) مالك تاجر بلا سجل merchant مرتبط (بيانات ناقصة)', async () => {
-    vi.mocked(khalilService.findUserByPhone).mockResolvedValue(owner);
+    vi.mocked(khalilService.verifyPasswordForPhone).mockResolvedValue({ ok: true, user: owner, mustChangePassword: false });
     vi.mocked(merchantRepository.findByOwnerId).mockResolvedValue(null);
 
-    const result = await merchantService.loginOwnerByPhone(owner.phone);
+    const result = await merchantService.loginOwnerByPhone(owner.phone, 'correct-password');
 
     expect(result).toBeNull();
     expect(khalilService.createSession).not.toHaveBeenCalled();
@@ -122,16 +145,27 @@ describe('MerchantService.loginOwnerByPhone', () => {
   });
 
   it('يرفض (null) تاجراً معطَّلاً (isActive: false)', async () => {
-    vi.mocked(khalilService.findUserByPhone).mockResolvedValue(owner);
+    vi.mocked(khalilService.verifyPasswordForPhone).mockResolvedValue({ ok: true, user: owner, mustChangePassword: false });
     vi.mocked(merchantRepository.findByOwnerId).mockResolvedValue({ ...activeMerchant, isActive: false });
 
-    const result = await merchantService.loginOwnerByPhone(owner.phone);
+    const result = await merchantService.loginOwnerByPhone(owner.phone, 'correct-password');
 
     expect(result).toBeNull();
     expect(khalilService.createSession).not.toHaveBeenCalled();
     expect(auditService.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'auth.login_failed', metadata: expect.objectContaining({ reason: 'merchant_inactive' }) })
     );
+  });
+});
+
+describe('MerchantService.register (URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH)', () => {
+  it('يفوّض مباشرة لـ merchantRepository.create بنفس المدخلات (مُستهلَك من scripts/create-merchant-account.ts)', async () => {
+    const input = { ownerId: owner.id, businessName: 'محل جديد', phone: '01055555555', slug: 'new-shop', commissionRate: 8 };
+
+    const result = await merchantService.register(input);
+
+    expect(merchantRepository.create).toHaveBeenCalledWith(input);
+    expect(result).toEqual(activeMerchant);
   });
 });
 

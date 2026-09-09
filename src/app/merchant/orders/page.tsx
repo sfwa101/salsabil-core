@@ -10,6 +10,11 @@ export default async function MerchantOrdersPage() {
   if (!session || !session.tenantId) {
     redirect('/merchant/login');
   }
+  // URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH — يمنع الوصول لأي صفحة أخرى قبل تغيير كلمة المرور
+  // المؤقتة إجبارياً (لا يمكن تجاوزه بالانتقال المباشر للرابط) — راجع specs/identity/PASSWORD_AUTH_SPEC.md §5
+  if (session.mustChangePassword) {
+    redirect('/merchant/change-password');
+  }
 
   const orders = await ordersService.getOrdersForTenant(session.tenantId);
 

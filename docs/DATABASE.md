@@ -1,8 +1,8 @@
 ---
 title: مرجع قاعدة البيانات
 status: ACTIVE
-version: 1.12
-last_updated: 2026-09-06
+version: 1.13
+last_updated: 2026-09-09
 owner: المؤسس (أبوحتاب) + Claude
 source_of_truth: Supabase Project الفعلي (للجداول المنفَّذة) + هذا الملف (للتخطيط)
 ---
@@ -48,8 +48,23 @@ create table users (
 );
 alter table users enable row level security;
 create policy "Users can read own data" on users for select using (auth.uid() = id);
+
+-- 2026-09-09 (URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH، scripts/password-auth-schema.sql) —
+-- تنفيذ يدوي عبر Supabase SQL Editor، لم يُطبَّق على dev بعد وقت كتابة هذا التحديث.
+alter table users add column password_hash text;
+alter table users add column must_change_password boolean not null default false;
 ```
 **الحالة:** `IMPLEMENTED` — RLS مفعَّل، سياسة قراءة واحدة فقط (المستخدم يقرأ بياناته الخاصة). **لا سياسات Insert/Update/Delete بعد — `OPEN_QUESTION`: من يملك حق إنشاء مستخدم جديد؟ (Auth مباشرة أم عبر service مخصص؟)**
+
+**`password_hash`/`must_change_password` (Evidence: `PENDING_MIGRATION` — الكود/الاختبارات
+الوحدوية جاهزة، الـ`ALTER TABLE` لم يُنفَّذ على dev بعد):** يُغلقان `DD-001`/`INV-AUTHN-001`
+(دخول التاجر/الإدارة كان بالهاتف وحده بلا كلمة مرور). `password_hash` نصياً (صيغة `salt:hash`،
+`scrypt` عبر `node:crypto`، لا تبعية جديدة) بدل عمود على `merchants` كما اقترح موجّه المهمة أصلاً —
+راجع `specs/identity/PASSWORD_AUTH_SPEC.md §0` للتصحيح الكامل (دخول التاجر/الإدارة كلاهما يبحث في
+`users`، لا `merchants.phone`). `nullable` عمداً (الحسابان التجريبيان القائمان بلا كلمة مرور بعد) —
+منطق التطبيق يرفض أي دخول بكلمة مرور لـ`password_hash is null` (Fail Closed، لا قيد `not null`).
+**يجب تشغيل `scripts/backfill-existing-owner-passwords.ts` فور تطبيق هذا الـALTER**، وإلا يُقفَل
+على الحسابين التجريبيين فوراً.
 
 **نموذج الهوية المرحلي (اليوم 12، `ADR-015`):** لا صف `users` يُنشَأ إطلاقاً لزائر يتصفّح أو يشتري كعميل عادي —
 هويته عبر `carts.session_token` وحده (`ADR-008`) حتى لحظة Checkout حيث يُطلَب الهاتف فقط
@@ -244,6 +259,11 @@ create index sessions_user_id_idx on sessions (user_id);
 
 -- اليوم 19 (Context Engine، ADR-018) — عمود جديد، nullable
 alter table sessions add column active_persona_id uuid references user_personas(id);
+
+-- 2026-09-09 (URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH، scripts/password-auth-schema.sql) —
+-- نسخة "يجب تغيير كلمة المرور" وقت إنشاء الجلسة، لا مصدر حقيقة دائم (users.must_change_password
+-- هو المصدر) — تفادياً لقراءة users في كل طلب لاحق. تنفيذ يدوي، لم يُطبَّق على dev بعد.
+alter table sessions add column must_change_password boolean not null default false;
 ```
 
 **الحالة:** `IMPLEMENTED` — كان `CONCEPTUAL` منذ اليوم 2 ("مع تسجيل الدخول")، بُني الآن فعلياً عند أول تدفق دخول حقيقي (تسجيل دخول تاجر بالهاتف بلا كلمة مرور). يُفعِّل لأول مرة `Session`/`canAccessTenant` الموجودين في `src/core/kernel/khalil/` منذ اليوم 4 بلا أي مستهلك فعلي حتى الآن. مُتحقَّق منه حياً: دخول حقيقي بهاتف تاجر تجريبي موجود مسبقاً في القاعدة، قراءة الجلسة عبر `token`، إبطالها (`destroySession`)، ومحاولة إدراج `role` غير صحيحة (رُفضت فعلياً بـ`sessions_role_check`).

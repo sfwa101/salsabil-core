@@ -7,6 +7,7 @@ import { loginMerchantAction } from '@/app/merchant/login/actions';
 export function MerchantLoginForm() {
   const router = useRouter();
   const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
 
@@ -15,14 +16,14 @@ export function MerchantLoginForm() {
     setStatus('submitting');
     setError(null);
 
-    const result = await loginMerchantAction(phone);
+    const result = await loginMerchantAction(phone, password);
 
     if ('error' in result) {
       setStatus('error');
       setError(result.error);
       return;
     }
-    router.push('/merchant/orders');
+    router.push(result.mustChangePassword ? '/merchant/change-password' : '/merchant/orders');
     router.refresh();
   }
 
@@ -35,6 +36,17 @@ export function MerchantLoginForm() {
           type="tel"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
+          className="rounded-xl border border-border bg-card p-3 text-foreground"
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium text-muted-foreground">كلمة المرور</label>
+        <input
+          required
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
           className="rounded-xl border border-border bg-card p-3 text-foreground"
         />
       </div>

@@ -21,7 +21,7 @@ const merchantOwner: User = {
   createdAt: new Date().toISOString(),
 };
 
-const adminSession: Session = { userId: adminUser.id, tenantId: null, role: 'platform_admin', expiresAt: new Date(Date.now() + 1000).toISOString() };
+const adminSession: Session = { userId: adminUser.id, tenantId: null, role: 'platform_admin', expiresAt: new Date(Date.now() + 1000).toISOString(), mustChangePassword: false };
 
 const merchant: Merchant = {
   id: 'merchant-1',
@@ -36,7 +36,7 @@ const merchant: Merchant = {
 
 vi.mock('../../kernel/khalil/service', () => ({
   khalilService: {
-    findUserByPhone: vi.fn(),
+    verifyPasswordForPhone: vi.fn(),
     createSession: vi.fn(async () => ({ token: 'admin-session-token', session: adminSession })),
   },
 }));
@@ -65,10 +65,10 @@ beforeEach(() => {
 });
 
 describe('AdminService.loginByPhone', () => {
-  it('ينجح: هاتف platform_admin حقيقي → token وجلسة بـ tenantId: null، ويُسجَّل auth.login_success', async () => {
-    vi.mocked(khalilService.findUserByPhone).mockResolvedValue(adminUser);
+  it('ينجح: هاتف+كلمة مرور platform_admin حقيقي → token وجلسة بـ tenantId: null، ويُسجَّل auth.login_success', async () => {
+    vi.mocked(khalilService.verifyPasswordForPhone).mockResolvedValue({ ok: true, user: adminUser, mustChangePassword: false });
 
-    const result = await adminService.loginByPhone(adminUser.phone);
+    const result = await adminService.loginByPhone(adminUser.phone, 'correct-password');
 
     expect(result).not.toBeNull();
     expect(result!.token).toBe('admin-session-token');
@@ -77,28 +77,41 @@ describe('AdminService.loginByPhone', () => {
       tenantId: null,
       role: 'platform_admin',
       ttlSeconds: expect.any(Number),
+      mustChangePassword: false,
     });
     expect(auditService.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'auth.login_success', actorId: adminUser.id, actorRole: 'platform_admin' })
     );
   });
 
-  it('يرفض (null) رقماً غير مسجَّل إطلاقاً، ويُسجَّل auth.login_failed بفاعل anonymous', async () => {
-    vi.mocked(khalilService.findUserByPhone).mockResolvedValue(null);
+  it('يرفض (null) رقماً غير مسجَّل إطلاقاً، ويُسجَّل auth.login_failed بفاعل anonymous وسبب not_found', async () => {
+    vi.mocked(khalilService.verifyPasswordForPhone).mockResolvedValue({ ok: false, reason: 'not_found', user: null });
 
-    const result = await adminService.loginByPhone('01099999999');
+    const result = await adminService.loginByPhone('01099999999', 'any-password');
 
     expect(result).toBeNull();
     expect(khalilService.createSession).not.toHaveBeenCalled();
     expect(auditService.log).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'auth.login_failed', actorId: null, actorRole: 'anonymous' })
+      expect.objectContaining({ action: 'auth.login_failed', actorId: null, actorRole: 'anonymous', metadata: expect.objectContaining({ reason: 'not_found' }) })
+    );
+  });
+
+  it('يرفض (null) كلمة مرور خاطئة لحساب إدارة حقيقي، ويُسجَّل auth.login_failed بفاعله الحقيقي وسبب wrong_password', async () => {
+    vi.mocked(khalilService.verifyPasswordForPhone).mockResolvedValue({ ok: false, reason: 'wrong_password', user: adminUser });
+
+    const result = await adminService.loginByPhone(adminUser.phone, 'wrong-password');
+
+    expect(result).toBeNull();
+    expect(khalilService.createSession).not.toHaveBeenCalled();
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'auth.login_failed', actorId: adminUser.id, actorRole: 'platform_admin', metadata: expect.objectContaining({ reason: 'wrong_password' }) })
     );
   });
 
   it('يرفض (null) مستخدماً مسجَّلاً لكن دوره ليس platform_admin (مثال: merchant_owner)، ويُسجَّل auth.login_failed بدوره الحقيقي', async () => {
-    vi.mocked(khalilService.findUserByPhone).mockResolvedValue(merchantOwner);
+    vi.mocked(khalilService.verifyPasswordForPhone).mockResolvedValue({ ok: true, user: merchantOwner, mustChangePassword: false });
 
-    const result = await adminService.loginByPhone(merchantOwner.phone);
+    const result = await adminService.loginByPhone(merchantOwner.phone, 'correct-password');
 
     expect(result).toBeNull();
     expect(khalilService.createSession).not.toHaveBeenCalled();

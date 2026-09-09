@@ -1,10 +1,10 @@
 ---
 title: Spec — كلمة مرور حقيقية لدخول التاجر/الإدارة (إغلاق DD-001 / AUTH-SECURITY-BLOCKER)
-status: DRAFT — بانتظار موافقة المؤسس (Spec-first، لا كود بعد)
-version: 0.1
-last_updated: 2026-09-08
-owner: Claude (صياغة) + المؤسس (اعتماد)
-source_of_truth: هذا الملف حتى الاعتماد، ثم الكود الفعلي بعد التنفيذ
+status: IMPLEMENTED (كود + اختبارات وحدة) — PENDING (SQL/Backfill يدويان + Guardian Review DEEP)
+version: 1.0
+last_updated: 2026-09-09
+owner: Claude (صياغة وتنفيذ) + المؤسس (اعتماد Spec + تشغيل SQL يدوياً)
+source_of_truth: ADR-026 (docs/DECISIONS.md) للقرار النهائي، الكود الفعلي لتفاصيل التنفيذ
 ---
 
 # Spec — كلمة مرور حقيقية لدخول التاجر/الإدارة
@@ -302,4 +302,14 @@ IDOR + Zod + Rate Limiting، ويوم جلسات `ADR-012`: جدول جديد + 
 
 ## Status
 
-`DRAFT` — بانتظار موافقتك الصريحة على هذا الـSpec (بما فيه تصحيح §0) قبل أي سطر كود.
+`IMPLEMENTED` (كود + 161/161 اختبار وحدة، `arch:check` نظيف) — `PENDING` حتى:
+1. تشغيل `scripts/password-auth-schema.sql` يدوياً عبر Supabase SQL Editor (dev) — الوكيل بلا
+   صلاحية تنفيذ DDL آلية، نفس قيد كل Migration سابق في هذا المشروع.
+2. تشغيل `scripts/backfill-existing-owner-passwords.ts` فوراً بعده (وإلا يُقفَل على الحسابين
+   التجريبيين — `password_hash is null` = رفض دخول دائم).
+3. نجاح اختبارات التكامل الحية الثلاثة المُحدَّثة (فشلت محلياً حالياً بـ"column does not exist"،
+   متوقَّع تماماً قبل الخطوة 1).
+4. Guardian Review `DEEP` مستقل فعلي (`AGENTS.md §17`) — لم يبدأ بعد.
+
+راجع `docs/DECISIONS.md → ADR-026` للقرار والتصميم النهائي الكامل (طابق §0-§11 أعلاه حرفياً، بلا
+انحراف عن الـSpec المعتمد).

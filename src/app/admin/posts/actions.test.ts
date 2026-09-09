@@ -37,6 +37,7 @@ const adminSession: Session = {
   tenantId: null,
   role: 'platform_admin',
   expiresAt: new Date(Date.now() + 1000 * 60).toISOString(),
+  mustChangePassword: false,
 };
 
 function baseInput(overrides: Partial<PostFormInput> = {}): PostFormInput {

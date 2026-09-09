@@ -1,10 +1,10 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.25
+version: 1.26
 authority: Security & Correctness (قسم DECISION DEBT REGISTRY) + Engineering Decision Log (باقي الملف)
-last_updated: 2026-09-08
-last_verified: 2026-09-08
+last_updated: 2026-09-09
+last_verified: 2026-09-09
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف
 ---
@@ -996,6 +996,84 @@ Related Documents: docs/DECISIONS.md → CONFLICT-005 (SUPERSEDED)، ADR-007 (ن
 
 ---
 
+## ADR-026
+```
+Title: كلمة مرور حقيقية لدخول التاجر/الإدارة — يُغلق DD-001/INV-AUTHN-001 (BLOCKER)، scrypt بلا
+          تبعية جديدة، password_hash على users لا merchants
+Status: IMPLEMENTED (كود + اختبارات وحدة) — PENDING (SQL/Backfill يدويان + Guardian Review DEEP)
+Date: 2026-09-09 (URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH)
+Decision: (أ) عمودان جديدان على `users` (`password_hash text` nullable، `must_change_password
+          boolean not null default false`)، وعمود واحد على `sessions` (`must_change_password`، نسخة
+          وقت إنشاء الجلسة، لا مصدر حقيقة). **تصحيح صريح على نص موجّه المهمة** الذي اقترح
+          `merchants.password_hash` — كلا دخول التاجر (`ADR-012`) والإدارة (`ADR-013`) يبحثان
+          بالهاتف في `users`، لا `merchants.phone`؛ `merchants` كيان تجاري بلا هوية دخول خاصة به.
+          هذا يعني أيضاً: **آلية واحدة مشتركة تماماً** (`KhalilService.verifyPasswordForPhone`)
+          تخدم كلا التدفقين، لا تطبيقان منفصلان.
+          (ب) تجزئة عبر `node:crypto` المدمجة (`scrypt` + ملح 16 بايت عشوائي لكل كلمة مرور +
+          `timingSafeEqual` للمقارنة) — `src/core/kernel/security/password.ts`، **صفر تبعية npm
+          جديدة** (`bcrypt` كان سيحتاج تجميعاً أصلياً، مشاكل معروفة على Windows).
+          (ج) تدفق دخول موحَّد: هاتف + كلمة مرور، رسالة رفض موحَّدة واحدة للعميل ("رقم الهاتف أو
+          كلمة المرور غير صحيحة" — لا تمييز عن الرسالة القديمة "غير مسجَّل كتاجر" التي كانت تُسرِّب
+          ضمنياً "الرقم مسجَّل لكن ليس تاجراً"؛ تحسين أمني حقيقي، يمنع Enumeration Attack) — مع
+          تدقيق داخلي دقيق (`PasswordVerificationResult` تمييزية: `not_found`/`no_password_set`/
+          `wrong_password`) لا يُسرَّب للعميل أبداً، فقط يُستهلَك داخل `merchant.service.ts`/
+          `admin.service.ts` لتسجيل `audit_log` دقيق.
+          (د) كلمة مرور مؤقتة تُجبِر تغييرها عند أول دخول: `KhalilService.setTemporaryPassword`
+          (يرفع `must_change_password=true`) مقابل `setNewPassword` (المستخدم يغيّرها طواعية من
+          جلسته، يُسقِط العلم) — دالتان منفصلتان بنيّة مختلفة، لا دالة واحدة بمعامل شرطي مربِك.
+          صفحتا `/merchant/change-password`/`/admin/change-password` (مكوّن مشترك
+          `ChangePasswordForm.tsx`، نمط `OrderRow.tsx` — `action` كـ prop) تُنشئان جلسة جديدة
+          (دوران Session، لا تعديل القائمة) بعد التغيير عبر `clearSessionCookie`+`createSession`
+          الموجودتين حرفياً، لا دالة repository جديدة لـ sessions. حراسة سطر واحد في
+          `merchant/orders/page.tsx`/`admin/dashboard/page.tsx` تمنع تجاوز الصفحة المحمية قبل
+          التغيير — لا Middleware مركزي جديد (خارج نطاق هذه الدفعة).
+          (ه) `scripts/create-merchant-account.ts` (دائم، لا يُحذَف) لإنشاء حساب تاجر/إدارة جديد
+          بكلمة مرور مؤقتة عشوائية (`generateTempPassword`، تستبعد محارف متشابهة بصرياً 0/O/1/l/I) —
+          تُطبَع مرة واحدة في الطرفية فقط، لا تُخزَّن نصاً صريحاً. `scripts/
+          backfill-existing-owner-passwords.ts` (مؤقت، يُحذَف بعد الاستخدام) لضبط كلمة مرور مؤقتة
+          للحسابين التجريبيين القائمين (وإلا يُقفَل عليهما فوراً — `password_hash is null` = رفض
+          دخول دائم، Fail Closed، `AGENTS.md §8`، لا قيد `not null` على DB).
+          (و) تمريرتان رقيقتان جديدتان أضيفتا لإبقاء `scripts/` خارج الوصول المباشر لطبقة
+          Repository (نفس قاعدة الاعتماد المفروضة داخل `src/` عبر dependency-cruiser، رغم أنه لا
+          يفحص `scripts/`): `KhalilService.createUser` (كانت حصراً داخل `khalil.repository.ts`)،
+          `MerchantService.register` (كانت `merchantRepository.create` بلا أي مستدعٍ فعلياً قبل
+          هذه الدفعة — قدرة ميتة أُحيِيت، لا مُكرَّرة).
+Context: طلب مؤسس مباشر عاجل (`URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH`) — إطلاق ريف المدينة
+          خلال أيام لاستقبال 70 تاجراً حقيقياً (`docs/ROADMAP.md → 🚨 أولوية عاجلة`) يجعل
+          `DD-001`/`INV-AUTHN-001` (دخول بلا كلمة مرور، مقبول صراحة "لتاجر/إدارة تجريبيَين واحدَين
+          فقط" منذ `ADR-012`/`ADR-013`) غير مقبول إطلاقاً بهذا الحجم. Spec-first إلزامي (Guardian
+          Matrix، Authentication = `DEEP`) — `specs/identity/PASSWORD_AUTH_SPEC.md` عُرض واعتُمد
+          صراحة (بما في ذلك تصحيح §0 أعلاه) قبل أي سطر كود.
+Alternatives: (أ) OTP أو مزوّد SMS خارجي — مرفوض صراحة بالموجّه ("لا نظام OTP معقّد يؤخر الإطلاق").
+          (ب) Supabase Auth كاملة — نطاق أكبر بكثير، قرار منفصل موثَّق مسبقاً كـ`PROPOSED`
+          (`docs/SECURITY.md §1`). (ج) `bcrypt`/`bcryptjs` — مرفوضة: تبعية جديدة، `bcrypt` تحديداً
+          يحتاج تجميعاً أصلياً بمشاكل معروفة على Windows (بيئة التطوير الفعلية). (د) "نسيت كلمة
+          المرور" ذاتي الخدمة — مرفوض لهذه الدفعة (يحتاج قناة تحقق ثانية غير موجودة، خارج النطاق
+          المُعلَن)؛ البديل المؤقت المعتمد: إعادة تعيين يدوية من المؤسس عبر نفس السكربتين (قرار مؤسس
+          صريح على سؤال مفتوح 1 من الـSpec).
+Consequences: **لا يُعتبَر `DD-001` مُغلقاً بعد** — يبقى `OPEN` حتى: (1) تشغيل
+          `scripts/password-auth-schema.sql` يدوياً عبر Supabase SQL Editor (الوكيل بلا صلاحية
+          تنفيذ DDL آلية، نفس قيد كل Migration سابق في هذا المشروع)، (2) تشغيل
+          `scripts/backfill-existing-owner-passwords.ts` فوراً بعده، (3) التحقق الحي الكامل
+          (اختبارات التكامل الثلاثة المُحدَّثة — `merchant.integration.test.ts`،
+          `admin.integration.test.ts`، `reef-city-journey.integration.test.ts` — لم تُشغَّل
+          بنجاح بعد، فشلت محلياً بخطأ "column does not exist" قبل تطبيق SQL، كما هو متوقَّع)، و(4)
+          Guardian Review `DEEP` مستقل فعلي (`AGENTS.md §17`) — لم يبدأ بعد. الاختبارات الوحدوية
+          (161/161) وفحص المعمارية (`arch:check`) نظيفان بالكامل ومُتحقَّق منهما فعلياً في هذه
+          الجلسة. رسالة خطأ دخول التاجر/الإدارة تغيَّرت (سلوك ملحوظ، `AGENTS.md §13`) — من "رقم
+          الهاتف غير مسجَّل كتاجر، أو الحساب غير مفعَّل" إلى "رقم الهاتف أو كلمة المرور غير صحيحة"،
+          مُعلَن صراحة هنا. `AuditAction` union أُضيف إليه `'auth.password_changed'` (إضافي، لا كسر).
+Related Documents: specs/identity/PASSWORD_AUTH_SPEC.md (التصميم الكامل)، DD-001 (يبقى OPEN)،
+          INV-AUTHN-001 (INVARIANTS.md، انتقل WAIVED→PARTIAL)، ADR-012، ADR-013، ADR-014،
+          docs/DATABASE.md (users/sessions)، docs/SECURITY.md §1،
+          src/core/kernel/security/password.ts، src/core/kernel/khalil/{service.ts,
+          khalil.repository.ts,types.ts}، src/core/modules/{merchant,admin}/*.service.ts،
+          scripts/{password-auth-schema.sql,create-merchant-account.ts,
+          backfill-existing-owner-passwords.ts}
+```
+
+---
+
 ## سجل التعارضات (CONFLICT LOG)
 
 ### CONFLICT-001
@@ -1193,8 +1271,14 @@ Owner: Founder
 Created: 2026-09-05
 Review by: قبل إنشاء أي حساب merchant_owner أو platform_admin ثانٍ حقيقي (شرط، لا تاريخ ثابت)
 Blocking: YES — يمنع توسّع آمن لعدد التجار/حسابات الإدارة
-Status: OPEN
-Related: INV-AUTHN-001 (INVARIANTS.md)، ADR-012، ADR-013، docs/SECURITY.md OPEN_QUESTIONS بند 7
+Status: OPEN — تحديث 2026-09-09: القرار حُسم (كلمة مرور، لا OTP/Supabase Auth كاملة — راجع ADR-026)
+          والكود/الاختبارات الوحدوية مكتملان (161/161)، لكن **لا يُغلَق بعد** حتى: (1) تشغيل
+          scripts/password-auth-schema.sql يدوياً (ALTER TABLE — الوكيل بلا صلاحية DDL آلية)، (2)
+          scripts/backfill-existing-owner-passwords.ts فوراً بعده، (3) نجاح اختبارات التكامل الحية
+          (فشلت محلياً حالياً بـ"column does not exist"، متوقَّع قبل تطبيق SQL)، و(4) Guardian
+          Review DEEP مستقل فعلي — لم يبدأ بعد. لا تسجيل تاجر ثانٍ حقيقي قبل اكتمال الأربعة.
+Related: INV-AUTHN-001 (INVARIANTS.md، انتقل WAIVED→PARTIAL)، ADR-012، ADR-013، ADR-026 (القرار
+          والتصميم الكامل)، docs/SECURITY.md §1، specs/identity/PASSWORD_AUTH_SPEC.md
 ```
 
 ### DD-002

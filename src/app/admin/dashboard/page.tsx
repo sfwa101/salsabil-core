@@ -13,6 +13,10 @@ export default async function AdminDashboardPage() {
   if (!session) {
     redirect('/admin/login');
   }
+  // URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH — نفس حراسة merchant/orders/page.tsx
+  if (session.mustChangePassword) {
+    redirect('/admin/change-password');
+  }
 
   const [merchants, orders, history] = await Promise.all([
     adminService.listMerchants(),

@@ -30,6 +30,7 @@ function makeQueryBuilder(terminal: { data: unknown; error: unknown }) {
     select: ReturnType<typeof vi.fn>;
     eq: ReturnType<typeof vi.fn>;
     insert: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
     maybeSingle: ReturnType<typeof vi.fn>;
     single: ReturnType<typeof vi.fn>;
     then: (onFulfilled: (value: typeof terminal) => unknown) => unknown;
@@ -37,12 +38,24 @@ function makeQueryBuilder(terminal: { data: unknown; error: unknown }) {
     select: vi.fn(() => builder),
     eq: vi.fn(() => builder),
     insert: vi.fn(() => builder),
+    update: vi.fn(() => builder),
     maybeSingle: vi.fn(async () => terminal),
     single: vi.fn(async () => terminal),
     then: (onFulfilled) => Promise.resolve(terminal).then(onFulfilled),
   };
   return builder;
 }
+
+const userRowWithAuth = {
+  id: 'user-1',
+  full_name: 'تاجر',
+  phone: '01000000000',
+  email: null,
+  role: 'merchant_owner' as const,
+  created_at: '2026-09-01T00:00:00.000Z',
+  password_hash: 'salt-hex:hash-hex',
+  must_change_password: true,
+};
 
 const worldRow = {
   id: 'world-1',
@@ -174,5 +187,88 @@ describe('KhalilRepository.createPersona', () => {
     vi.mocked(supabaseAdmin.from).mockReturnValue(builder as never);
 
     await expect(khalilRepository.createPersona({ userId: 'user-1', worldId: 'world-1', isDefault: true })).rejects.toMatchObject({ code: '23505' });
+  });
+});
+
+// URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH
+describe('KhalilRepository.findAuthByPhone', () => {
+  it('يعيد null إن لم يوجد مستخدم بهذا الهاتف', async () => {
+    const builder = makeQueryBuilder({ data: null, error: null });
+    vi.mocked(supabaseAdmin.from).mockReturnValue(builder as never);
+
+    const result = await khalilRepository.findAuthByPhone('01099999999');
+
+    expect(result).toBeNull();
+    expect(supabaseAdmin.from).toHaveBeenCalledWith('users');
+  });
+
+  it('يعيد user (camelCase، بلا حقلَي التجزئة) + passwordHash/mustChangePassword خام منفصلَين', async () => {
+    const builder = makeQueryBuilder({ data: userRowWithAuth, error: null });
+    vi.mocked(supabaseAdmin.from).mockReturnValue(builder as never);
+
+    const result = await khalilRepository.findAuthByPhone('01000000000');
+
+    expect(result).toEqual({
+      user: {
+        id: 'user-1',
+        fullName: 'تاجر',
+        phone: '01000000000',
+        email: undefined,
+        role: 'merchant_owner',
+        createdAt: '2026-09-01T00:00:00.000Z',
+      },
+      passwordHash: 'salt-hex:hash-hex',
+      mustChangePassword: true,
+    });
+    // password_hash/must_change_password لا تظهران على user نفسه — Zero Trust على مستوى النوع
+    expect(result!.user).not.toHaveProperty('passwordHash');
+    expect(result!.user).not.toHaveProperty('password_hash');
+  });
+
+  it('passwordHash يعيد null صراحة إن لم تُضبَط كلمة مرور بعد (حساب لم يُهيَّأ)', async () => {
+    const builder = makeQueryBuilder({ data: { ...userRowWithAuth, password_hash: null, must_change_password: false }, error: null });
+    vi.mocked(supabaseAdmin.from).mockReturnValue(builder as never);
+
+    const result = await khalilRepository.findAuthByPhone('01000000000');
+
+    expect(result!.passwordHash).toBeNull();
+  });
+
+  it('يرمي الخطأ كما هو عند فشل الاستعلام', async () => {
+    const dbError = new Error('connection error');
+    const builder = makeQueryBuilder({ data: null, error: dbError });
+    vi.mocked(supabaseAdmin.from).mockReturnValue(builder as never);
+
+    await expect(khalilRepository.findAuthByPhone('01000000000')).rejects.toThrow('connection error');
+  });
+});
+
+describe('KhalilRepository.setPassword', () => {
+  it('يحدّث password_hash ويُسقِط must_change_password=false افتراضياً إن لم يُمرَّر الوسيط الثالث', async () => {
+    const builder = makeQueryBuilder({ data: null, error: null });
+    vi.mocked(supabaseAdmin.from).mockReturnValue(builder as never);
+
+    await khalilRepository.setPassword('user-1', 'new-salt:new-hash');
+
+    expect(supabaseAdmin.from).toHaveBeenCalledWith('users');
+    expect(builder.update).toHaveBeenCalledWith({ password_hash: 'new-salt:new-hash', must_change_password: false });
+    expect(builder.eq).toHaveBeenCalledWith('id', 'user-1');
+  });
+
+  it('يمرّر must_change_password=true صراحة عند تمريرها (كلمة مرور مؤقتة صادرة من النظام)', async () => {
+    const builder = makeQueryBuilder({ data: null, error: null });
+    vi.mocked(supabaseAdmin.from).mockReturnValue(builder as never);
+
+    await khalilRepository.setPassword('user-1', 'temp-salt:temp-hash', true);
+
+    expect(builder.update).toHaveBeenCalledWith({ password_hash: 'temp-salt:temp-hash', must_change_password: true });
+  });
+
+  it('يرمي الخطأ كما هو عند فشل التحديث', async () => {
+    const dbError = new Error('update failed');
+    const builder = makeQueryBuilder({ data: null, error: dbError });
+    vi.mocked(supabaseAdmin.from).mockReturnValue(builder as never);
+
+    await expect(khalilRepository.setPassword('user-1', 'new-hash')).rejects.toThrow('update failed');
   });
 });

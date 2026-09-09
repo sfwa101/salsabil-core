@@ -22,6 +22,7 @@ import { randomUUID } from 'node:crypto';
 import { supabase } from '../kernel/database/supabase-client';
 import { supabaseAdmin } from '../kernel/database/supabase-admin-client';
 import { khalilService } from '../kernel/khalil/service';
+import { hashPassword } from '../kernel/security/password';
 import { cartService } from '../modules/cart/cart.service';
 import { ordersService } from '../modules/orders/orders.service';
 import { merchantService } from '../modules/merchant/merchant.service';
@@ -30,6 +31,11 @@ import type { AddItemInput } from '../modules/cart/types';
 
 const TEST_ADMIN_PHONE = '01000000001';
 const TEST_PRODUCT_BASE_PRICE = 120;
+
+// URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH — كل حسابات الدخول في هذا الملف (تاجر أ/ب المُنشَآن
+// حياً هنا + حساب platform_admin التجريبي المشترك) تستخدم نفس كلمة المرور المعروفة هذه — بيانات
+// اختبار بحتة بلا قيمة أمنية حقيقية، لا سرّاً فعلياً.
+const TEST_PASSWORD = 'Test-Password-123';
 
 describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabase حقيقي)', () => {
   // تاجر أ ومنتجه — يُنشآن حياً خصيصاً لهذا الملف (راجع ملاحظة عزل الاختبارات أعلاه)
@@ -56,11 +62,25 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
     const { data: category, error: categoryError } = await supabaseAdmin.from('categories').select('id').limit(1).single();
     if (categoryError) throw categoryError;
 
+    const testPasswordHash = await hashPassword(TEST_PASSWORD);
+
+    // حساب platform_admin التجريبي المشترك (01000000001) — لا يُنشَأ هنا، لكن يجب أن يحمل كلمة
+    // المرور المعروفة أعلاه لينجح adminService.loginByPhone لاحقاً (السيناريو 7). idempotent —
+    // آمن حتى لو ضبطتها ملفات تكامل أخرى بنفس القيمة بالتوازي.
+    const adminUser = await khalilService.findUserByPhone(TEST_ADMIN_PHONE);
+    if (!adminUser) throw new Error('مدير المنصة التجريبي غير موجود في قاعدة البيانات الحقيقية');
+    await khalilService.setNewPassword(adminUser.id, TEST_PASSWORD);
+
     // تاجر أ حقيقي (مالك + صف merchants) — إدراج مباشر عبر service_role، نفس نمط إنشاء
     // حساب platform_admin التجريبي الأول يدوياً (راجع docs/DATABASE.md §3 sessions)
     const { data: userARow, error: userAError } = await supabaseAdmin
       .from('users')
-      .insert({ full_name: 'مالك تاجر أ — اختبار E2E', phone: merchantAPhone, role: 'merchant_owner' })
+      .insert({
+        full_name: 'مالك تاجر أ — اختبار E2E',
+        phone: merchantAPhone,
+        role: 'merchant_owner',
+        password_hash: testPasswordHash,
+      })
       .select('*')
       .single();
     if (userAError) throw userAError;
@@ -104,7 +124,12 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
     // تاجر ب حقيقي — نفس نمط تاجر أ أعلاه
     const { data: userBRow, error: userBError } = await supabaseAdmin
       .from('users')
-      .insert({ full_name: 'مالك تاجر ب — اختبار E2E', phone: merchantBPhone, role: 'merchant_owner' })
+      .insert({
+        full_name: 'مالك تاجر ب — اختبار E2E',
+        phone: merchantBPhone,
+        role: 'merchant_owner',
+        password_hash: testPasswordHash,
+      })
       .select('*')
       .single();
     if (userBError) throw userBError;
@@ -229,7 +254,7 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
   it('السيناريو 4 — جلسة التاجر أ الحقيقية ترى الطلب وتؤكّده', async () => {
     if (!orderId) throw new Error('الطلب من السيناريو السابق غير موجود');
 
-    const loginA = await merchantService.loginOwnerByPhone(merchantAPhone);
+    const loginA = await merchantService.loginOwnerByPhone(merchantAPhone, TEST_PASSWORD);
     expect(loginA).not.toBeNull();
     tokensToClean.push(loginA!.token);
     merchantALoginUserId = loginA!.session.userId;
@@ -253,7 +278,7 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
     async () => {
       if (!orderId) throw new Error('الطلب من السيناريو السابق غير موجود');
 
-      const loginB = await merchantService.loginOwnerByPhone(merchantBPhone);
+      const loginB = await merchantService.loginOwnerByPhone(merchantBPhone, TEST_PASSWORD);
       expect(loginB).not.toBeNull();
       tokensToClean.push(loginB!.token);
       merchantBLoginUserId = loginB!.session.userId;
@@ -332,7 +357,7 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
   it('السيناريو 7 — إشراف الإدارة: ترى الطلب عبر كل التجار، وتنفّذ التسليم النهائي بلا tenantId (تجاوز مشروع، بعكس محاولة التاجر ب)', async () => {
     if (!orderId) throw new Error('الطلب من السيناريو السابق غير موجود');
 
-    const loginAdmin = await adminService.loginByPhone(TEST_ADMIN_PHONE);
+    const loginAdmin = await adminService.loginByPhone(TEST_ADMIN_PHONE, TEST_PASSWORD);
     expect(loginAdmin).not.toBeNull();
     tokensToClean.push(loginAdmin!.token);
     adminUserId = loginAdmin!.session.userId;

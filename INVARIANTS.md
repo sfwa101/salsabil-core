@@ -552,40 +552,53 @@ Engineering
 
 ### INV-AUTHN-001
 ```
-Invariant (المطلوب مستقبلاً، غير مُطبَّق اليوم):
+Invariant:
 تسجيل دخول التاجر/الإدارة يتطلب إثبات هوية أقوى من مجرد معرفة رقم هاتف نشط (كلمة مرور/OTP/تحقق ثانٍ).
 
-الواقع الحالي (مقصود ومقبول مؤقتاً بقرار مؤسس صريح، لا سهواً):
-تسجيل الدخول بالهاتف وحده — MerchantService.loginOwnerByPhone/AdminService.loginByPhone
-(src/core/modules/merchant/merchant.service.ts، src/core/modules/admin/admin.service.ts) — أي طرف
-يعرف هاتف تاجر/إدارة نشط يستطيع انتحاله بالكامل. التخفيف الوحيد المُطبَّق: Rate Limiting (راجع
-INV-RATE-001) + سجل تدقيق لكل محاولة (audit_log: auth.login_success/auth.login_failed).
+الواقع الحالي (2026-09-09، URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH):
+تسجيل الدخول الآن يتطلب هاتف + كلمة مرور معاً — MerchantService.loginOwnerByPhone/
+AdminService.loginByPhone يستدعيان KhalilService.verifyPasswordForPhone (تجزئة scrypt +
+timingSafeEqual، src/core/kernel/security/password.ts، node:crypto مدمجة بلا تبعية جديدة). رسالة
+رفض موحَّدة واحدة للعميل (لا تمييز "هاتف خطأ" عن "كلمة مرور خطأ") مع تدقيق داخلي دقيق للسبب الحقيقي.
+كلمة مرور مؤقتة تُجبِر تغييرها عند أول دخول (users.must_change_password/sessions.must_change_password
+— يمنع الوصول لأي صفحة أخرى حتى التغيير). راجع specs/identity/PASSWORD_AUTH_SPEC.md للتصميم الكامل.
 
 Control/Implementation:
-لا يوجد Control يمنع هذا اليوم — القرار (ADR-012/ADR-013) قبِل هذا الخطر صراحة لتاجر تجريبي واحد
-وحساب platform_admin واحد فقط.
+src/core/kernel/security/password.ts (hashPassword/verifyPassword/generateTempPassword)،
+src/core/kernel/khalil/{service.ts,khalil.repository.ts} (verifyPasswordForPhone/setNewPassword/
+setTemporaryPassword/findAuthByPhone/setPassword)، src/app/{merchant,admin}/change-password/*
+(تغيير إجباري)، حراسة في src/app/merchant/orders/page.tsx وsrc/app/admin/dashboard/page.tsx.
 
 Automated Test:
-N/A — لا اختبار "يثبت وجود عامل تحقق ثانٍ" لأنه غير مبني أصلاً.
+password.test.ts (11 اختباراً، تجزئة/تحقق حقيقيان بلا تمويه)، khalil.repository.test.ts
+(findAuthByPhone/setPassword)، khalil/service.test.ts (verifyPasswordForPhone/setNewPassword/
+setTemporaryPassword/createUser)، merchant.service.test.ts/admin.service.test.ts (تدفق الدخول
+الكامل بكلمة المرور)، merchant.integration.test.ts/admin.integration.test.ts/
+reef-city-journey.integration.test.ts (محدَّثة لتستهلك كلمة مرور حقيقية).
 
 Guardian:
-Required (DEEP) — لأي عمل مستقبلي على هذا الملف تحديداً (بناء كلمة مرور/OTP/Supabase Auth).
+Required (DEEP) — **لم يُنفَّذ بعد وقت هذا التحديث.** التنفيذ + الاختبارات الوحدوية مكتملان
+ومُتحقَّق منهما (161/161)، لكن الاختبارات التكاملية (ضد Supabase حياً) **لم تُشغَّل بنجاح بعد** —
+تتطلب تشغيل scripts/password-auth-schema.sql (ALTER TABLE يدوي، لا صلاحية DDL آلية لدى الوكيل) ثم
+scripts/backfill-existing-owner-passwords.ts أولاً. لا يُعتبَر هذا البند مُغلَقاً (لا ENFORCED) قبل:
+(أ) اكتمال هذين الخطوتين والتحقق الحي، و(ب) Guardian Review DEEP مستقل فعلي.
 
 Evidence:
-- Type: Code Inspection (قراءة الكود المباشرة تؤكد غياب أي تحقق ثانٍ)
-- Source: merchant.service.ts (loginOwnerByPhone)، admin.service.ts (loginByPhone)؛ موثَّق صراحة في
-  ADR-012، ADR-013، docs/SECURITY.md OPEN_QUESTIONS بند 7
-- Executed: 2026-09-05 (قراءة توثيق + كود، هذه الجلسة)
-- Scope: الخطر مُثبَت وموثَّق بوضوح تام منذ ADR-012 — لا حاجة لدليل إضافي لإثبات غيابه، الغياب نفسه
-  هو الحقيقة الموثَّقة.
-- Result: N/A
+- Type: Automated Test (وحدة) + Code Inspection
+- Source: الملفات أعلاه
+- Executed: 2026-09-09 (هذه الجلسة) — وحدة فقط (161/161 نجحت، `npm run arch:check` نظيف).
+  تكامل: لم يُنفَّذ بنجاح بعد (يتطلب SQL يدوي أولاً، راجع Guardian أعلاه).
+- Scope: منطق التحقق/التجزئة/تدفق الدخول مُثبَت وحدياً بالكامل؛ السلوك الحي ضد قاعدة بيانات
+  حقيقية بعد تطبيق Schema الجديد **غير مُثبَت بعد**.
+- Result: PASS (وحدة) — PENDING (تكامل + Guardian)
 
 Status:
-WAIVED — خطر معروف، موثَّق، مقبول صراحة من المؤسس **لمرحلة تاجر/إدارة تجريبيَين واحدَين فقط**، بشرط
-صريح: يُغلَق قبل تسجيل تاجر ثانٍ حقيقي أو حساب platform_admin ثانٍ. راجع DD-001 في docs/DECISIONS.md.
+PARTIAL — IMPLEMENTED PENDING VERIFICATION. الكود/الاختبارات الوحدوية مكتملة؛ لا يُرفَع إلى
+ENFORCED قبل تشغيل SQL/Backfill والتحقق الحي + Guardian Review DEEP. راجع DD-001 في
+docs/DECISIONS.md (يبقى OPEN حتى اكتمال الشرطين).
 
 Owner:
-Founder (قبول الخطر قرار مؤسس، لا هندسي)
+Founder (تشغيل SQL يدوي) + Guardian مستقل (المراجعة) + Claude (نفَّذ الكود/الاختبارات الوحدوية)
 ```
 
 ---
@@ -754,10 +767,14 @@ staging.reefam.com** — "ملاحظة دقة صريحة" في ROADMAP.md تقر
 | الحالة | العدد | المعرِّفات |
 |---|---|---|
 | ENFORCED | 8 | INV-ORD-001, INV-ORD-003, INV-INV-001, INV-RLS-001, INV-ARCH-001, INV-SEC-002, INV-AUTHZ-001, INV-DATA-001 |
-| PARTIAL | 4 | INV-TEN-001, INV-ORD-002, INV-SEC-001, INV-RATE-001 |
+| PARTIAL | 5 | INV-TEN-001, INV-ORD-002, INV-SEC-001, INV-RATE-001, INV-AUTHN-001 |
 | UNKNOWN | 1 | INV-INV-002 |
 | VIOLATED (جزئياً) | 1 | INV-AUDIT-001 |
-| WAIVED | 1 | INV-AUTHN-001 |
+
+> **تحديث 2026-09-09:** INV-AUTHN-001 انتقل من WAIVED إلى PARTIAL —
+> URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH نفَّذ كلمة مرور حقيقية (لم يعد الخطر مقبولاً بلا
+> تخفيف)، لكنه لم يصل ENFORCED بعد (SQL/Backfill يدويان لم يُشغَّلا، Guardian DEEP لم يبدأ). راجع
+> الإدخال الكامل أعلاه.
 
 **15 إدخالاً إجمالاً.** لا ادعاء بأن هذا شامل لكل خاصية في المشروع — هذه أول دفعة مُستخرَجة من نطاق
 القراءة المُصرَّح به لهذه المهمة (orders, inventory, khalil, RLS, architecture boundaries, security

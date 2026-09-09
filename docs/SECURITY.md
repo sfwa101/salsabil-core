@@ -1,8 +1,8 @@
 ---
 title: مرجع الأمن
 status: ACTIVE
-version: 1.6
-last_updated: 2026-09-06
+version: 1.7
+last_updated: 2026-09-09
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف (التفصيل)، SALSABIL_CONSTITUTION.md §4, §26 (المبدأ)، INVARIANTS.md (الحالة والدليل الفعلي القابل للتحقق لكل ثابت أمني)
 ---
@@ -92,17 +92,22 @@ External Services (Supabase Storage، مستقبلاً: بوابات دفع/تو
 ## 1. Authentication — Evidence: `PARTIALLY_IMPLEMENTED`
 
 المزوَّد النهائي المخطَّط: Supabase Auth (`PROPOSED`، غير مفعَّل بعد — لا صفحة تسجيل دخول بمعنى
-Auth حقيقية). **الموجود فعلياً اليوم:** تسجيل دخول تاجر/إدارة بالهاتف وحده بلا كلمة مرور
-(`MerchantService.loginOwnerByPhone`/`AdminService.loginByPhone`)، عبر جلسة مخصَّصة (`sessions`،
-`ADR-012`/`ADR-013`) لا Supabase Auth.
+Auth حقيقية). **الموجود فعلياً اليوم (مُحدَّث 2026-09-09):** تسجيل دخول تاجر/إدارة بالهاتف + كلمة
+مرور معاً (`MerchantService.loginOwnerByPhone`/`AdminService.loginByPhone` →
+`KhalilService.verifyPasswordForPhone`، تجزئة `scrypt` + `timingSafeEqual` عبر `node:crypto`
+المدمجة بلا تبعية جديدة — `src/core/kernel/security/password.ts`)، عبر جلسة مخصَّصة (`sessions`،
+`ADR-012`/`ADR-013`) لا Supabase Auth. كلمة مرور مؤقتة تُجبِر تغييرها عند أول دخول
+(`users.must_change_password`/`sessions.must_change_password`). راجع
+`specs/identity/PASSWORD_AUTH_SPEC.md` للتصميم الكامل.
 
-> **🚫 BLOCKER صريح — خطورة `HIGH` (لا `OPEN_QUESTION` غامضة):** تسجيل الدخول بلا كلمة مرور
-> (`INV-AUTHN-001` في `INVARIANTS.md`، حالته `WAIVED`) **مقبول حصراً** لتاجر/إدارة تجريبيَّين
-> واحدَين فقط، بشرط صريح موثَّق مسبقاً (`ADR-012`, `ADR-013`): **يجب إغلاقه (كلمة مرور/OTP/Supabase
-> Auth كاملة) قبل تسجيل أي تاجر ثانٍ حقيقي أو حساب `platform_admin` ثانٍ.** بلا هذا الإغلاق، أي
-> طرف يعرف رقم هاتف تاجر/إدارة نشط يستطيع انتحاله بالكامل (تغيير حالة طلبات، تفعيل/تعطيل تجار — لا
-> قراءة فقط). راجع `DD-001` في `docs/DECISIONS.md` (Decision Debt، `Blocking: YES`) — هذا البند
-> **يمنع** توسّع آمن لعدد التجار/حسابات الإدارة، لا مجرد سؤال معلَّق بلا أثر عملي.
+> **⚠️ BLOCKER سابق — الآن `PARTIAL` (لا `RESOLVED` بعد):** BLOCKER دخول بلا كلمة مرور
+> (`INV-AUTHN-001` في `INVARIANTS.md`، كان `WAIVED`، الآن `PARTIAL`) — **الكود منفَّذ ومختبَر
+> وحدياً بالكامل (161/161)**، لكن **لم يُغلَق فعلياً بعد** لسببين: (أ) `scripts/password-auth-schema.sql`
+> (`ALTER TABLE`) يحتاج تشغيلاً يدوياً عبر Supabase SQL Editor — لا صلاحية تنفيذ DDL آلية لدى
+> الوكيل، نفس قيد كل Migration سابق في هذا المشروع (`OPEN_QUESTIONS` بند 8 أدناه) — ثم
+> `scripts/backfill-existing-owner-passwords.ts` للحسابين التجريبيين القائمين، و(ب) **Guardian
+> Review `DEEP` لم يبدأ بعد** (إلزامي، `AGENTS.md §17` — Authentication أعلى حساسية). راجع `DD-001`
+> في `docs/DECISIONS.md` (يبقى `OPEN` حتى اكتمال كلا الشرطين) وADR الجديد للتفصيل الكامل.
 
 ## 2. Authorization / RBAC — Evidence: راجع `INV-AUTHZ-001` (`INVARIANTS.md`) للدليل الحالي
 
@@ -232,6 +237,9 @@ OPEN_QUESTIONS أدناه.
 4. Soft Delete مقابل Hard Delete — غير محسوم (`DATABASE.md §7`)
 5. BR-016 (الحد الأدنى لقيمة الطلب) — لا رقم معتمد (`docs/BUSINESS_RULES.md`)
 6. متى تُبنى `sessions`/تسجيل الدخول الحقيقي — يبقى شرطاً لتفعيل §3 أعلاه فعلياً لا منطقياً فقط
-7. **جديد (اليوم 12):** استبدال الدخول بلا كلمة مرور (تاجر وإدارة) بكلمة مرور/OTP/Supabase Auth كاملة — خارج نطاق اليوم صراحة (نطاق أكبر بكثير من يوم أمان واحد)، تخفيف الضرر المؤقت الوحيد المُطبَّق اليوم هو تحديد المعدل + سجل تدقيق لكل محاولة (§9/§12). يبقى قراراً مؤسس منفصل مطلوب قبل أي عميل حقيقي ثانٍ.
+7. ~~استبدال الدخول بلا كلمة مرور (تاجر وإدارة) بكلمة مرور/OTP/Supabase Auth كاملة~~ **مُغلَق
+   جزئياً (2026-09-09، `URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH`):** كلمة مرور (لا OTP/Supabase
+   Auth كاملة، بقرار مؤسس صريح) مُنفَّذة ومختبَرة وحدياً بالكامل — **لم تُغلَق فعلياً بعد** حتى
+   تشغيل SQL/Backfill اليدويين + Guardian Review `DEEP`. راجع §1 أعلاه وDD-001.
 8. **جديد (اليوم 12):** تأسيس نظام Migrations رسمي (`docs/DATABASE.md §8`) — لا يزال كل SQL يُنفَّذ يدوياً، بما فيها `audit_log` الجديد. مرشَّح طبيعي لليوم 13 (التجهيز للإنتاج).
 9. **جديد (الأيام 14-16، `ADR-016`):** لا تحديد معدل ولا انتهاء صلاحية على قراءة `/order/[id]` (راجع §16 أعلاه) — أي حامل لرابط تتبّع طلب يستطيع الاستعلام عنه بلا حد. مقبول مؤقتاً لحجم البيانات التجريبي الحالي، يجب إعادة تقييمه قبل إنتاج حقيقي بحجم بيانات أكبر.

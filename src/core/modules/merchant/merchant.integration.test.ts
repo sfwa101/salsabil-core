@@ -3,15 +3,24 @@
 // الحية القائمة فعلاً (تاجر تجريبي، هاتف 01000000000) بدل إنشاء بيانات جديدة — نفس الحساب
 // الذي تعتمد عليه orders.integration.test.ts (منتج "دجاجة كاملة طازجة"). ينظّف كل جلسة أنشأها.
 
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { merchantService } from './merchant.service';
 import { khalilService } from '../../kernel/khalil/service';
 
 const TEST_MERCHANT_OWNER_PHONE = '01000000000';
+// URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH — كلمة مرور معروفة تُضبَط idempotently في beforeAll؛
+// بيانات اختبار بحتة بلا قيمة أمنية حقيقية.
+const TEST_PASSWORD = 'Test-Password-123';
 
 describe('Merchant login integration (Supabase حقيقي، اليوم 10)', () => {
   const tokensToClean: string[] = [];
+
+  beforeAll(async () => {
+    const owner = await khalilService.findUserByPhone(TEST_MERCHANT_OWNER_PHONE);
+    if (!owner) throw new Error(`حساب اختبار مشترك غير موجود: ${TEST_MERCHANT_OWNER_PHONE}`);
+    await khalilService.setNewPassword(owner.id, TEST_PASSWORD);
+  });
 
   afterAll(async () => {
     for (const token of tokensToClean) {
@@ -20,7 +29,7 @@ describe('Merchant login integration (Supabase حقيقي، اليوم 10)', () 
   });
 
   it('ينجح: هاتف تاجر حقيقي نشط → token وجلسة صحيحة (tenantId يطابق التاجر الفعلي)', async () => {
-    const result = await merchantService.loginOwnerByPhone(TEST_MERCHANT_OWNER_PHONE);
+    const result = await merchantService.loginOwnerByPhone(TEST_MERCHANT_OWNER_PHONE, TEST_PASSWORD);
     expect(result).not.toBeNull();
     tokensToClean.push(result!.token);
 
@@ -29,7 +38,7 @@ describe('Merchant login integration (Supabase حقيقي، اليوم 10)', () 
   });
 
   it('الجلسة المُنشَأة تُقرأ حياً عبر validateSessionToken بنفس البيانات', async () => {
-    const result = await merchantService.loginOwnerByPhone(TEST_MERCHANT_OWNER_PHONE);
+    const result = await merchantService.loginOwnerByPhone(TEST_MERCHANT_OWNER_PHONE, TEST_PASSWORD);
     tokensToClean.push(result!.token);
 
     const fetched = await khalilService.validateSessionToken(result!.token);
@@ -38,7 +47,7 @@ describe('Merchant login integration (Supabase حقيقي، اليوم 10)', () 
   });
 
   it('destroySession يُبطل الجلسة فعلياً — استعلام لاحق بنفس الرمز يعيد null', async () => {
-    const result = await merchantService.loginOwnerByPhone(TEST_MERCHANT_OWNER_PHONE);
+    const result = await merchantService.loginOwnerByPhone(TEST_MERCHANT_OWNER_PHONE, TEST_PASSWORD);
     await khalilService.destroySession(result!.token);
 
     const fetched = await khalilService.validateSessionToken(result!.token);
@@ -48,7 +57,12 @@ describe('Merchant login integration (Supabase حقيقي، اليوم 10)', () 
 
   it('يرفض (null) رقم هاتف غير مسجَّل إطلاقاً في قاعدة البيانات الحقيقية', async () => {
     const randomPhone = `0199${Math.floor(1000000 + Math.random() * 8999999)}`;
-    const result = await merchantService.loginOwnerByPhone(randomPhone);
+    const result = await merchantService.loginOwnerByPhone(randomPhone, TEST_PASSWORD);
+    expect(result).toBeNull();
+  });
+
+  it('يرفض (null) كلمة مرور خاطئة لتاجر حقيقي ونشط', async () => {
+    const result = await merchantService.loginOwnerByPhone(TEST_MERCHANT_OWNER_PHONE, 'wrong-password-123');
     expect(result).toBeNull();
   });
 

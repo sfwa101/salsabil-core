@@ -7,6 +7,7 @@ import { loginAdminAction } from '@/app/admin/login/actions';
 export function AdminLoginForm() {
   const router = useRouter();
   const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
 
@@ -15,14 +16,14 @@ export function AdminLoginForm() {
     setStatus('submitting');
     setError(null);
 
-    const result = await loginAdminAction(phone);
+    const result = await loginAdminAction(phone, password);
 
     if ('error' in result) {
       setStatus('error');
       setError(result.error);
       return;
     }
-    router.push('/admin/dashboard');
+    router.push(result.mustChangePassword ? '/admin/change-password' : '/admin/dashboard');
     router.refresh();
   }
 
@@ -35,6 +36,17 @@ export function AdminLoginForm() {
           type="tel"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
+          className="rounded-xl border border-border bg-card p-3 text-foreground"
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium text-muted-foreground">كلمة المرور</label>
+        <input
+          required
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
           className="rounded-xl border border-border bg-card p-3 text-foreground"
         />
       </div>

@@ -1,0 +1,39 @@
+// src/core/kernel/security/password.ts
+// تجزئة كلمة المرور — URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH (إغلاق DD-001، Guardian DEEP إلزامي)
+// راجع specs/identity/PASSWORD_AUTH_SPEC.md §7 للتبرير الكامل.
+//
+// node:crypto المدمجة (scrypt) — بلا أي تبعية npm جديدة. بديل موصى به رسمياً في توثيق Node.js نفسه
+// لتجزئة كلمات المرور؛ bcrypt كان سيحتاج تجميعاً أصلياً (native bindings) بمشاكل معروفة على Windows
+// (بيئة التطوير الفعلية لهذا المشروع). timingSafeEqual يمنع هجوم توقيت (Timing Attack) عند المقارنة.
+
+import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
+
+const scryptAsync = promisify(scrypt);
+const KEY_LENGTH = 64;
+
+/** يُنتج سلسلة "ملح:تجزئة" (hex كلاهما) — تُخزَّن كاملة في users.password_hash عمود واحد. */
+export async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16).toString('hex');
+  const derivedKey = (await scryptAsync(password, salt, KEY_LENGTH)) as Buffer;
+  return `${salt}:${derivedKey.toString('hex')}`;
+}
+
+/** يقارن كلمة مرور مُدخَلة بتجزئة مخزَّنة — timingSafeEqual لمقاومة هجوم التوقيت. */
+export async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
+  const [salt, hashHex] = storedHash.split(':');
+  if (!salt || !hashHex) return false;
+  const derivedKey = (await scryptAsync(password, salt, KEY_LENGTH)) as Buffer;
+  const storedBuffer = Buffer.from(hashHex, 'hex');
+  return derivedKey.length === storedBuffer.length && timingSafeEqual(derivedKey, storedBuffer);
+}
+
+// بلا 0/O و1/l/I (تشابه بصري) — أسهل إملاءً عبر مكالمة/واتساب صوتي عند تبليغ تاجر بكلمة مرور مؤقتة
+const TEMP_PASSWORD_CHARSET = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+const TEMP_PASSWORD_LENGTH = 10;
+
+/** كلمة مرور مؤقتة عشوائية آمنة (crypto.randomBytes، لا Math.random) — للحسابات الجديدة/Backfill. */
+export function generateTempPassword(): string {
+  const bytes = randomBytes(TEMP_PASSWORD_LENGTH);
+  return Array.from(bytes, (b) => TEMP_PASSWORD_CHARSET[b % TEMP_PASSWORD_CHARSET.length]).join('');
+}

@@ -14,6 +14,7 @@ export type AuditAction =
   | 'merchant.deactivated'
   | 'auth.login_success'
   | 'auth.login_failed'
+  | 'auth.password_changed'
   | 'inventory.release_failed';
 
 export interface AuditLogEntry {

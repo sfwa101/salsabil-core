@@ -17,6 +17,10 @@ export interface Session {
   tenantId: string | null; // null للعملاء العاديين، موجود للتجار
   role: UserRole;
   expiresAt: string;
+  // URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH — نسخة "يجب تغيير كلمة المرور" وقت إنشاء الجلسة
+  // (لا تُقرأ من users في كل طلب لاحق). المصدر الحقيقي يبقى users.must_change_password —
+  // راجع specs/identity/PASSWORD_AUTH_SPEC.md §0/§5.
+  mustChangePassword: boolean;
 }
 
 export interface Tenant {

@@ -2,6 +2,7 @@
 // اختبارات وحدة — تُموّه khalilRepository فقط؛ منطق khalil.service.ts نفسه حقيقي
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { hashPassword } from '../security/password';
 import type { Session, User, World, UserPersona } from './types';
 
 const user: User = { id: 'user-1', fullName: 'تاجر', phone: '01000000000', role: 'merchant_owner', createdAt: new Date().toISOString() };
@@ -17,6 +18,7 @@ const validSession: Session = {
   tenantId: 'merchant-1',
   role: 'merchant_owner',
   expiresAt: new Date(Date.now() + 60_000).toISOString(),
+  mustChangePassword: false,
 };
 
 const expiredSession: Session = {
@@ -35,6 +37,8 @@ vi.mock('./khalil.repository', () => ({
     findPersonaByUserAndWorld: vi.fn(),
     createPersona: vi.fn(),
     listActiveWorlds: vi.fn(),
+    findAuthByPhone: vi.fn(),
+    setPassword: vi.fn(),
   },
 }));
 
@@ -109,7 +113,7 @@ describe('KhalilService.createSession / destroySession', () => {
 
 describe('KhalilService.canAccessTenant', () => {
   it('يسمح لـ platform_admin بلا قيد', () => {
-    const adminSession: Session = { userId: 'admin-1', tenantId: null, role: 'platform_admin', expiresAt: validSession.expiresAt };
+    const adminSession: Session = { userId: 'admin-1', tenantId: null, role: 'platform_admin', expiresAt: validSession.expiresAt, mustChangePassword: false };
     expect(khalilService.canAccessTenant(adminSession, 'any-tenant')).toBe(true);
   });
 
@@ -191,5 +195,78 @@ describe('KhalilService.listActiveWorlds', () => {
 
     expect(khalilRepository.listActiveWorlds).toHaveBeenCalledOnce();
     expect(result).toEqual([individualsWorld]);
+  });
+});
+
+// URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH — password.ts (hashPassword/verifyPassword) حقيقي
+// هنا، لا مموَّه — يثبت التكامل الفعلي بين الطبقتين، لا فقط أن الاستدعاء تم.
+describe('KhalilService.verifyPasswordForPhone', () => {
+  it('{ ok: false, reason: "not_found" } لهاتف غير مسجَّل إطلاقاً', async () => {
+    vi.mocked(khalilRepository.findAuthByPhone).mockResolvedValue(null);
+
+    const result = await khalilService.verifyPasswordForPhone('01099999999', 'any-password');
+
+    expect(result).toEqual({ ok: false, reason: 'not_found', user: null });
+  });
+
+  it('{ ok: false, reason: "no_password_set" } لمستخدم موجود بلا كلمة مرور مضبوطة بعد', async () => {
+    vi.mocked(khalilRepository.findAuthByPhone).mockResolvedValue({ user, passwordHash: null, mustChangePassword: false });
+
+    const result = await khalilService.verifyPasswordForPhone(user.phone, 'any-password');
+
+    expect(result).toEqual({ ok: false, reason: 'no_password_set', user });
+  });
+
+  it('{ ok: false, reason: "wrong_password" } لكلمة مرور لا تطابق التجزئة المخزَّنة', async () => {
+    const correctHash = await hashPassword('correct-password-123');
+    vi.mocked(khalilRepository.findAuthByPhone).mockResolvedValue({ user, passwordHash: correctHash, mustChangePassword: false });
+
+    const result = await khalilService.verifyPasswordForPhone(user.phone, 'wrong-password');
+
+    expect(result).toEqual({ ok: false, reason: 'wrong_password', user });
+  });
+
+  it('{ ok: true, user, mustChangePassword } لكلمة مرور صحيحة — mustChangePassword يُمرَّر كما هو من السجل', async () => {
+    const correctHash = await hashPassword('correct-password-123');
+    vi.mocked(khalilRepository.findAuthByPhone).mockResolvedValue({ user, passwordHash: correctHash, mustChangePassword: true });
+
+    const result = await khalilService.verifyPasswordForPhone(user.phone, 'correct-password-123');
+
+    expect(result).toEqual({ ok: true, user, mustChangePassword: true });
+  });
+});
+
+describe('KhalilService.setNewPassword', () => {
+  it('يُجزّئ كلمة المرور الجديدة ثم يستدعي khalilRepository.setPassword بالتجزئة الناتجة، mustChangePassword=false', async () => {
+    await khalilService.setNewPassword('user-1', 'new-password-123');
+
+    expect(khalilRepository.setPassword).toHaveBeenCalledOnce();
+    const [userId, hash, mustChangePassword] = vi.mocked(khalilRepository.setPassword).mock.calls[0]!;
+    expect(userId).toBe('user-1');
+    expect(hash).toMatch(/^[0-9a-f]+:[0-9a-f]+$/);
+    expect(mustChangePassword).toBe(false);
+  });
+});
+
+describe('KhalilService.createUser', () => {
+  it('يفوّض مباشرة لـ khalilRepository.createUser بنفس المدخلات (مُستهلَك من scripts/create-merchant-account.ts)', async () => {
+    vi.mocked(khalilRepository.createUser).mockResolvedValue(user);
+
+    const result = await khalilService.createUser({ fullName: user.fullName, phone: user.phone, role: 'merchant_owner' });
+
+    expect(khalilRepository.createUser).toHaveBeenCalledWith({ fullName: user.fullName, phone: user.phone, role: 'merchant_owner' });
+    expect(result).toEqual(user);
+  });
+});
+
+describe('KhalilService.setTemporaryPassword', () => {
+  it('يُجزّئ كلمة مرور مؤقتة ويستدعي khalilRepository.setPassword بـ mustChangePassword=true صراحة', async () => {
+    await khalilService.setTemporaryPassword('user-1', 'temp-password-abc');
+
+    expect(khalilRepository.setPassword).toHaveBeenCalledOnce();
+    const [userId, hash, mustChangePassword] = vi.mocked(khalilRepository.setPassword).mock.calls[0]!;
+    expect(userId).toBe('user-1');
+    expect(hash).toMatch(/^[0-9a-f]+:[0-9a-f]+$/);
+    expect(mustChangePassword).toBe(true);
   });
 });
