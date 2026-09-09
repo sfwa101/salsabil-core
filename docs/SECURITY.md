@@ -100,13 +100,14 @@ Auth حقيقية). **الموجود فعلياً اليوم (مُحدَّث 202
 (`users.must_change_password`/`sessions.must_change_password`). راجع
 `specs/identity/PASSWORD_AUTH_SPEC.md` للتصميم الكامل.
 
-> **⚠️ BLOCKER سابق — الآن `PARTIAL` (لا `RESOLVED` بعد):** BLOCKER دخول بلا كلمة مرور
-> (`INV-AUTHN-001` في `INVARIANTS.md`، كان `WAIVED`، الآن `PARTIAL`) — **الكود منفَّذ ومختبَر
-> بالكامل (200/200، وحدة + تكامل حي معاً)**، `scripts/password-auth-schema.sql` طُبِّق فعلياً على
-> dev و`scripts/backfill-existing-owner-passwords.ts` شُغِّل بنجاح للحسابين التجريبيين القائمين.
-> **لم يُغلَق فعلياً بعد لسبب واحد فقط:** **Guardian Review `DEEP` لم يبدأ بعد** (إلزامي،
-> `AGENTS.md §17` — Authentication أعلى حساسية). راجع `DD-001` في `docs/DECISIONS.md` (يبقى `OPEN`
-> حتى اكتمال المراجعة) وADR-026 للتفصيل الكامل.
+> **✅ BLOCKER سابق — الآن `RESOLVED`:** BLOCKER دخول بلا كلمة مرور (`INV-AUTHN-001` في
+> `INVARIANTS.md`، كان `WAIVED` → `PARTIAL` → الآن `ENFORCED`) — الكود منفَّذ ومختبَر بالكامل
+> (202/203، وحدة + تكامل حي معاً)، `scripts/password-auth-schema.sql` طُبِّق فعلياً على dev
+> و`scripts/backfill-existing-owner-passwords.ts` شُغِّل بنجاح للحسابين التجريبيين القائمين.
+> **Guardian Review `DEEP` مستقل اكتمل بمراجعتين:** الأولى BLOCKED (كشفت ثغرة توقيت Timing Attack
+> في verifyPasswordForPhone)، وبعد إصلاحها جولة ثانية مستقلة كلياً APPROVED (تحقق حي مستقل لقياس
+> RTT وتسجيل الدخول الفعلي). راجع `DD-001` في `docs/DECISIONS.md` (`RESOLVED`) وADR-026 للتفصيل
+> الكامل.
 
 ## 2. Authorization / RBAC — Evidence: راجع `INV-AUTHZ-001` (`INVARIANTS.md`) للدليل الحالي
 
@@ -236,9 +237,10 @@ OPEN_QUESTIONS أدناه.
 4. Soft Delete مقابل Hard Delete — غير محسوم (`DATABASE.md §7`)
 5. BR-016 (الحد الأدنى لقيمة الطلب) — لا رقم معتمد (`docs/BUSINESS_RULES.md`)
 6. متى تُبنى `sessions`/تسجيل الدخول الحقيقي — يبقى شرطاً لتفعيل §3 أعلاه فعلياً لا منطقياً فقط
-7. ~~استبدال الدخول بلا كلمة مرور (تاجر وإدارة) بكلمة مرور/OTP/Supabase Auth كاملة~~ **مُغلَق
-   جزئياً (2026-09-09، `URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH`):** كلمة مرور (لا OTP/Supabase
-   Auth كاملة، بقرار مؤسس صريح) مُنفَّذة، SQL مُطبَّق على dev، ومختبَرة حياً بالكامل (200/200) —
-   **لم تُغلَق فعلياً بعد** حتى Guardian Review `DEEP` (الشرط الوحيد المتبقي). راجع §1 أعلاه وDD-001.
+7. ~~استبدال الدخول بلا كلمة مرور (تاجر وإدارة) بكلمة مرور/OTP/Supabase Auth كاملة~~ **مُغلَقة
+   بالكامل (2026-09-09، `URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH`):** كلمة مرور (لا OTP/Supabase
+   Auth كاملة، بقرار مؤسس صريح) مُنفَّذة، SQL مُطبَّق على dev، مختبَرة حياً بالكامل (202/203)، و
+   Guardian Review `DEEP` مستقل اكتمل بمراجعتين (BLOCKED ثم APPROVED بعد إصلاح ثغرة توقيت). راجع §1
+   أعلاه وDD-001 (`RESOLVED`).
 8. **جديد (اليوم 12):** تأسيس نظام Migrations رسمي (`docs/DATABASE.md §8`) — لا يزال كل SQL يُنفَّذ يدوياً، بما فيها `audit_log` الجديد. مرشَّح طبيعي لليوم 13 (التجهيز للإنتاج).
 9. **جديد (الأيام 14-16، `ADR-016`):** لا تحديد معدل ولا انتهاء صلاحية على قراءة `/order/[id]` (راجع §16 أعلاه) — أي حامل لرابط تتبّع طلب يستطيع الاستعلام عنه بلا حد. مقبول مؤقتاً لحجم البيانات التجريبي الحالي، يجب إعادة تقييمه قبل إنتاج حقيقي بحجم بيانات أكبر.

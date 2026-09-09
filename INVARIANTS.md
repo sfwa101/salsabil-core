@@ -577,33 +577,45 @@ setTemporaryPassword/createUser)، merchant.service.test.ts/admin.service.test.t
 reef-city-journey.integration.test.ts (محدَّثة لتستهلك كلمة مرور حقيقية).
 
 Guardian:
-Required (DEEP) — **لم يبدأ بعد.** التنفيذ + الاختبارات الوحدوية والتكاملية معاً مكتملة ومُتحقَّق
-منها حياً (200/200، راجع Evidence). لا يُعتبَر هذا البند ENFORCED قبل مراجعة Guardian DEEP مستقلة
-فعلية (AGENTS.md §17) — هذا الشرط الوحيد المتبقي الآن.
+Required (DEEP) — **مكتمل، بمراجعتين مستقلتين.** الجولة الأولى (BLOCKED) كشفت ثغرة توقيت
+(Timing Attack) حقيقية في verifyPasswordForPhone (مساري not_found/no_password_set يرجعان فوراً
+بلا حساب scrypt، بينما wrong_password وحده ينفّذه — فرق زمني قابل للقياس يُعدّ به أرقام هواتف
+تجار مسجَّلين، PASSWORD_AUTH_SPEC.md §10). أُصلحت (FIX-TIMING-ATTACK-VULNERABILITY-AUTH —
+DUMMY_PASSWORD_HASH بنفس معاملات scrypt تماماً، يُنفَّذ فعلياً في كلا المسارين الآمنين قبل
+الرفض). الجولة الثانية — جلسة Guardian مستقلة كلياً، بلا سياق من الأولى — راجعت الإصلاح من
+الصفر: تحققت حسابياً من تطابق معاملات DUMMY_PASSWORD_HASH (طول الملح/التجزئة)، أعادت قياس RTT
+حياً بنفسها بمعزل عن كود الاختبار المُرفق (ratio max/min = 1.03x، تقارب حقيقي)، تحققت من عدم
+تسرّب password_hash وسلامة Rate Limiting (لم يُلمَس بالإصلاح)، وأجرت تسجيل دخول حي فعلي (حساب
+اختبار مؤقت أُنشئ وحُذف على dev) بكلمتَي مرور صحيحة/خاطئة عبر التجزئة الحقيقية المخزَّنة فعلياً.
+**النتيجة: APPROVED.**
 
 Evidence:
-- Type: Automated Test (وحدة + تكامل حي) + Code Inspection
+- Type: Automated Test (وحدة + تكامل حي) + Code Inspection + مراجعتا Guardian DEEP مستقلتان
+  (الأولى BLOCKED، الثانية APPROVED بعد الإصلاح)
 - Source: الملفات أعلاه + scripts/password-auth-schema.sql (مُطبَّق فعلياً على dev)،
   scripts/backfill-existing-owner-passwords.ts (شُغِّل فعلياً — كلمتا مرور مؤقتتان جديدتان
-  للحسابين التجريبيين، مسلَّمتان للمؤسس مباشرة، غير مخزَّنتين هنا)
+  للحسابين التجريبيين، مسلَّمتان للمؤسس مباشرة، غير مخزَّنتين هنا)، وDD-001 (docs/DECISIONS.md)
+  لتفصيل مراجعتَي Guardian الكامل
 - Executed: 2026-09-09 (هذه الجلسة) — SQL طُبِّق يدوياً عبر Supabase SQL Editor (dev) + NOTIFY
   pgrst لإعادة تحميل الـschema cache. Backfill نجح (كلا الحسابين). مجموعة الاختبارات الكاملة
-  200/200 نجحت (159 وحدة + 41 تكامل، بما فيها الثلاثة التي كانت تفشل قبل SQL بخطأ "column does
-  not exist" — الآن تنجح ضد بيانات حية فعلاً). `npm run arch:check` نظيف.
-- Scope: منطق التحقق/التجزئة/تدفق الدخول/دوران الجلسة/إجبار تغيير كلمة المرور — كل ذلك مُثبَت
-  وحدياً وحياً معاً. النطاق غير المُغطَّى: لا اختبار Playwright حي عبر متصفح حقيقي لتدفق تغيير
-  كلمة المرور في الواجهة (صفحتا change-password) — الخدمة/الفعل (Server Action) مُختبَران فقط عبر
-  مسار الجلسة، لا النموذج البصري نفسه.
-- Result: PASS (وحدة + تكامل بالكامل) — Guardian DEEP لا يزال PENDING
+  202/203 نجحت (الفشل الوحيد المتبقي: نفاد مخزون تجريبي في admin.integration.test.ts، غير متعلق
+  بالمصادقة إطلاقاً). `npm run arch:check` نظيف. مراجعتا Guardian DEEP نُفِّذتا حياً (لا محاكاة) —
+  قياس RTT فعلي، تسجيل دخول فعلي ضد dev DB.
+- Scope: منطق التحقق/التجزئة/تدفق الدخول/دوران الجلسة/إجبار تغيير كلمة المرور/مقاومة هجوم
+  التوقيت — كل ذلك مُثبَت وحدياً وحياً ومراجَع مستقلاً معاً. النطاق غير المُغطَّى: لا اختبار
+  Playwright حي عبر متصفح حقيقي لتدفق تغيير كلمة المرور في الواجهة (صفحتا change-password) —
+  الخدمة/الفعل (Server Action) مُختبَران فقط عبر مسار الجلسة، لا النموذج البصري نفسه (فجوة
+  موثَّقة، غير مانعة).
+- Result: PASS (وحدة + تكامل بالكامل) — Guardian DEEP APPROVED (مراجعتان مستقلتان)
 
 Status:
-PARTIAL — IMPLEMENTED AND LIVE-VERIFIED, PENDING GUARDIAN. الكود/الاختبارات (وحدة + تكامل)
-مكتملة ومُتحقَّق منها حياً بالكامل؛ لا يُرفَع إلى ENFORCED قبل Guardian Review DEEP مستقل فعلي.
-راجع DD-001 في docs/DECISIONS.md (يبقى OPEN حتى اكتمال Guardian تحديداً الآن).
+ENFORCED — الكود/الاختبارات (وحدة + تكامل) مكتملة ومُتحقَّق منها حياً بالكامل، ومراجعة Guardian
+Review DEEP مستقلة اكتملت بالاعتماد (APPROVED) بعد إصلاح ثغرة التوقيت المكتشَفة بالجولة الأولى.
+راجع DD-001 في docs/DECISIONS.md (RESOLVED).
 
 Owner:
-Guardian مستقل (المراجعة المتبقية الوحيدة) + Claude (نفَّذ الكود/الاختبارات، طبَّق SQL بمساعدة
-المؤسس، شغَّل Backfill والتحقق الحي)
+Claude (نفَّذ الكود/الاختبارات، طبَّق SQL بمساعدة المؤسس، شغَّل Backfill والتحقق الحي، أصلح ثغرة
+التوقيت) + Guardian مستقل (مراجعتان: BLOCKED ثم APPROVED)
 ```
 
 ---
@@ -771,15 +783,17 @@ staging.reefam.com** — "ملاحظة دقة صريحة" في ROADMAP.md تقر
 
 | الحالة | العدد | المعرِّفات |
 |---|---|---|
-| ENFORCED | 8 | INV-ORD-001, INV-ORD-003, INV-INV-001, INV-RLS-001, INV-ARCH-001, INV-SEC-002, INV-AUTHZ-001, INV-DATA-001 |
-| PARTIAL | 5 | INV-TEN-001, INV-ORD-002, INV-SEC-001, INV-RATE-001, INV-AUTHN-001 |
+| ENFORCED | 9 | INV-ORD-001, INV-ORD-003, INV-INV-001, INV-RLS-001, INV-ARCH-001, INV-SEC-002, INV-AUTHZ-001, INV-DATA-001, INV-AUTHN-001 |
+| PARTIAL | 4 | INV-TEN-001, INV-ORD-002, INV-SEC-001, INV-RATE-001 |
 | UNKNOWN | 1 | INV-INV-002 |
 | VIOLATED (جزئياً) | 1 | INV-AUDIT-001 |
 
-> **تحديث 2026-09-09:** INV-AUTHN-001 انتقل من WAIVED إلى PARTIAL —
+> **تحديث 2026-09-09:** INV-AUTHN-001 انتقل من WAIVED → PARTIAL → **ENFORCED** —
 > URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH نفَّذ كلمة مرور حقيقية، طبَّق SQL على dev فعلياً،
-> شغَّل Backfill، وتحقَّق حياً (200/200 اختباراً، وحدة + تكامل معاً). **الشرط الوحيد المتبقي قبل
-> ENFORCED الآن: Guardian Review DEEP مستقل.** راجع الإدخال الكامل أعلاه.
+> شغَّل Backfill، وتحقَّق حياً (202/203 اختباراً، وحدة + تكامل معاً — الفشل الوحيد غير متعلق
+> بالمصادقة). **Guardian Review DEEP مستقل اكتمل بمراجعتين:** الأولى BLOCKED (ثغرة توقيت
+> Timing Attack)، بعد الإصلاح جولة ثانية مستقلة كلياً APPROVED. راجع الإدخال الكامل أعلاه وDD-001
+> في docs/DECISIONS.md (RESOLVED).
 
 **15 إدخالاً إجمالاً.** لا ادعاء بأن هذا شامل لكل خاصية في المشروع — هذه أول دفعة مُستخرَجة من نطاق
 القراءة المُصرَّح به لهذه المهمة (orders, inventory, khalil, RLS, architecture boundaries, security

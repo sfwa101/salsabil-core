@@ -1287,12 +1287,23 @@ Owner: Founder
 Created: 2026-09-05
 Review by: قبل إنشاء أي حساب merchant_owner أو platform_admin ثانٍ حقيقي (شرط، لا تاريخ ثابت)
 Blocking: YES — يمنع توسّع آمن لعدد التجار/حسابات الإدارة
-Status: OPEN — تحديث 2026-09-09: القرار حُسم (كلمة مرور، لا OTP/Supabase Auth كاملة — راجع ADR-026)،
-          SQL طُبِّق فعلياً على dev، scripts/backfill-existing-owner-passwords.ts شُغِّل بنجاح
-          (كلمتا مرور مؤقتتان جديدتان للحسابين التجريبيين)، ومجموعة الاختبارات كاملة (وحدة+تكامل)
-          200/200 ناجحة حياً. **الشرط الوحيد المتبقي لإغلاقه فعلياً: Guardian Review DEEP مستقل** —
-          لم يبدأ بعد. لا تسجيل تاجر ثانٍ حقيقي قبل اكتماله.
-Related: INV-AUTHN-001 (INVARIANTS.md، انتقل WAIVED→PARTIAL)، ADR-012، ADR-013، ADR-026 (القرار
+Status: RESOLVED — تحديث 2026-09-09: القرار حُسم (كلمة مرور، لا OTP/Supabase Auth كاملة — راجع
+          ADR-026)، SQL طُبِّق فعلياً على dev، scripts/backfill-existing-owner-passwords.ts شُغِّل
+          بنجاح (كلمتا مرور مؤقتتان جديدتان للحسابين التجريبيين)، ومجموعة الاختبارات كاملة
+          (وحدة+تكامل) 200/200 ناجحة حياً. **Guardian Review DEEP مستقل اكتمل بمراجعتين منفصلتين:**
+          (1) الجولة الأولى — BLOCKED، كشفت ثغرة توقيت (Timing Attack) في
+          KhalilService.verifyPasswordForPhone (مساري not_found/no_password_set يرجعان فوراً بلا
+          حساب scrypt، بينما wrong_password وحده ينفّذه — فرق زمني يُعدّ به أرقام هواتف تجار
+          مسجَّلين). (2) بعد إصلاح FIX-TIMING-ATTACK-VULNERABILITY-AUTH (DUMMY_PASSWORD_HASH
+          بنفس معاملات scrypt، ينفَّذ في المسارين الآمنين قبل الرفض) — جولة ثانية مستقلة كلياً
+          (جلسة Guardian منفصلة، لا سياق من الجولة الأولى): APPROVED. تحقَّقت بنفسها من تطابق
+          معاملات DUMMY_PASSWORD_HASH، أعادت قياس RTT حياً بشكل مستقل (ratio max/min = 1.03x)،
+          تحققت من عدم تسرّب password_hash وسلامة Rate Limiting (INV-RATE-001، لم يُلمَس بالإصلاح)،
+          وأجرت تسجيل دخول حي فعلي (حساب اختبار مؤقت أُنشئ وحُذف على dev) بكلمتَي مرور صحيحة/خاطئة.
+          كل بنود PASSWORD_AUTH_SPEC.md §10 مُتحقَّقة. **لا خطر متبقٍّ يمنع الاعتماد** — DD-002
+          (القفل الموزَّع لـRate Limiting قبل إنتاج متعدد الخوادم) يبقى بنداً منفصلاً تماماً، غير
+          مرتبط بهذا القرار.
+Related: INV-AUTHN-001 (INVARIANTS.md، انتقل PARTIAL→ENFORCED)، ADR-012، ADR-013، ADR-026 (القرار
           والتصميم الكامل)، docs/SECURITY.md §1، specs/identity/PASSWORD_AUTH_SPEC.md
 ```
 

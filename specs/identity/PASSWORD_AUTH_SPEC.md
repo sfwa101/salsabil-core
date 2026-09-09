@@ -306,13 +306,18 @@ IDOR + Zod + Rate Limiting، ويوم جلسات `ADR-012`: جدول جديد + 
 
 ## Status
 
-`IMPLEMENTED AND LIVE-VERIFIED` — كود + 200/200 اختبار (159 وحدة + 41 تكامل حي)، `arch:check`
-نظيف. `scripts/password-auth-schema.sql` طُبِّق فعلياً على dev (+ `NOTIFY pgrst, 'reload schema'`
-لزم فعلياً لإعادة تحميل ذاكرة PostgREST المؤقتة)، `scripts/backfill-existing-owner-passwords.ts`
-شُغِّل بنجاح (كلمتا مرور مؤقتتان جديدتان للحسابين التجريبيين، سُلِّمتا للمؤسس مباشرة).
+`ENFORCED` — كود + 202/203 اختبار (وحدة + تكامل حي، الفشل الوحيد المتبقي غير متعلق بالمصادقة)،
+`arch:check` نظيف. `scripts/password-auth-schema.sql` طُبِّق فعلياً على dev (+ `NOTIFY pgrst,
+'reload schema'` لزم فعلياً لإعادة تحميل ذاكرة PostgREST المؤقتة)،
+`scripts/backfill-existing-owner-passwords.ts` شُغِّل بنجاح (كلمتا مرور مؤقتتان جديدتان للحسابين
+التجريبيين، سُلِّمتا للمؤسس مباشرة).
 
-**`PENDING` لسبب واحد فقط الآن:** Guardian Review `DEEP` مستقل فعلي (`AGENTS.md §17`) — لم يبدأ
-بعد. لا يُعتبَر `DD-001` مُغلقاً، ولا تسجيل تاجر ثانٍ حقيقي، قبل اكتماله.
+**Guardian Review `DEEP` مستقل اكتمل بمراجعتين (`AGENTS.md §17`):** الأولى BLOCKED — كشفت ثغرة
+توقيت (Timing Attack) حقيقية في `verifyPasswordForPhone` (§10)، أُصلحت
+(`FIX-TIMING-ATTACK-VULNERABILITY-AUTH`). جولة ثانية مستقلة كلياً (جلسة Guardian منفصلة بلا سياق
+من الأولى) راجعت الإصلاح من الصفر — أعادت قياس RTT حياً، تحققت من معاملات `DUMMY_PASSWORD_HASH`،
+ومن عدم تسرّب `password_hash`/سلامة Rate Limiting، وأجرت تسجيل دخول حي فعلي: **APPROVED.**
+`DD-001` الآن `RESOLVED` (`docs/DECISIONS.md`).
 
 راجع `docs/DECISIONS.md → ADR-026` للقرار والتصميم النهائي الكامل، بما فيه تصحيح تصميمي اكتُشف
 أثناء التحقُّق الحي (بند و): السكربتان لا يستوردان `khalilService`/`merchantService` (حزمة
