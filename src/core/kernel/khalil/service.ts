@@ -2,7 +2,7 @@
 // منطق الأعمال الخاص بخليل — لا استدعاء لقاعدة بيانات هنا مباشرة، فقط عبر khalilRepository
 
 import { khalilRepository } from './khalil.repository';
-import { hashPassword, verifyPassword } from '../security/password';
+import { hashPassword, verifyPassword, DUMMY_PASSWORD_HASH } from '../security/password';
 import type { User, Session, UserRole, UserPersona, World } from './types';
 
 // URGENT-MERCHANT-PASSWORD-AUTH-BEFORE-LAUNCH — نتيجة تمييزية (Discriminated Union) عمداً بدل
@@ -80,11 +80,26 @@ export class KhalilService {
    * لا فحص دور هنا عمداً (مسؤولية المستدعي: merchant.service يتوقع merchant_owner، admin.service
    * يتوقع platform_admin، نفس فصل المسؤولية القائم أصلاً في findUserByPhone). راجع
    * specs/identity/PASSWORD_AUTH_SPEC.md §5.
+   *
+   * FIX-TIMING-ATTACK-VULNERABILITY-AUTH — Guardian Review DEEP (NOT APPROVED، الدفعة الأولى) كشف
+   * أن مساري not_found/no_password_set كانا يرجعان فوراً بلا أي حساب scrypt، بينما wrong_password
+   * وحده يُنفِّذ verifyPassword() الحقيقي — فرق زمني قابل للقياس يسمح بتعداد أرقام هواتف تجار
+   * مسجَّلين (Timing Attack، PASSWORD_AUTH_SPEC.md §10). الإصلاح: كلا المسارين الآن يُنفِّذان
+   * verifyPassword() فعلياً مقابل DUMMY_PASSWORD_HASH (تجزئة وهمية ثابتة بنفس معاملات scrypt، لا
+   * تطابق أي حساب حقيقي أبداً) **قبل** إرجاع الرفض — فتُنفَق نفس الكلفة الزمنية تقريباً في المسارات
+   * الثلاثة جميعاً. النتيجة نفسها (`matches`) تُهمَل عمداً (دائماً false منطقياً بما أن كلمة المرور
+   * لن تطابق تجزئة عشوائية) — الغرض الوحيد هو استهلاك نفس زمن الحساب، لا التحقق الفعلي.
    */
   async verifyPasswordForPhone(phone: string, password: string): Promise<PasswordVerificationResult> {
     const auth = await khalilRepository.findAuthByPhone(phone);
-    if (!auth) return { ok: false, reason: 'not_found', user: null };
-    if (!auth.passwordHash) return { ok: false, reason: 'no_password_set', user: auth.user };
+    if (!auth) {
+      await verifyPassword(password, DUMMY_PASSWORD_HASH);
+      return { ok: false, reason: 'not_found', user: null };
+    }
+    if (!auth.passwordHash) {
+      await verifyPassword(password, DUMMY_PASSWORD_HASH);
+      return { ok: false, reason: 'no_password_set', user: auth.user };
+    }
 
     const matches = await verifyPassword(password, auth.passwordHash);
     if (!matches) return { ok: false, reason: 'wrong_password', user: auth.user };

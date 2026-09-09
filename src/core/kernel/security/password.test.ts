@@ -2,7 +2,7 @@
 // اختبارات وحدة حقيقية بلا Mocks — منطق تجزئة فعلي (node:crypto)، لا شبكة، لا Supabase.
 
 import { describe, it, expect } from 'vitest';
-import { hashPassword, verifyPassword, generateTempPassword } from './password';
+import { hashPassword, verifyPassword, generateTempPassword, DUMMY_PASSWORD_HASH } from './password';
 
 describe('hashPassword / verifyPassword', () => {
   it('كلمة المرور الصحيحة تتحقق بنجاح مقابل تجزئتها', async () => {
@@ -34,6 +34,28 @@ describe('hashPassword / verifyPassword', () => {
 
   it('تجزئة مشوَّهة (بلا فاصل ":") تُرفَض بأمان بدل رمي استثناء', async () => {
     await expect(verifyPassword('any-password', 'not-a-valid-hash')).resolves.toBe(false);
+  });
+});
+
+// FIX-TIMING-ATTACK-VULNERABILITY-AUTH — الثابت المُستخدَم في khalilService.verifyPasswordForPhone
+// لتنفيذ حساب scrypt فعلي في مسارَي not_found/no_password_set (راجع تعليق DUMMY_PASSWORD_HASH نفسه
+// وkhalil/service.ts للتفصيل الكامل). اختبار الوحدة الزمني الحي (قياس RTT عبر المسارات الثلاثة)
+// موجود في khalil/service.test.ts — هنا فقط تحقُّق شكلي أن الثابت نفسه سليم البنية وقابل للاستخدام
+// فعلياً عبر verifyPassword() بلا استثناء.
+describe('DUMMY_PASSWORD_HASH', () => {
+  it('بنفس تنسيق "ملح:تجزئة" (hex كلاهما) الذي يُنتجه hashPassword — نفس أطوال KEY_LENGTH/الملح', async () => {
+    const real = await hashPassword('any-password');
+    const [realSalt, realHash] = real.split(':');
+    const [dummySalt, dummyHash] = DUMMY_PASSWORD_HASH.split(':');
+
+    expect(dummySalt).toMatch(/^[0-9a-f]+$/);
+    expect(dummyHash).toMatch(/^[0-9a-f]+$/);
+    expect(dummySalt).toHaveLength(realSalt!.length);
+    expect(dummyHash).toHaveLength(realHash!.length);
+  });
+
+  it('verifyPassword تُنفَّذ فعلياً مقابله بلا استثناء، وترفض أي كلمة مرور حقيقية (لا يطابقها أبداً)', async () => {
+    await expect(verifyPassword('any-real-password', DUMMY_PASSWORD_HASH)).resolves.toBe(false);
   });
 });
 

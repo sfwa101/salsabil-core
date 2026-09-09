@@ -234,6 +234,58 @@ describe('KhalilService.verifyPasswordForPhone', () => {
 
     expect(result).toEqual({ ok: true, user, mustChangePassword: true });
   });
+
+  // FIX-TIMING-ATTACK-VULNERABILITY-AUTH — Guardian Review DEEP (NOT APPROVED، الدفعة الأولى) لاحظ
+  // غياب اختبار زمني حي يمنع انحداراً مستقبلياً لنفس الثغرة. هذا القياس **حقيقي** (performance.now
+  // حول الاستدعاء الفعلي، بلا محاكاة/تزييف) — khalilRepository مموَّه (استجابة شبه فورية)،
+  // password.ts (verifyPassword/scrypt) حقيقي بالكامل كبقية اختبارات هذا الوصف، فالفرق الزمني
+  // المقيس يعكس فعلياً وجود/غياب حساب scrypt في كل مسار، لا تفاصيل تنفيذ أخرى.
+  describe('مقاومة هجوم التوقيت (Timing Attack) — قياس RTT حي عبر المسارات الثلاثة', () => {
+    it('not_found وno_password_set ينفقان زمناً مقارباً لـwrong_password — دليل حي أن الثلاثة تُنفِّذ حساب scrypt نفسه، لا رفضاً فورياً في مسارين فقط', async () => {
+      const correctHash = await hashPassword('a-real-password-123');
+      const SAMPLES_PER_PATH = 4;
+
+      async function averageMs(mockSetup: () => void, phone: string, password: string): Promise<number> {
+        const samples: number[] = [];
+        for (let i = 0; i < SAMPLES_PER_PATH; i++) {
+          mockSetup();
+          const start = performance.now();
+          await khalilService.verifyPasswordForPhone(phone, password);
+          samples.push(performance.now() - start);
+        }
+        return samples.reduce((a, b) => a + b, 0) / samples.length;
+      }
+
+      const notFoundAvg = await averageMs(
+        () => vi.mocked(khalilRepository.findAuthByPhone).mockResolvedValue(null),
+        '01000000099',
+        'irrelevant-password'
+      );
+      const noPasswordSetAvg = await averageMs(
+        () => vi.mocked(khalilRepository.findAuthByPhone).mockResolvedValue({ user, passwordHash: null, mustChangePassword: false }),
+        user.phone,
+        'irrelevant-password'
+      );
+      const wrongPasswordAvg = await averageMs(
+        () => vi.mocked(khalilRepository.findAuthByPhone).mockResolvedValue({ user, passwordHash: correctHash, mustChangePassword: false }),
+        user.phone,
+        'definitely-wrong-password'
+      );
+
+      // دليل إيجابي: لو كان الإصلاح غائباً (رفض فوري بلا scrypt)، هذان الزمنان كانا سيكونان قريبين
+      // من الصفر (أقل من 10% من wrong_password) — التحقق من أنهما ليسا كذلك يثبت أن الحساب الحقيقي
+      // يقع فعلياً في المسارين الآمنين، لا فقط أن النتيجة النهائية متقاربة صدفة.
+      expect(notFoundAvg).toBeGreaterThan(wrongPasswordAvg * 0.4);
+      expect(noPasswordSetAvg).toBeGreaterThan(wrongPasswordAvg * 0.4);
+
+      // تقارب عام: أبطأ مسار لا يتجاوز ضعف أسرع مسار — هامش يتحمّل جيتر النظام الطبيعي (GC، جدولة
+      // المهام) بلا التسامح مع فرق من رتبة مقدار كامل (10x+) الذي كان قائماً فعلياً قبل الإصلاح.
+      const times = [notFoundAvg, noPasswordSetAvg, wrongPasswordAvg];
+      const max = Math.max(...times);
+      const min = Math.min(...times);
+      expect(max / min).toBeLessThan(2);
+    }, 20000);
+  });
 });
 
 describe('KhalilService.setNewPassword', () => {
