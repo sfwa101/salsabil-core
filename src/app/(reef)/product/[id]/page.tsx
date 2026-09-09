@@ -16,8 +16,14 @@ import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { ImageOff } from 'lucide-react';
 import { catalogService } from '@/core/modules/catalog/catalog.service';
+import { ordersService } from '@/core/modules/orders/orders.service';
 import { ProductOptions } from '@/components/ProductOptions';
+import { HorizontalShelf } from '@/components/HorizontalShelf';
+import { ProductCard } from '@/components/ProductCard';
 import { getNeighborhoodIdentity } from '@/config/neighborhood-identity-registry';
+import { getVisibleProductPageBlockIds } from '@/config/product-page-blocks-registry';
+
+const UPSELL_LIMIT = 6;
 
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -32,6 +38,17 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
 
   const category = categories.find((c) => c.id === product.categoryId) ?? null;
   const identity = category ? getNeighborhoodIdentity('reef', category.slug) : null;
+
+  // بلوك 3 — رف Upsell («منتجات قد تعجبك»): يُبنى فقط إن كان مسجَّلاً ظاهراً في السجل (اليوم دائماً
+  // true — البنية جاهزة لتعطيله من لوحة إدارة مستقبلية بلا لمس هذا الملف). يعيد استخدام إشارة
+  // "الأكثر طلباً" الموجودة أصلاً (ordersService.getMostOrderedProductIds، نفس مصدر رف "غالباً ما
+  // يُشترى معه" في السلة) بدل اختراع خوارزمية "منتجات ذات صلة" جديدة (AGENTS.md §2).
+  const showUpsell = getVisibleProductPageBlockIds(product, 'page').includes('upsellShelf');
+  const upsellProducts = showUpsell
+    ? await ordersService
+        .getMostOrderedProductIds([product.id], UPSELL_LIMIT)
+        .then((ids) => (ids.length > 0 ? catalogService.getProductsByIds(ids) : []))
+    : [];
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-6 md:max-w-4xl">
@@ -81,11 +98,28 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             <p className="leading-relaxed text-muted-foreground">{product.description}</p>
           )}
 
-          <div className="rounded-3xl border border-border bg-card p-5 shadow-[var(--sb-shadow-tinted)]">
+          {/* بند 4 — هوية الحي تمتد الآن للحدود لا فقط لون النص/الزر (كانت تُطبَّق فقط داخل
+              ProductOptions نفسها) — راجع docs/DECISIONS.md → ADR-024 لمصدر accentColor. */}
+          <div
+            className="rounded-3xl border border-border bg-card p-5 shadow-[var(--sb-shadow-tinted)]"
+            style={identity ? { borderColor: `${identity.accentColor}55` } : undefined}
+          >
             <ProductOptions product={product} accentColor={identity?.accentColor} />
           </div>
         </div>
       </div>
+
+      {upsellProducts.length > 0 && (
+        <div className="mt-8">
+          <HorizontalShelf title="منتجات قد تعجبك">
+            {upsellProducts.map((p) => (
+              <div key={p.id} className="w-40 shrink-0">
+                <ProductCard product={p} />
+              </div>
+            ))}
+          </HorizontalShelf>
+        </div>
+      )}
     </main>
   );
 }
