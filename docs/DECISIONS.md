@@ -1,7 +1,7 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.31
+version: 1.32
 authority: Security & Correctness (قسم DECISION DEBT REGISTRY) + Engineering Decision Log (باقي الملف)
 last_updated: 2026-09-10
 last_verified: 2026-09-10
@@ -1729,16 +1729,72 @@ Reason: COMPLETE-VISUAL-STENCIL-IMPORT-FULL-BATCH-NO-STOPS (بند 5) طلب "ا
 Risk: إن قرأ أي طرف بند 5 كـ"لم يُنفَّذ" بلا هذا السياق — الحقيقة الدقيقة: البنية 100% جاهزة،
           التنفيذ البصري الفعلي معلَّق حصراً على قرار بيانات (إنشاء أحياء حقيقية) هو قرار المؤسس
           وحده (تاجر/كتالوج جديد لكل حي)، لا نطاقاً تقنياً ناقصاً.
+
+⚠️ تحديث 2026-09-10 (PRODUCT-BOTTOM-SHEET-AND-NEIGHBORHOODS-BATCH، بند 2) — **مُحسَم، تأكيد مؤسس
+          مباشر بإنشاء الأحياء الحقيقية الآن** (نفس نمط "تكليف مؤسس مباشر يُسقِط قيد سابق"،
+          CONFLICT-008/009). `scripts/seed-real-neighborhoods-demo-content.ts` (جديد، دائم، Idempotent
+          — نفس نمط `seed-daily-food-demo-content.ts`) زرع **5 أحياء حقيقية جديدة** على قاعدة `dev`:
+          `produce` (الخضار والفواكه)، `dairy` (الألبان)، `kitchen` (مطبخ ريف)، `meat` (اللحوم
+          والدواجن)، `sweets` (حلويات اليوم) — 21 منتجاً تجريبياً دائماً موزَّعة عليها. **قرار تسمية
+          صريح:** "السوبرماركت" **لم يُنشَأ كحي سادس منفصل** — يطابق بالفعل `daily-food` الموجود
+          أصلاً (`sourceNote` الخاص بـ`'reef:daily-food'` في السجل نفسه ينص صراحة: "لا حي سوبرماركت
+          منفصل عندنا")؛ صف مكرِّر بنفس اللون كان سيخالف `ADR-024` بلا داعٍ فعلي — إن كان المقصود
+          تحديداً حياً سادساً منفصلاً باسم "سوبرماركت" بلون مختلف عن `daily-food`، هذا قرار تسمية
+          إضافي منفصل يحتاج تأكيداً صريحاً، لم يُفترَض هنا.
+          **التحقُّق الحي (بند 3 من نفس المهمة) أثبت الهدف الأصلي لهذا الـDD بدقة:** الهوية (لون
+          البانر) تُطبَّق تلقائياً وصحيحة على الخمسة كلها بلا أي كود إضافي (مطابقة حرفية لقيم
+          `neighborhood-identity-registry.ts`). **بلوك الوزن** يعمل بشكل متطابق في حيَّين مختلفين
+          تماماً (`kitchen`/`meat`) — ليس خاصاً بـ"دجاجة كاملة طازجة" (`daily-food`) كما كان الحال
+          الوحيد سابقاً. **بلوك الإضافات — أول اختبار بيانات حقيقي على الإطلاق** (لم يوجد أي منتج
+          بخيارات `addon` في القاعدة قبل هذا السكربت، تحقَّقتُ منه حياً): يظهر بشكل صحيح، والتفاعل
+          (تفعيل إضافة) يعيد حساب السعر فعلياً عبر `calculatePriceAction` بلا أي تعديل على
+          `CatalogService`. منتج عادي بلا خيارات لا يظهر له أي من البلوكين — صحيح كما هو مصمَّم.
+          **خطر جانبي اكتُشف حياً أثناء التحقُّق (AGENTS.md §12):** صور `placehold.co` بلا لاحقة صيغة
+          صريحة تُخدَّم كـ`image/svg+xml` افتراضياً — Next.js Image Optimizer يرفضها `400` افتراضياً
+          (`dangerouslyAllowSVG` غير مفعَّل، إعداد أمان قياسي). **هذا خلل موجود مسبقاً يمسّ صور
+          `daily-food` المزروعة سابقاً أيضاً** (تحقَّقتُ منه حياً — نفس الخطأ 400 على صورة الأرز
+          الأصلية) — لم يُصلَح هنا (خارج نطاق هذه المهمة، يمسّ محتوى دفعة سابقة)، فقط صُحِّح داخل
+          السكربت الجديد نفسه (`.png` صريحة في كل رابط) لتفادي تكراره في المحتوى الجديد. **الإصلاح
+          الشامل (تعديل next.config.ts لجميع الصور القديمة) يحتاج قراراً مؤسس منفصلاً** — مُسجَّل
+          أدناه.
 Owner: Founder
 Created: 2026-09-09
-Review by: فور قرار إنشاء أول حي حقيقي جديد (سوبرماركت/مطبخ/خضار/ألبان/حلويات أو غيره) — عندها
-          يُتحقَّق حياً أن الهوية/البلوكات تُطبَّق تلقائياً كما هو مصمَّم، لا افتراضاً نظرياً فقط
-Blocking: NO — لا يمنع أي عمل حالي، ولا يمنع بند 5 من "الاكتمال التقني" (البنية جاهزة) لكنه يمنع
-          "الاكتمال البصري الظاهر" (لا حي ثانٍ فعلي ليُرى بهوية مختلفة اليوم)
-Status: OPEN
+Resolved: 2026-09-10 — PRODUCT-BOTTOM-SHEET-AND-NEIGHBORHOODS-BATCH (بند 2)
+Review by: N/A — مُحسَم ومُتحقَّق منه حياً (5 أحياء، 21 منتجاً، هوية+بلوكات صحيحة)
+Blocking: NO
+Status: RESOLVED
 Related: src/config/neighborhood-identity-registry.ts (ADR-024، CONFLICT-009)،
           src/config/product-page-blocks-registry.ts، src/components/ProductSheetContent.tsx،
-          src/app/(reef)/product/[id]/page.tsx، ideas/IDEAS.md → IDEA-002
+          src/app/(reef)/product/[id]/page.tsx، ideas/IDEAS.md → IDEA-002،
+          scripts/seed-real-neighborhoods-demo-content.ts، DD-015 (خلل صور SVG، أدناه)
+```
+
+---
+
+### DD-015
+```
+Decision: هل تُضاف `images.dangerouslyAllowSVG: true` (+`contentDispositionType: 'attachment'`
+          كإجراء أمان مصاحب موصى به من توثيق Next.js) إلى `next.config.ts` لإصلاح صور
+          `daily-food` القديمة (`seed-daily-food-demo-content.ts`) التي تفشل بـ400 اليوم، أم
+          تُستبدَل روابطها بصيغة `.png` صريحة (نفس حل هذه الدفعة، بلا أي تغيير أمني)؟
+Reason: اكتُشف حياً أثناء PRODUCT-BOTTOM-SHEET-AND-NEIGHBORHOODS-BATCH (بند 3، 2026-09-10): كل صور
+          `placehold.co` المزروعة بلا لاحقة صيغة صريحة (`?text=...` بلا `.png`/`.jpg` قبلها) تُخدَّم
+          `image/svg+xml` من المصدر — Next.js Image Optimizer يرفض SVG افتراضياً (`400`). تحقَّقتُ
+          حياً: صورة "أرز مصري أبيض" (أول منتج في `daily-food`، `seed-daily-food-demo-content.ts`)
+          تفشل بنفس الخطأ بالضبط. هذا خلل **موجود منذ زرع daily-food الأصلي**، لم يُكتشَف من قبل —
+          لا أحد اختبر تحميل الصور الفعلي عبر `next/image` حياً حتى الآن على ما يبدو.
+Risk: كل صور منتجات `daily-food` (8 منتجات على الأقل من السكربت الأصلي) تظهر كصورة معطوبة (Broken
+          Image) بدل placeholder ملوّن — أثر بصري حقيقي على أقدم/أكبر حي في المنصة، لا تافهاً.
+Owner: Founder
+Created: 2026-09-10
+Review by: قرار مؤسس على الاتجاه — (أ) `dangerouslyAllowSVG` (يُصلح الروابط القديمة كما هي، لكنه
+          تخفيف أمني عام يفتح الباب لأي SVG مستقبلي من أي مصدر ضمن `remotePatterns` الحالي الواسع
+          `hostname: '**'`)، أم (ب) تعديل روابط `daily-food` المزروعة إلى `.png` صريحة (نفس حل هذه
+          الدفعة تماماً، بلا أي تغيير أمني، لكنه تعديل بيانات إضافي على محتوى دفعة سابقة).
+Blocking: NO — صور معطوبة بصرياً فقط، لا خطأ وظيفي (المنتج نفسه يعمل، السعر/الإضافة للسلة سليمان)
+Status: OPEN
+Related: next.config.ts، scripts/seed-daily-food-demo-content.ts،
+          scripts/seed-real-neighborhoods-demo-content.ts (الحل المُطبَّق هنا فقط)، DD-013
 ```
 
 ---
