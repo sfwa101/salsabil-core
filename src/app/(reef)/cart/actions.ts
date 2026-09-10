@@ -4,7 +4,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { cartService } from '@/core/modules/cart/cart.service';
-import { getCartIdentity, getExistingCartSessionToken } from '@/core/modules/cart/cart-session';
+import { getCartIdentity, getExistingCartIdentity } from '@/core/modules/cart/cart-session';
 import type { AddItemInput, CartSummary } from '@/core/modules/cart/types';
 
 type ActionResult = { summary: CartSummary } | { error: string };
@@ -18,20 +18,22 @@ export async function getCartSummaryAction(): Promise<CartSummary> {
 }
 
 // للـHeader (اليوم 14) — يُستدعى من كل صفحات (reef)، بما فيها صفحات لا تمس السلة إطلاقاً
-// (الرئيسية، الأقسام، المنتج). يقرأ الكوكي بلا إنشائها (getExistingCartSessionToken) عمداً: لا
+// (الرئيسية، الأقسام، المنتج). يقرأ الكوكي بلا إنشائها (getExistingCartIdentity) عمداً: لا
 // كتابة كوكي أثناء عرض RSC (نفس مشكلة اليوم 14 الأصلية)، ولا داعٍ لإنشاء سلة لزائر لم يلمسها.
+// CUSTOMER-IDENTITY-PHASE-1: getExistingCartIdentity تفحص جلسة عميل مسجَّل أولاً — بلا هذا كان
+// عدّاد الهيدر سيبقى صفراً دائماً لعميل مسجَّل دخوله فعلياً.
 export async function getCartItemCountAction(): Promise<number> {
-  const token = await getExistingCartSessionToken();
-  if (!token) return 0;
-  return cartService.getItemCountForSession(token);
+  const identity = await getExistingCartIdentity();
+  if (!identity) return 0;
+  return cartService.getItemCountForIdentity(identity);
 }
 
 // FULL-VISUAL-PARITY-AUDIT-AND-FIX (بند 1ب) — للهيدر (CartCapsule.tsx)، يعرض الآن الإجمالي بالجنيه
 // لا عدد القطع. نفس نمط getCartItemCountAction حرفياً.
 export async function getCartTotalAction(): Promise<number> {
-  const token = await getExistingCartSessionToken();
-  if (!token) return 0;
-  return cartService.getTotalForSession(token);
+  const identity = await getExistingCartIdentity();
+  if (!identity) return 0;
+  return cartService.getTotalForIdentity(identity);
 }
 
 // FIX-STALE-PRODUCT-REFS-PERFORMANCE-AND-CATEGORY-VISUALS (الجزء 2) — لصفحة الحي ([category]/
@@ -41,9 +43,9 @@ export async function getCartTotalAction(): Promise<number> {
 // Route Handler") عند أول عرض RSC لزائر بلا أي كوكي سلة سابق. نفس نمط getCartItemCountAction حرفياً
 // (قراءة فقط، بلا سلة = null).
 export async function getCartSummaryIfExistsAction(): Promise<CartSummary | null> {
-  const token = await getExistingCartSessionToken();
-  if (!token) return null;
-  return cartService.getSummaryForSession(token);
+  const identity = await getExistingCartIdentity();
+  if (!identity) return null;
+  return cartService.getSummaryForIdentityIfExists(identity);
 }
 
 export async function addToCartAction(input: AddItemInput): Promise<ActionResult> {

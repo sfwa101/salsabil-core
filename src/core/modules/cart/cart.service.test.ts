@@ -48,6 +48,7 @@ vi.mock('./cart.repository', () => ({
     insertItem: vi.fn(),
     updateItemQuantity: vi.fn(),
     deleteItem: vi.fn(),
+    deleteCart: vi.fn(),
   },
 }));
 
@@ -185,11 +186,11 @@ describe('CartService.getItemCount', () => {
   });
 });
 
-describe('CartService.getItemCountForSession', () => {
+describe('CartService.getItemCountForIdentity', () => {
   it('اختبار حاسم (اليوم 14، منع سباق مع الـHeader): لا يستدعي إنشاء سلة جديدة إطلاقاً — يعيد صفراً إن لم توجد سلة لهذا التوكن بعد', async () => {
     vi.mocked(cartRepository.findCartBySessionToken).mockResolvedValue(null);
 
-    const count = await cartService.getItemCountForSession('brand-new-token');
+    const count = await cartService.getItemCountForIdentity({ sessionToken: 'brand-new-token' });
 
     expect(count).toBe(0);
     expect(cartRepository.createCartForSession).not.toHaveBeenCalled();
@@ -200,17 +201,29 @@ describe('CartService.getItemCountForSession', () => {
     vi.mocked(cartRepository.findCartBySessionToken).mockResolvedValue(cart);
     vi.mocked(cartRepository.findItems).mockResolvedValue([makeItem({ quantity: 4 })]);
 
-    const count = await cartService.getItemCountForSession(cart.sessionToken!);
+    const count = await cartService.getItemCountForIdentity({ sessionToken: cart.sessionToken! });
 
     expect(count).toBe(4);
   });
+
+  // CUSTOMER-IDENTITY-PHASE-1 — عميل مسجَّل دخوله: سلته بـuserId لا sessionToken (ADR-008).
+  it('يجمع كميات سلة عميل مسجَّل دخوله عبر userId، لا sessionToken', async () => {
+    vi.mocked(cartRepository.findCartByUserId).mockResolvedValue(cart);
+    vi.mocked(cartRepository.findItems).mockResolvedValue([makeItem({ quantity: 2 })]);
+
+    const count = await cartService.getItemCountForIdentity({ userId: 'user-1' });
+
+    expect(count).toBe(2);
+    expect(cartRepository.findCartByUserId).toHaveBeenCalledWith('user-1');
+    expect(cartRepository.findCartBySessionToken).not.toHaveBeenCalled();
+  });
 });
 
-describe('CartService.getTotalForSession', () => {
-  it('يعيد صفراً بلا استدعاء getSummary إن لم توجد سلة لهذا التوكن بعد (نفس نمط getItemCountForSession)', async () => {
+describe('CartService.getTotalForIdentity', () => {
+  it('يعيد صفراً بلا استدعاء getSummary إن لم توجد سلة لهذا التوكن بعد (نفس نمط getItemCountForIdentity)', async () => {
     vi.mocked(cartRepository.findCartBySessionToken).mockResolvedValue(null);
 
-    const total = await cartService.getTotalForSession('brand-new-token');
+    const total = await cartService.getTotalForIdentity({ sessionToken: 'brand-new-token' });
 
     expect(total).toBe(0);
     expect(cartRepository.findItemsWithProducts).not.toHaveBeenCalled();
@@ -220,17 +233,17 @@ describe('CartService.getTotalForSession', () => {
     vi.mocked(cartRepository.findCartBySessionToken).mockResolvedValue(cart);
     mockSummaryItems([makeItem({ selection: { sizeId: 'medium' }, quantity: 2 })]); // 120 * 2 = 240
 
-    const total = await cartService.getTotalForSession(cart.sessionToken!);
+    const total = await cartService.getTotalForIdentity({ sessionToken: cart.sessionToken! });
 
     expect(total).toBe(240);
   });
 });
 
-describe('CartService.getSummaryForSession', () => {
-  it('يعيد null بلا استدعاء findCartById إن لم توجد سلة لهذا التوكن بعد (نفس نمط getTotalForSession)', async () => {
+describe('CartService.getSummaryForIdentityIfExists', () => {
+  it('يعيد null بلا استدعاء findCartById إن لم توجد سلة لهذا التوكن بعد (نفس نمط getTotalForIdentity)', async () => {
     vi.mocked(cartRepository.findCartBySessionToken).mockResolvedValue(null);
 
-    const summary = await cartService.getSummaryForSession('brand-new-token');
+    const summary = await cartService.getSummaryForIdentityIfExists({ sessionToken: 'brand-new-token' });
 
     expect(summary).toBeNull();
     expect(cartRepository.findCartById).not.toHaveBeenCalled();
@@ -241,11 +254,55 @@ describe('CartService.getSummaryForSession', () => {
     vi.mocked(cartRepository.findCartBySessionToken).mockResolvedValue(cart);
     mockSummaryItems([makeItem({ selection: { sizeId: 'medium' }, quantity: 3 })]); // 120 * 3 = 360
 
-    const summary = await cartService.getSummaryForSession(cart.sessionToken!);
+    const summary = await cartService.getSummaryForIdentityIfExists({ sessionToken: cart.sessionToken! });
 
     expect(cartRepository.findCartById).not.toHaveBeenCalled();
     expect(summary?.total).toBe(360);
     expect(summary?.lines).toHaveLength(1);
+  });
+});
+
+describe('CartService.mergeGuestCartIntoUser', () => {
+  it('لا يفعل شيئاً إن لم توجد سلة ضيف لهذا التوكن أصلاً', async () => {
+    vi.mocked(cartRepository.findCartBySessionToken).mockResolvedValue(null);
+
+    await cartService.mergeGuestCartIntoUser('guest-token', 'user-1');
+
+    expect(cartRepository.findCartByUserId).not.toHaveBeenCalled();
+    expect(cartRepository.deleteCart).not.toHaveBeenCalled();
+  });
+
+  it('يحذف سلة الضيف الفارغة بلا لمس سلة المستخدم إطلاقاً', async () => {
+    const guestCart = { ...cart, id: 'guest-cart', sessionToken: 'guest-token' };
+    vi.mocked(cartRepository.findCartBySessionToken).mockResolvedValue(guestCart);
+    vi.mocked(cartRepository.findItems).mockResolvedValue([]);
+
+    await cartService.mergeGuestCartIntoUser('guest-token', 'user-1');
+
+    expect(cartRepository.deleteCart).toHaveBeenCalledWith('guest-cart');
+    expect(cartRepository.findCartByUserId).not.toHaveBeenCalled();
+  });
+
+  it('يجمع الكمية عند نفس المنتج بنفس الاختيار (لا استبدال)، وينقل بند مختلف كما هو، ثم يحذف سلة الضيف', async () => {
+    const guestCart = { ...cart, id: 'guest-cart', userId: null, sessionToken: 'guest-token' };
+    const userCart = { ...cart, id: 'user-cart', userId: 'user-1', sessionToken: null };
+    const sharedItem = makeItem({ id: 'shared', productId: 'p1', selection: { sizeId: 'small' }, quantity: 2 });
+    const guestOnlyItem = makeItem({ id: 'guest-only', productId: 'p2', selection: {}, quantity: 1 });
+    const existingUserItem = makeItem({ id: 'existing', productId: 'p1', selection: { sizeId: 'small' }, quantity: 3 });
+
+    vi.mocked(cartRepository.findCartBySessionToken).mockResolvedValue(guestCart);
+    vi.mocked(cartRepository.findCartByUserId).mockResolvedValue(userCart);
+    vi.mocked(cartRepository.findItems).mockImplementation(async (cartId: string) =>
+      cartId === 'guest-cart' ? [sharedItem, guestOnlyItem] : [existingUserItem]
+    );
+
+    await cartService.mergeGuestCartIntoUser('guest-token', 'user-1');
+
+    // نفس المنتج/الاختيار — تُجمَع الكميات (3 + 2 = 5)، لا استبدال
+    expect(cartRepository.updateItemQuantity).toHaveBeenCalledWith('existing', 5);
+    // بند لا يوجد له مطابق في سلة المستخدم — يُنقَل كما هو
+    expect(cartRepository.insertItem).toHaveBeenCalledWith('user-cart', 'p2', 1, {});
+    expect(cartRepository.deleteCart).toHaveBeenCalledWith('guest-cart');
   });
 });
 

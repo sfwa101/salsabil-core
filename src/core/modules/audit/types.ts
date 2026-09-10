@@ -15,6 +15,8 @@ export type AuditAction =
   | 'auth.login_success'
   | 'auth.login_failed'
   | 'auth.password_changed'
+  // CUSTOMER-IDENTITY-PHASE-1 — تسجيل حساب عميل جديد فقط (لا "ادّعاء" حساب ضيف موجود، مؤجَّل)
+  | 'auth.register_success'
   | 'inventory.release_failed';
 
 export interface AuditLogEntry {

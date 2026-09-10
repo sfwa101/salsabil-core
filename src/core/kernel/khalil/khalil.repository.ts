@@ -106,8 +106,13 @@ function toUserPersona(row: UserPersonaRow): UserPersona {
 }
 
 export class KhalilRepository {
+  // CUSTOMER-IDENTITY-PHASE-1 — أول مستهلك حقيقي فعلي لهذه الدالة (khalilService.findUserById،
+  // account/page.tsx). كانت تستخدم العميل العام (anon) — موثَّق صراحة في ADR-009 كدالة "لا تعمل
+  // فعلياً" (سياسة RLS الوحيدة على users هي auth.uid()=id، لا تنطبق أبداً بلا Supabase Auth حقيقية)
+  // لكن "غير مستخدَمة فلا انحدار وقع". الآن مُستخدَمة فعلياً — service_role إلزامي، نفس نمط
+  // findUserByPhoneAdmin المجاورة تماماً (لا يجوز فتح ثغرة سباق أخرى بترك النسخة القديمة صامتة).
   async findUserById(id: string): Promise<User | null> {
-    const { data, error } = await supabase.from('users').select('*').eq('id', id).maybeSingle();
+    const { data, error } = await supabaseAdmin.from('users').select('*').eq('id', id).maybeSingle();
     if (error) throw error;
     return data ? toUser(data as UserRow) : null;
   }

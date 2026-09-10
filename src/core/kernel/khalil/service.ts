@@ -57,6 +57,15 @@ export class KhalilService {
   }
 
   /**
+   * بحث بالمعرّف — لعرض بيانات المستخدم الحالي (اسم/هاتف) بعد التحقق من الجلسة (مثال:
+   * account/page.tsx تعرض اسم العميل المسجَّل). Session لا تحمل fullName نفسها عمداً (تصميم
+   * قائم أصلاً، Session رقيقة: userId/tenantId/role/expiresAt/mustChangePassword فقط).
+   */
+  async findUserById(id: string): Promise<User | null> {
+    return khalilRepository.findUserById(id);
+  }
+
+  /**
    * كل العوالم النشطة من جدول worlds — مُستهلَكة أولاً عبر bayan.service.ts (اليوم 23) لتحديد
    * عالم individuals، ولاحقاً عبر مبدّل العوالم في الواجهة (اليوم 29). تمريرة رقيقة فقط —
    * dependency-cruiser يمنع أي نطاق خارج kernel/khalil/ من استيراد khalilRepository مباشرة.

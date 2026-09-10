@@ -34,23 +34,32 @@ export class CartService {
     return items.reduce((sum, item) => sum + item.quantity, 0);
   }
 
+  // CUSTOMER-IDENTITY-PHASE-1 — الثلاثة أدناه كانت مقيَّدة بـsessionToken فقط (زائر حصراً) —
+  // عُمِّمت إلى CartIdentity كاملة (userId أو sessionToken) وإلا يبقى عدّاد/إجمالي الهيدر صفراً
+  // دائماً لعميل مسجَّل دخوله فعلياً (سلته بـuserId لا sessionToken). القراءة تبقى بلا
+  // getOrCreateCart (نفس تحفُّظ التعليقات الأصلية أدناه — لا كتابة كوكي أثناء عرض RSC).
+  private async findCartForIdentity(identity: CartIdentity): Promise<Cart | null> {
+    if ('userId' in identity) return cartRepository.findCartByUserId(identity.userId);
+    return cartRepository.findCartBySessionToken(identity.sessionToken);
+  }
+
   // قراءة فقط — عمداً لا تستدعي getOrCreateCart. الـHeader (اليوم 14) يظهر في كل صفحات (reef)،
   // بما فيها /cart و/checkout حيث تستدعي الصفحة نفسها getOrCreateCart بالتوازي (RSC تُحلّل
   // المكوّنات غير المعتمدة على بعضها بالتوازي في نفس الجولة) — لو استدعى الـHeader أيضاً
   // getOrCreateCart بنفس التوكن الجديد، يتسابق الاثنان على إدراج نفس session_token (UNIQUE)
   // ويفشل الخاسر بخطأ قيد فريد. تجنّب حقيقي للسباق لا معالجة له بعد وقوعه: لا سلة بعد لهذا
   // التوكن يعني حرفياً "لا عناصر"، فالقراءة وحدها صحيحة ومكتملة هنا.
-  async getItemCountForSession(sessionToken: string): Promise<number> {
-    const cart = await cartRepository.findCartBySessionToken(sessionToken);
+  async getItemCountForIdentity(identity: CartIdentity): Promise<number> {
+    const cart = await this.findCartForIdentity(identity);
     if (!cart) return 0;
     return this.getItemCount(cart.id);
   }
 
   // FULL-VISUAL-PARITY-AUDIT-AND-FIX (بند 1ب) — كبسولة السلة في الهيدر تعرض الآن الإجمالي بالجنيه
-  // لا عدد القطع. نفس نمط getItemCountForSession حرفياً (قراءة فقط، بلا getOrCreateCart، بلا سلة =
+  // لا عدد القطع. نفس نمط getItemCountForIdentity حرفياً (قراءة فقط، بلا getOrCreateCart، بلا سلة =
   // صفر) لكن عبر getSummary().total بدل getItemCount.
-  async getTotalForSession(sessionToken: string): Promise<number> {
-    const cart = await cartRepository.findCartBySessionToken(sessionToken);
+  async getTotalForIdentity(identity: CartIdentity): Promise<number> {
+    const cart = await this.findCartForIdentity(identity);
     if (!cart) return 0;
     const summary = await this.getSummary(cart.id);
     return summary.total;
@@ -58,13 +67,13 @@ export class CartService {
 
   // FIX-STALE-PRODUCT-REFS-PERFORMANCE-AND-CATEGORY-VISUALS (الجزء 2) — [category]/page.tsx يحتاج
   // الملخّص الكامل (لا الإجمالي فقط) لمعرفة أي منتج مُضاف بالفعل وبأي كمية (QuantityStepper). نفس
-  // نمط getTotalForSession/getItemCountForSession حرفياً: قراءة فقط، بلا getOrCreateCart — **حاسم
+  // نمط getTotalForIdentity/getItemCountForIdentity حرفياً: قراءة فقط، بلا getOrCreateCart — **حاسم
   // هنا تحديداً** لأن المستدعي (RSC صفحة حي) لا يجوز أن يكتب كوكي أثناء العرض (Next.js يرفض ذلك
   // خارج Server Action/Route Handler) — getCartSummaryAction القائمة تستدعي getCartIdentity()
   // (تُنشئ كوكي عند غيابه)، آمنة فقط من داخل Server Action حقيقي (مثال: /cart/page.tsx بعد أول
   // إضافة فعلية سابقة تكون قد أنشأت الكوكي بالفعل)، لا لأول زيارة عرض بلا أي كوكي سابق.
-  async getSummaryForSession(sessionToken: string): Promise<CartSummary | null> {
-    const cart = await cartRepository.findCartBySessionToken(sessionToken);
+  async getSummaryForIdentityIfExists(identity: CartIdentity): Promise<CartSummary | null> {
+    const cart = await this.findCartForIdentity(identity);
     if (!cart) return null;
     return this.getSummaryForCart(cart);
   }
@@ -181,6 +190,42 @@ export class CartService {
   async clearCart(cartId: string): Promise<void> {
     const items = await cartRepository.findItems(cartId);
     await Promise.all(items.map((item) => cartRepository.deleteItem(item.id)));
+  }
+
+  /**
+   * CUSTOMER-IDENTITY-PHASE-1 — تُستدعى مرة واحدة عند أول دخول/تسجيل ناجح (Server Action الدخول/
+   * التسجيل، بعد تعيين كوكي الجلسة مباشرة) لدمج سلة الضيف (session_token الحالي، إن وُجدت) داخل
+   * سلة العميل المسجَّل. عند تعارض نفس المنتج بنفس الاختيار (selection) في السلتين: **تُجمَع
+   * الكميات، لا استبدال** — قرار مؤسس صريح. لا إعادة فحص مخزون هنا عمداً (بعكس addItem) — محتوى
+   * السلة مؤقت/غير مُلزِم دائماً بطبيعته، والفحص الحاسم يبقى عند Checkout فعلياً (ADR-022) بصرف
+   * النظر عن مصدر البند. idempotent: بلا سلة ضيف قائمة أصلاً أو بلا بنود فيها، لا شيء يحدث سوى
+   * حذف صف فارغ إن وُجد.
+   */
+  async mergeGuestCartIntoUser(guestSessionToken: string, userId: string): Promise<void> {
+    const guestCart = await cartRepository.findCartBySessionToken(guestSessionToken);
+    if (!guestCart) return;
+
+    const guestItems = await cartRepository.findItems(guestCart.id);
+    if (guestItems.length === 0) {
+      await cartRepository.deleteCart(guestCart.id);
+      return;
+    }
+
+    const userCart = await this.getOrCreateCart({ userId });
+    const userItems = await cartRepository.findItems(userCart.id);
+
+    for (const guestItem of guestItems) {
+      const matching = userItems.find(
+        (item) => item.productId === guestItem.productId && selectionsMatch(item.selection, guestItem.selection)
+      );
+      if (matching) {
+        await cartRepository.updateItemQuantity(matching.id, matching.quantity + guestItem.quantity);
+      } else {
+        await cartRepository.insertItem(userCart.id, guestItem.productId, guestItem.quantity, guestItem.selection);
+      }
+    }
+
+    await cartRepository.deleteCart(guestCart.id);
   }
 }
 

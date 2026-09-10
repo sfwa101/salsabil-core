@@ -158,6 +158,13 @@ export class CartRepository {
     const { error } = await supabaseAdmin.from('cart_items').delete().eq('id', itemId);
     if (error) throw error;
   }
+
+  // CUSTOMER-IDENTITY-PHASE-1 — تُستهلَك بعد دمج سلة ضيف داخل سلة عميل مسجَّل (cartService.
+  // mergeGuestCartIntoUser) لحذف صف السلة الفارغ الآن. cart_items تُحذف تلقائياً (on delete cascade).
+  async deleteCart(cartId: string): Promise<void> {
+    const { error } = await supabaseAdmin.from('carts').delete().eq('id', cartId);
+    if (error) throw error;
+  }
 }
 
 export const cartRepository = new CartRepository();
