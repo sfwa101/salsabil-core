@@ -51,6 +51,9 @@ const PRODUCT_CENTRIC_TYPES: PostType[] = ['product_highlight', 'offer'];
 export function PostCard({ post, products }: PostCardProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [sheet, setSheet] = useState<SheetState>(null);
+  // بند 6 — راجع تعليق CategoryProductGrid.tsx: نفس سبب رفع اسم المنتج عبر onProductLoaded (جلب غير
+  // متزامن داخل ProductSheetContent.tsx). يُصفَّر في كل نقطة تفتح منتجاً (3 نقاط أدناه).
+  const [productSheetName, setProductSheetName] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const isProductCentric = PRODUCT_CENTRIC_TYPES.includes(post.postType);
@@ -61,6 +64,11 @@ export function PostCard({ post, products }: PostCardProps) {
     setActiveIndex(Math.round(el.scrollLeft / el.clientWidth));
   }
 
+  function openProductSheet(productId: string) {
+    setProductSheetName(null);
+    setSheet({ kind: 'product', productId });
+  }
+
   function handleMediaClick(media: PostMedia) {
     if (media.link.type === 'recipe') {
       setSheet({ kind: 'recipe', ...media.link });
@@ -68,7 +76,7 @@ export function PostCard({ post, products }: PostCardProps) {
     }
     if (isProductCentric) {
       const productId = media.link.type === 'product' ? media.link.productId : products[0]?.id;
-      if (productId) setSheet({ kind: 'product', productId });
+      if (productId) openProductSheet(productId);
       return;
     }
     setSheet({ kind: 'post' });
@@ -115,7 +123,7 @@ export function PostCard({ post, products }: PostCardProps) {
         <HorizontalShelf title="منتجات هذا المنشور">
           {products.map((product) => (
             <div key={product.id} className="w-36 shrink-0 snap-start md:w-44 xl:w-48">
-              <ProductCard product={product} onOpenSheet={(productId) => setSheet({ kind: 'product', productId })} />
+              <ProductCard product={product} onOpenSheet={openProductSheet} />
             </div>
           ))}
         </HorizontalShelf>
@@ -124,20 +132,18 @@ export function PostCard({ post, products }: PostCardProps) {
       <BottomSheet
         open={sheet !== null}
         onClose={() => setSheet(null)}
-        title={sheet?.kind === 'recipe' ? sheet.title : sheet?.kind === 'product' ? 'تفاصيل المنتج' : undefined}
+        title={sheet?.kind === 'recipe' ? sheet.title : sheet?.kind === 'product' ? (productSheetName ?? 'تفاصيل المنتج') : undefined}
       >
-        {sheet?.kind === 'product' && <ProductSheetContent productId={sheet.productId} />}
+        {sheet?.kind === 'product' && (
+          <ProductSheetContent productId={sheet.productId} onProductLoaded={(p) => setProductSheetName(p.name)} />
+        )}
         {sheet?.kind === 'recipe' && (
           <RecipeSheetContent
             recipe={{ type: 'recipe', title: sheet.title, baseFamilySize: sheet.baseFamilySize, ingredients: sheet.ingredients }}
           />
         )}
         {sheet?.kind === 'post' && (
-          <PostSheetContent
-            post={post}
-            products={products}
-            onSelectProduct={(productId) => setSheet({ kind: 'product', productId })}
-          />
+          <PostSheetContent post={post} products={products} onSelectProduct={openProductSheet} />
         )}
       </BottomSheet>
     </article>

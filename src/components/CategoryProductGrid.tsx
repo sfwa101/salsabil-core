@@ -12,6 +12,11 @@
 //
 // `/product/[id]` الصفحة الكاملة **بلا أي تغيير** — تبقى وجهة صالحة لمشاركة رابط مباشر/محركات بحث،
 // هذا التعديل يمس فقط كيفية فتح بطاقة منتج من داخل شبكة صفحة الحي.
+//
+// PRODUCT-BOTTOM-SHEET-AND-NEIGHBORHOODS-BATCH (بند 6) — `openProductName` جديد: عنوان BottomSheet
+// كان نصاً ثابتاً "تفاصيل المنتج" بصرف النظر عن المنتج المفتوح. ProductSheetContent.tsx يجلب المنتج
+// بشكل غير متزامن، فاسمه غير معروف هنا وقت الفتح — `onProductLoaded` يرفعه بمجرد اكتمال الجلب.
+// يُصفَّر عند فتح منتج جديد كي لا يظهر اسم المنتج السابق للحظة قبل اكتمال الجلب.
 
 import { useState } from 'react';
 import { ProductCard } from '@/components/ProductCard';
@@ -22,7 +27,13 @@ import type { CartLineSummary } from '@/core/modules/cart/types';
 
 export function CategoryProductGrid({ products, cartLines }: { products: Product[]; cartLines: CartLineSummary[] }) {
   const [openProductId, setOpenProductId] = useState<string | null>(null);
+  const [openProductName, setOpenProductName] = useState<string | null>(null);
   const cartLineByProductId = new Map(cartLines.map((line) => [line.product.id, line]));
+
+  function openSheet(productId: string) {
+    setOpenProductName(null);
+    setOpenProductId(productId);
+  }
 
   return (
     <>
@@ -32,13 +43,13 @@ export function CategoryProductGrid({ products, cartLines }: { products: Product
             key={product.id}
             product={product}
             cartLine={cartLineByProductId.get(product.id)}
-            onOpenSheet={setOpenProductId}
+            onOpenSheet={openSheet}
           />
         ))}
       </div>
 
-      <BottomSheet open={openProductId !== null} onClose={() => setOpenProductId(null)} title="تفاصيل المنتج">
-        {openProductId && <ProductSheetContent productId={openProductId} />}
+      <BottomSheet open={openProductId !== null} onClose={() => setOpenProductId(null)} title={openProductName ?? 'تفاصيل المنتج'}>
+        {openProductId && <ProductSheetContent productId={openProductId} onProductLoaded={(p) => setOpenProductName(p.name)} />}
       </BottomSheet>
     </>
   );
