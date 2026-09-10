@@ -1,7 +1,11 @@
 // src/core/modules/catalog/types.ts
 // كتالوج المنتجات — الأنواع والخيارات المرنة (SALSABIL_CONSTITUTION.md §8, §14)
 
-export type ProductOptionType = 'size' | 'addon';
+// تحوُّط تسمية (PRODUCT-BOTTOM-SHEET-AND-NEIGHBORHOODS-BATCH، بند 1) — كان `ProductOptionType`. نفس
+// مفهوم "خيار قابل للاختيار يغيّر السعر/المحتوى" (وزن/إضافة اليوم) متوقَّع الحاجة إليه مستقبلاً في
+// عوالم أخرى غير ريف (درجة رحلة/فندق في أسراب، نوع خدمة في نبض) — rename بحت بلا أي منطق جديد، لا
+// "محرك اختيارات عام". راجع docs/DECISIONS.md لملاحظة القرار الكاملة.
+export type SelectableOptionType = 'size' | 'addon';
 
 export type AddonUnavailableAction = 'continue_without' | 'ask_me' | 'cancel_order';
 

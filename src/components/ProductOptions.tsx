@@ -163,7 +163,7 @@ export function ProductOptions({ product, accentColor }: { product: Product; acc
         );
 
       // prepMethodOption/packagingOption: CONCEPTUAL — isVisible في السجل يعيد false دائماً اليوم
-      // (لا نوع مطابق في ProductOptionType)، فلن يصل التنفيذ هنا فعلياً. راجع تحذير السجل نفسه.
+      // (لا نوع مطابق في SelectableOptionType)، فلن يصل التنفيذ هنا فعلياً. راجع تحذير السجل نفسه.
       default:
         return null;
     }

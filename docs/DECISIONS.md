@@ -1961,6 +1961,37 @@ Related: DD-012 (السبب الجذري الأعمق، أُحسِم)، DD-010 (
 
 ---
 
+### DD-016
+```
+Decision: هل تُعاد تسمية `ProductOptionType` (src/core/modules/catalog/types.ts) إلى
+          `SelectableOptionType` كتحوُّط تسمية رخيص، ضمن نطاق ملفات مُعدَّلة أصلاً (لا سعياً لتعميم
+          معماري كامل الآن)؟
+Reason: رؤية المالك (PRODUCT-BOTTOM-SHEET-AND-NEIGHBORHOODS-BATCH، بند 1): نفس مفهوم "خيار قابل
+          للاختيار يغيّر السعر/المحتوى" (اليوم: وزن/إضافة على منتج) متوقَّع الحاجة إليه مستقبلاً في
+          عوالم أخرى غير ريف — درجة رحلة/فندق/وجبة في "أسراب"، نوع خدمة طبية في "نبض". هذان العالمان
+          **غير موجودين بعد** — لا تُبنى لهما معمارية كاملة الآن (بناء على تخمين بدل استخدام حقيقي،
+          خطأ سبق تجنُّبه صراحة في هذا المشروع، راجع CONFLICT-009/ADR-024).
+          **ما تم فعلياً: rename بحت، صفر منطق جديد.** نطاق التنفيذ محصور بملفات ستُعدَّل أصلاً ضمن
+          نفس الدفعة (`product-page-blocks-registry.ts`, `ProductOptions.tsx`) — لم تُلمَس ملفات
+          أخرى تستورد `ProductOption`/`ProductSelection` (catalog.repository.ts، cart.repository.ts،
+          bayan.repository.ts، bayan/types.ts) لأنها خارج نطاق العمل الجاري، ولأن التسمية فيها
+          ("منتج") لا تزال دقيقة اليوم — لا داعي تقني لتعميمها الآن. `PostForm.tsx` يملك واجهة محلية
+          منفصلة تماماً باسم `ProductOption` (شكل مختلف تماماً `{id, name}` لا `SizeOption|AddonOption`)
+          — لم تُمَس أيضاً، لا علاقة لها بهذا النوع إطلاقاً رغم تطابق الاسم صدفةً.
+Risk: لا خطر — rename من النوع الآمن (`tsc --noEmit` نظيف بعد التنفيذ، صفر استيراد مكسور). الخطر
+          الوحيد المُتجنَّب عمداً هو الاتجاه المعاكس: بناء "محرك اختيارات عام" يخدم عوالم افتراضية
+          غير موجودة — هذا مرفوض صراحة حتى وجود استخدام حقيقي ثانٍ (أسراب أو نبض فعلياً).
+Owner: Founder
+Created: 2026-09-10
+Resolved: 2026-09-10 — PRODUCT-BOTTOM-SHEET-AND-NEIGHBORHOODS-BATCH (بند 1)
+Status: RESOLVED
+Blocking: NO
+Related: src/core/modules/catalog/types.ts، src/config/product-page-blocks-registry.ts،
+          src/components/ProductOptions.tsx، ADR-024 (نفس مبدأ "لا بناء استباقي بلا استخدام حقيقي")
+```
+
+---
+
 ### مراجَع ولم يُحوَّل إلى Decision Debt (مع التبرير)
 
 - **BR-016 (الحد الأدنى لقيمة الطلب، `docs/BUSINESS_RULES.md`):** `OPEN_QUESTION` قائم، لكن التنفيذ
