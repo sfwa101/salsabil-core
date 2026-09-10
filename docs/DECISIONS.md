@@ -1,7 +1,7 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.34
+version: 1.35
 authority: Security & Correctness (قسم DECISION DEBT REGISTRY) + Engineering Decision Log (باقي الملف)
 last_updated: 2026-09-10
 last_verified: 2026-09-10
@@ -1648,7 +1648,21 @@ Blocking: NO لعمل الميزات العادي (كل ملف integration ين�
           husky pre-push كبوابة موثوقة (تجاوزها بـ`--no-verify` أصبح ضرورياً أحياناً بإذن صريح، لا
           استثناءً نادراً كما يُفترَض)
 Status: OPEN
-Related: src/core/modules/orders/orders.integration.test.ts، .husky/pre-push، AGENTS.md §9 (حظر
+
+⚠️ تحديث 2026-09-10 (PRODUCT-BOTTOM-SHEET-AND-NEIGHBORHOODS-BATCH، ترقية staging) — دليل إضافي يوسِّع
+          نطاق هذا الـDD: نفس النمط (فشل ضمن `npm test` الكامل، نجاح فوري عند إعادة التشغيل، **أعراض
+          مختلفة بين المحاولتين** — مرة نفاد مخزون "دجاجة كاملة طازجة" في `admin.integration.test.ts`،
+          ومرة `Test timed out` في اختبار `audit_log` مختلف تماماً في نفس الملف) ظهر الآن في
+          `admin.integration.test.ts` أيضاً، **لا `orders.integration.test.ts` فقط** كما افتُرض عند
+          الإنشاء. تنوّع الأعراض (نفاد مخزون مرة، Timeout مرة أخرى) بين التشغيلات يرجّح تزاحم موارد/
+          شبكة عاماً تحت حمل التشغيل المتوازي لملفات integration الكثيرة، لا تعارضاً محدَّداً بين ملفَين
+          بعينهما فقط. لم يُمَسّ أي كود في `orders.service.ts`/`inventory.service.ts`/
+          `admin.service.ts` في هذه الدفعة (كتالوج/بيانات بحتة) — **مؤكَّد أنه ليس تراجعاً ناتجاً عن
+          هذه المهمة**: التحقق (لا افتراض) تم بإعادة تشغيل `admin.integration.test.ts` معزولاً مرتين
+          — فشل مختلف مرة، نجاح 11/11 كامل في المرة التالية مباشرة. `git push` نجح عند إعادة المحاولة
+          الثانية بلا أي `--no-verify` (لم يُطلَب إذن التجاوز، ولم يُستخدَم).
+Related: src/core/modules/orders/orders.integration.test.ts،
+          src/core/modules/admin/admin.integration.test.ts، .husky/pre-push، AGENTS.md §9 (حظر
           تجاوز الخطافات إلا بطلب صريح — طُبِّق هنا فعلياً مرة واحدة بإذن المؤسس المباشر في محادثة
           FULL-VISUAL-PARITY-AUDIT-AND-FIX)
 ```
