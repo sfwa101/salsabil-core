@@ -207,10 +207,29 @@ describe('Admin orders integration (Supabase حقيقي، اليوم 11)', () =>
   const cartIdsToClean: string[] = [];
 
   beforeAll(async () => {
-    const product = await catalogRepository.findProductByName('دجاجة كاملة طازجة');
-    if (!product) throw new Error('منتج الاختبار غير موجود في قاعدة البيانات الحقيقية');
-    productId = product.id;
-    await supabaseAdmin.from('inventory').upsert({ product_id: productId, quantity_available: 10 }, { onConflict: 'product_id' });
+    // DD-011 — منتج مخصَّص لهذا الوصف بدل الاعتماد على صف "دجاجة كاملة طازجة" الحقيقي المشترك
+    // (كان يتعارض مع cart/orders.integration.test.ts عند تشغيلها معاً). نفس خيارات/سعر المنتج
+    // المرجعي حرفياً — لا تغيير في سلوك المنتج المُختبَر، فقط عزل الصف نفسه.
+    const reference = await catalogRepository.findProductByName('دجاجة كاملة طازجة');
+    if (!reference) throw new Error('منتج مرجعي غير موجود في قاعدة البيانات الحقيقية');
+    if (!reference.tenantId) throw new Error('المنتج المرجعي غير مرتبط بتاجر');
+
+    const { data: productRow, error } = await supabaseAdmin
+      .from('products')
+      .insert({
+        category_id: reference.categoryId,
+        tenant_id: reference.tenantId,
+        name: `منتج اختبار الإدارة — ${randomUUID().slice(0, 8)}`,
+        base_price: reference.basePrice,
+        unit: reference.unit,
+        options: reference.options,
+        is_active: true,
+      })
+      .select('*')
+      .single();
+    if (error) throw error;
+    productId = productRow.id as string;
+    await supabaseAdmin.from('inventory').insert({ product_id: productId, quantity_available: 10 });
   });
 
   afterAll(async () => {
@@ -226,7 +245,8 @@ describe('Admin orders integration (Supabase حقيقي، اليوم 11)', () =>
       await supabaseAdmin.from('user_personas').delete().eq('user_id', userId);
       await supabaseAdmin.from('users').delete().eq('id', userId);
     }
-    await supabaseAdmin.from('inventory').update({ quantity_available: 10 }).eq('product_id', productId);
+    await supabaseAdmin.from('inventory').delete().eq('product_id', productId);
+    await supabaseAdmin.from('products').delete().eq('id', productId);
   });
 
   it('الإدارة تقرأ طلباً حقيقياً بغض النظر عن التاجر، تغيّر حالته بلا tenantId، ويظهر في سجل التدقيق العام', async () => {

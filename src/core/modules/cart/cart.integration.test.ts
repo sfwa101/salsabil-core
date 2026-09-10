@@ -12,27 +12,34 @@ describe('Cart integration (Supabase حقيقي)', () => {
   let productId: string;
   let sessionToken: string;
   let cartId: string;
-  let seededInventory = false;
 
   beforeAll(async () => {
-    const product = await catalogRepository.findProductByName('دجاجة كاملة طازجة');
-    if (!product) throw new Error('منتج الاختبار "دجاجة كاملة طازجة" غير موجود في قاعدة البيانات الحقيقية');
-    productId = product.id;
+    // DD-011 — منتج مخصَّص لهذا الوصف (Describe) بدل الاعتماد على صف "دجاجة كاملة طازجة" الحقيقي
+    // المشترك: كان يسبِّب تعارضاً حقيقياً (مخزون يُقرَأ/يُكتَب من عدة ملفات integration في آنٍ واحد)
+    // بين هذا الملف وadmin/orders.integration.test.ts. نفس خيارات/سعر المنتج المرجعي حرفياً — لا
+    // تغيير في القيم المتوقَّعة (لا تزال "= 100" صحيحة أدناه).
+    const reference = await catalogRepository.findProductByName('دجاجة كاملة طازجة');
+    if (!reference) throw new Error('منتج مرجعي "دجاجة كاملة طازجة" غير موجود في قاعدة البيانات الحقيقية');
+    if (!reference.tenantId) throw new Error('المنتج المرجعي غير مرتبط بتاجر');
 
-    const { data: existing } = await supabaseAdmin
-      .from('inventory')
+    const { data: productRow, error } = await supabaseAdmin
+      .from('products')
+      .insert({
+        category_id: reference.categoryId,
+        tenant_id: reference.tenantId,
+        name: `منتج اختبار السلة — ${randomUUID().slice(0, 8)}`,
+        base_price: reference.basePrice,
+        unit: reference.unit,
+        options: reference.options,
+        is_active: true,
+      })
       .select('*')
-      .eq('product_id', productId)
-      .maybeSingle();
+      .single();
+    if (error) throw error;
+    productId = productRow.id as string;
 
-    if (!existing) {
-      const { error } = await supabaseAdmin.from('inventory').insert({ product_id: productId, quantity_available: 10 });
-      if (error) throw error;
-      seededInventory = true;
-    } else {
-      const { error } = await supabaseAdmin.from('inventory').update({ quantity_available: 10 }).eq('product_id', productId);
-      if (error) throw error;
-    }
+    const { error: invError } = await supabaseAdmin.from('inventory').insert({ product_id: productId, quantity_available: 10 });
+    if (invError) throw invError;
 
     sessionToken = randomUUID();
   });
@@ -41,9 +48,8 @@ describe('Cart integration (Supabase حقيقي)', () => {
     if (cartId) {
       await supabaseAdmin.from('carts').delete().eq('id', cartId); // cart_items تُحذف تلقائياً (on delete cascade)
     }
-    if (seededInventory) {
-      await supabaseAdmin.from('inventory').delete().eq('product_id', productId);
-    }
+    await supabaseAdmin.from('inventory').delete().eq('product_id', productId);
+    await supabaseAdmin.from('products').delete().eq('id', productId);
   });
 
   it('getOrCreateCart بنفس session_token يُعيد نفس السلة في المرة الثانية (idempotent)', async () => {
@@ -77,10 +83,27 @@ describe('Cart IDOR (اليوم 12، ADR-014، Supabase حقيقي)', () => {
   let itemInCartBId: string;
 
   beforeAll(async () => {
-    const product = await catalogRepository.findProductByName('دجاجة كاملة طازجة');
-    if (!product) throw new Error('منتج الاختبار "دجاجة كاملة طازجة" غير موجود في قاعدة البيانات الحقيقية');
-    productId = product.id;
-    await supabaseAdmin.from('inventory').update({ quantity_available: 10 }).eq('product_id', productId);
+    // DD-011 — منتج مخصَّص لهذا الوصف أيضاً، نفس مبرِّر الوصف أعلاه بالضبط.
+    const reference = await catalogRepository.findProductByName('دجاجة كاملة طازجة');
+    if (!reference) throw new Error('منتج مرجعي "دجاجة كاملة طازجة" غير موجود في قاعدة البيانات الحقيقية');
+    if (!reference.tenantId) throw new Error('المنتج المرجعي غير مرتبط بتاجر');
+
+    const { data: productRow, error } = await supabaseAdmin
+      .from('products')
+      .insert({
+        category_id: reference.categoryId,
+        tenant_id: reference.tenantId,
+        name: `منتج اختبار IDOR — ${randomUUID().slice(0, 8)}`,
+        base_price: reference.basePrice,
+        unit: reference.unit,
+        options: reference.options,
+        is_active: true,
+      })
+      .select('*')
+      .single();
+    if (error) throw error;
+    productId = productRow.id as string;
+    await supabaseAdmin.from('inventory').insert({ product_id: productId, quantity_available: 10 });
 
     const cartA = await cartService.getOrCreateCart({ sessionToken: randomUUID() });
     cartAId = cartA.id;
@@ -94,6 +117,8 @@ describe('Cart IDOR (اليوم 12، ADR-014، Supabase حقيقي)', () => {
   afterAll(async () => {
     await supabaseAdmin.from('carts').delete().eq('id', cartAId);
     await supabaseAdmin.from('carts').delete().eq('id', cartBId);
+    await supabaseAdmin.from('inventory').delete().eq('product_id', productId);
+    await supabaseAdmin.from('products').delete().eq('id', productId);
   });
 
   it('اختبار أمني حاسم: ترفض حياً حذف بند ينتمي لسلة أخرى عبر cartId مختلف، بلا حذف صامت', async () => {

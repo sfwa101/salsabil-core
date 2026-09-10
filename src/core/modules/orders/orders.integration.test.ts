@@ -21,13 +21,32 @@ describe('Orders/Checkout integration (Supabase حقيقي)', () => {
   const cartIdsToClean: string[] = [];
 
   beforeAll(async () => {
-    const product = await catalogRepository.findProductByName('دجاجة كاملة طازجة');
-    if (!product) throw new Error('منتج الاختبار "دجاجة كاملة طازجة" غير موجود في قاعدة البيانات الحقيقية');
-    productId = product.id;
-    tenantId = product.tenantId;
-    if (!tenantId) throw new Error('المنتج التجريبي غير مرتبط بتاجر — لا يمكن اختبار Checkout');
+    // DD-011 — منتج مخصَّص لهذا الوصف بدل الاعتماد على صف "دجاجة كاملة طازجة" الحقيقي المشترك (كان
+    // يسبِّب تعارضاً حقيقياً بين هذا الملف وadmin/cart.integration.test.ts — أحدها يُنزِل المخزون
+    // إلى صفر عمداً بينما آخر يفترضه = 10). نفس خيارات/سعر المنتج المرجعي حرفياً — القيم المتوقَّعة
+    // أدناه (100 جنيه، إلخ) لا تتغيَّر.
+    const reference = await catalogRepository.findProductByName('دجاجة كاملة طازجة');
+    if (!reference) throw new Error('منتج مرجعي "دجاجة كاملة طازجة" غير موجود في قاعدة البيانات الحقيقية');
+    if (!reference.tenantId) throw new Error('المنتج المرجعي غير مرتبط بتاجر — لا يمكن اختبار Checkout');
+    tenantId = reference.tenantId;
 
-    await supabaseAdmin.from('inventory').upsert({ product_id: productId, quantity_available: 10 }, { onConflict: 'product_id' });
+    const { data: productRow, error } = await supabaseAdmin
+      .from('products')
+      .insert({
+        category_id: reference.categoryId,
+        tenant_id: reference.tenantId,
+        name: `منتج اختبار Checkout — ${randomUUID().slice(0, 8)}`,
+        base_price: reference.basePrice,
+        unit: reference.unit,
+        options: reference.options,
+        is_active: true,
+      })
+      .select('*')
+      .single();
+    if (error) throw error;
+    productId = productRow.id as string;
+
+    await supabaseAdmin.from('inventory').insert({ product_id: productId, quantity_available: 10 });
   });
 
   afterAll(async () => {
@@ -44,7 +63,8 @@ describe('Orders/Checkout integration (Supabase حقيقي)', () => {
       await supabaseAdmin.from('user_personas').delete().eq('user_id', userId);
       await supabaseAdmin.from('users').delete().eq('id', userId);
     }
-    await supabaseAdmin.from('inventory').update({ quantity_available: 10 }).eq('product_id', productId);
+    await supabaseAdmin.from('inventory').delete().eq('product_id', productId);
+    await supabaseAdmin.from('products').delete().eq('id', productId);
   });
 
   it('يحوّل سلة حقيقية إلى طلب PENDING بسعر مجمَّد صحيح، وينشئ مستخدماً جديداً بالهاتف، ويُفرغ السلة', async () => {
@@ -264,12 +284,28 @@ describe('Orders lifecycle integration (Supabase حقيقي، اليوم 9)', ()
   const cartIdsToClean: string[] = [];
 
   beforeAll(async () => {
-    const product = await catalogRepository.findProductByName('دجاجة كاملة طازجة');
-    if (!product) throw new Error('منتج الاختبار "دجاجة كاملة طازجة" غير موجود في قاعدة البيانات الحقيقية');
-    productId = product.id;
-    if (!product.tenantId) throw new Error('المنتج التجريبي غير مرتبط بتاجر');
-    tenantId = product.tenantId;
-    await supabaseAdmin.from('inventory').upsert({ product_id: productId, quantity_available: 10 }, { onConflict: 'product_id' });
+    // DD-011 — منتج مخصَّص لهذا الوصف أيضاً، نفس مبرِّر الوصف الأول في هذا الملف أعلاه.
+    const reference = await catalogRepository.findProductByName('دجاجة كاملة طازجة');
+    if (!reference) throw new Error('منتج مرجعي "دجاجة كاملة طازجة" غير موجود في قاعدة البيانات الحقيقية');
+    if (!reference.tenantId) throw new Error('المنتج المرجعي غير مرتبط بتاجر');
+    tenantId = reference.tenantId;
+
+    const { data: productRow, error } = await supabaseAdmin
+      .from('products')
+      .insert({
+        category_id: reference.categoryId,
+        tenant_id: reference.tenantId,
+        name: `منتج اختبار دورة حياة الطلب — ${randomUUID().slice(0, 8)}`,
+        base_price: reference.basePrice,
+        unit: reference.unit,
+        options: reference.options,
+        is_active: true,
+      })
+      .select('*')
+      .single();
+    if (error) throw error;
+    productId = productRow.id as string;
+    await supabaseAdmin.from('inventory').insert({ product_id: productId, quantity_available: 10 });
   });
 
   afterAll(async () => {
@@ -284,7 +320,8 @@ describe('Orders lifecycle integration (Supabase حقيقي، اليوم 9)', ()
       await supabaseAdmin.from('user_personas').delete().eq('user_id', userId);
       await supabaseAdmin.from('users').delete().eq('id', userId);
     }
-    await supabaseAdmin.from('inventory').update({ quantity_available: 10 }).eq('product_id', productId);
+    await supabaseAdmin.from('inventory').delete().eq('product_id', productId);
+    await supabaseAdmin.from('products').delete().eq('id', productId);
   });
 
   async function createTestOrder() {
