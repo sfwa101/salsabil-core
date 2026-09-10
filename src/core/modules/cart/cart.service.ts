@@ -106,7 +106,15 @@ export class CartService {
       throw new Error('الكمية يجب أن تكون أكبر من صفر');
     }
 
-    const product = await catalogService.getProductById(input.productId);
+    // FIX-SEQUENTIAL-CART-QUERIES-PARALLEL (DD-014) — getProductById(productId) وfindItems(cartId)
+    // مستقلان تماماً (مفتاحان مختلفان، لا يعتمد أحدهما على نتيجة الآخر) — كانا يُنفَّذان بالتتابع بلا
+    // داعٍ. لا تغيير على منطق التحقق نفسه: إن كان المنتج غير صالح لاحقاً، ستكون findItems قد نُفِّذت
+    // فعلاً (قراءة بلا أثر جانبي، تكلفتها الضائعة في مسار خطأ نادر مقبولة مقابل توفير رحلة شبكة كاملة
+    // في المسار السليم).
+    const [product, existingItems] = await Promise.all([
+      catalogService.getProductById(input.productId),
+      cartRepository.findItems(cartId),
+    ]);
     if (!product || !product.isActive) {
       throw new Error(`المنتج غير متاح: ${input.productId}`);
     }
@@ -116,7 +124,6 @@ export class CartService {
       throw new Error(`اختيار غير صالح للمنتج ${input.productId}`);
     }
 
-    const existingItems = await cartRepository.findItems(cartId);
     const matchingItem = existingItems.find(
       (item) => item.productId === input.productId && selectionsMatch(item.selection, selection)
     );
