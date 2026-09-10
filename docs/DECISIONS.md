@@ -1667,6 +1667,29 @@ Related: src/core/modules/orders/orders.integration.test.ts،
           FULL-VISUAL-PARITY-AUDIT-AND-FIX)
 ```
 
+⚠️ تحديث 2026-09-10 (بند 6 مصادقة عميل تمهيدي — تجاوز `--no-verify` ثانٍ، بإذن مؤسس مباشر) — نفس
+          النمط بالضبط تكرَّر بشدة أعلى: **6 محاولات `git push` متتالية فشلت**، كل مرة باختبار
+          integration مختلف (`orders.integration.test.ts` دورة الحياة الكاملة → مرة، اختبار توقيت
+          `khalil/service.test.ts` (Timing Attack RTT ratio، حدّي 2.07-2.26 مقابل عتبة 2.0) → 3
+          مرات، `admin.integration.test.ts` نفاد مخزون → مرة) — **كل اختبار فاشل نجح 100% عند إعادة
+          تشغيله معزولاً فوراً بعدها** (`orders.integration.test.ts` 12/12، `khalil/service.test.ts`
+          23/23، لم يُعزَل `admin.integration.test.ts` وحده هذه المرة لكن نفس نمط التحديث السابق
+          أعلاه). **الدفعتان المدفوعتان لا تمسّان orders/inventory/cart/auth إطلاقاً** — بند 1
+          (`refactor(catalog): rename ProductOptionType to SelectableOptionType`: catalog/types.ts
+          [rename فقط، جزئي عبر `git apply --cached` لعزل تغيير مستقل غير ذي صلة كان موجوداً مسبقاً
+          بلا تدخل]، product-page-blocks-registry.ts، ProductOptions.tsx، DECISIONS.md) وبند 6
+          (`fix(product-sheet): ...`: ProductSheetContent.tsx، CategoryProductGrid.tsx،
+          PostCard.tsx) — كتالوج/واجهة بحتة. **إذن مؤسس مباشر صريح في نفس المحادثة** (لا سياسة
+          دائمة، لهذه الدفعة فقط) لاستخدام `git push --no-verify` بعد التوثيق هنا أولاً — طُبِّق
+          بعد كتابة هذا التحديث مباشرة. **قرار مؤسس تابع مباشر:** هذا التكرار (مرتان الآن، بشدة
+          متصاعدة) يجعل حسم `DD-011` من جذوره **شرطاً مسبقاً صريحاً** قبل بدء أي عمل على مهمة هوية
+          العميل (auth/عناوين/سلة) — تلك المهمة تمسّ orders/cart/auth بعمق وتتطلب Guardian Review
+          DEEP مزدوجة (نفس نمط DD-001)، لا يمكن الوثوق بنتائجها إن كانت بوابة الاختبار نفسها غير
+          مستقرة. **الحالة تبقى `OPEN`** — لن تُغلَق `RESOLVED` إلا بعد حل معماري فعلي (لا تجاوز آخر)
+          يُعرَض على المؤسس أولاً إن احتاج تغييراً بنيوياً (مثال: عزل قاعدة بيانات اختبار منفصلة، أو
+          تسلسل تنفيذ للملفات المتعارضة بدل توازٍ كامل)، ثم يُتحقَّق منه حياً (تشغيلات `npm test`
+          متكررة ناجحة، لا مرة واحدة).
+
 ---
 
 ### DD-012
