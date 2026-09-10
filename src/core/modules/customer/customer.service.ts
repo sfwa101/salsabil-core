@@ -1,15 +1,18 @@
 // src/core/modules/customer/customer.service.ts
-// CUSTOMER-IDENTITY-PHASE-1 — تسجيل/دخول عميل حقيقي (اختياري، Guest Mode يبقى الافتراضي — راجع
-// docs/DECISIONS.md لتقرير الاستقصاء المعتمد). يعيد استخدام khalilService بالكامل — صفر تعديل
-// على kernel/khalil نفسه، نفس آلية دخول التاجر/الإدارة بالضبط (ADR-026)، نمط موازٍ لا كود جديد.
+// CUSTOMER-IDENTITY-PHASE-1/CLAIM-FLOW — تسجيل/دخول عميل حقيقي (اختياري، Guest Mode يبقى الافتراضي
+// — راجع docs/DECISIONS.md لتقرير الاستقصاء المعتمد) + ادّعاء حساب ضيف موجود مسبقاً بعد تحقق OTP
+// (ADR-030). يعيد استخدام khalilService بالكامل — صفر تعديل على kernel/khalil نفسه (باستثناء
+// findUserById، أُصلِحت في الدفعة السابقة)، نفس آلية دخول التاجر/الإدارة بالضبط (ADR-026).
 //
-// ⚠️ نطاق مقصود صراحة: `register` يرفض أي هاتف له صف users موجود مسبقاً بالكامل — حتى لو كان صفاً
-// "ضيف" بلا كلمة مرور من Checkout سابق (findOrCreateCustomerByPhone القائم). لا "ادّعاء" حساب —
-// ذلك المسار يحتاج تحقق هاتف حقيقياً (OTP) لمنع انتحال حساب عميل آخر بمجرد معرفة رقم هاتفه، ومزوّد
-// الـOTP لم يُحسَم بعد (قرار مؤسس معلَّق). يُبنى كمهمة منفصلة صريحة بعد ذلك القرار.
+// ⚠️ `register` يرفض أي هاتف له صف users موجود مسبقاً بالكامل — حتى لو كان صفاً "ضيف" بلا كلمة
+// مرور من Checkout سابق (findOrCreateCustomerByPhone القائم). المسار الوحيد لتفعيل حساب كهذا الآن
+// هو `startClaim`/`confirmClaim` أدناه (تحقق OTP حقيقي عبر otpService، لا كلمة مرور مباشرة —
+// يمنع انتحال حساب عميل آخر بمجرد معرفة رقم هاتفه).
 
 import { khalilService } from '../../kernel/khalil/service';
 import type { Session } from '../../kernel/khalil/types';
+import { otpService } from '../../kernel/otp/otp.service';
+import type { OtpChannelName } from '../../kernel/otp/types';
 import { auditService } from '../audit/audit.service';
 
 // عميل عادي، لا حساسية جلسة تاجر/إدارة — مدة أطول من MERCHANT_SESSION_TTL_SECONDS (7 أيام) مقبولة
@@ -100,6 +103,58 @@ export class CustomerService {
       action: 'auth.login_success',
       entityType: 'user',
       entityId: auth.user.id,
+      metadata: { phone },
+    });
+
+    return result;
+  }
+
+  /**
+   * الخطوة الأولى لادّعاء حساب موجود مسبقاً (ضيف سابق بلا كلمة مرور، أو أي صف customer آخر بلا
+   * كلمة مرور مضبوطة بعد) — يرسل رمز تحقق عبر otpService (WhatsApp أساسي، SMS Misr احتياطي).
+   * يرفض بصمت لو لا صف بهذا الهاتف أصلاً أو لو دوره ليس customer — **لا خطر Enumeration جديد**:
+   * نفس المبرِّر المسجَّل في registerCustomerAction.ts (العميل يعرف رقمه هو أصلاً).
+   */
+  async startClaim(phone: string): Promise<{ ok: true; channel: OtpChannelName } | { error: string }> {
+    const existing = await khalilService.findUserByPhone(phone);
+    if (!existing || existing.role !== 'customer') {
+      return { error: 'لا يوجد حساب بهذا الرقم' };
+    }
+
+    const result = await otpService.sendChallenge(phone, 'claim_account');
+    if (!result.ok) return { error: result.error };
+    return { ok: true, channel: result.channel };
+  }
+
+  /**
+   * الخطوة الثانية — رمز صحيح + كلمة مرور جديدة يُضبطان على الحساب الموجود (لا صف جديد)، ثم جلسة
+   * فورية (نفس تجربة register/login). يتحقق من الرمز عبر otpService أولاً — لا كلمة مرور تُضبَط
+   * إطلاقاً قبل نجاح التحقق.
+   */
+  async confirmClaim(phone: string, code: string, newPassword: string): Promise<RegisterResult> {
+    const verified = await otpService.verifyChallenge(phone, 'claim_account', code);
+    if (!verified) return { error: 'account_exists' }; // رسالة عامة كافية هنا — التفصيل (رمز خاطئ/منتهٍ) لا يغيّر إجراء المستخدم التالي
+
+    const user = await khalilService.findUserByPhone(phone);
+    // نادر جداً: تغيّر شيء بين startClaim وconfirmClaim (مثال: حُذف الحساب) — نفس رسالة الرفض العامة، لا كشف تفصيل داخلي
+    if (!user || user.role !== 'customer') return { error: 'account_exists' };
+
+    await khalilService.setNewPassword(user.id, newPassword);
+
+    const result = await khalilService.createSession({
+      userId: user.id,
+      tenantId: null,
+      role: 'customer',
+      ttlSeconds: CUSTOMER_SESSION_TTL_SECONDS,
+      mustChangePassword: false,
+    });
+
+    await auditService.log({
+      actorId: user.id,
+      actorRole: 'customer',
+      action: 'auth.account_claimed',
+      entityType: 'user',
+      entityId: user.id,
       metadata: { phone },
     });
 

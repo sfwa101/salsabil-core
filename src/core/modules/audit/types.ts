@@ -17,6 +17,8 @@ export type AuditAction =
   | 'auth.password_changed'
   // CUSTOMER-IDENTITY-PHASE-1 — تسجيل حساب عميل جديد فقط (لا "ادّعاء" حساب ضيف موجود، مؤجَّل)
   | 'auth.register_success'
+  // CUSTOMER-IDENTITY-CLAIM-FLOW (ADR-030) — ادّعاء حساب عميل ضيف موجود مسبقاً، بعد تحقق OTP ناجح
+  | 'auth.account_claimed'
   | 'inventory.release_failed';
 
 export interface AuditLogEntry {

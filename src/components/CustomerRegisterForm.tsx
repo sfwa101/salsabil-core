@@ -12,17 +12,20 @@ export function CustomerRegisterForm() {
   const [password, setPassword] = useState('');
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [accountExists, setAccountExists] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus('submitting');
     setError(null);
+    setAccountExists(false);
 
     const result = await registerCustomerAction({ fullName, phone, password });
 
     if ('error' in result) {
       setStatus('error');
       setError(result.error);
+      setAccountExists(!!result.accountExists);
       return;
     }
     router.push('/account');
@@ -72,6 +75,11 @@ export function CustomerRegisterForm() {
         {status === 'submitting' ? 'جارٍ الإنشاء...' : 'إنشاء حساب'}
       </button>
       {status === 'error' && error && <span className="text-center text-sm text-destructive">{error}</span>}
+      {accountExists && (
+        <Link href="/account/claim" className="text-center text-sm text-primary hover:underline">
+          هذا رقمك ولا تملك كلمة مرور؟ استرجع الحساب عبر رمز تحقق
+        </Link>
+      )}
 
       <Link href="/account/login" className="text-center text-sm text-primary hover:underline">
         لديك حساب بالفعل؟ سجّل الدخول

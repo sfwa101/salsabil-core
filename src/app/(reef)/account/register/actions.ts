@@ -1,5 +1,6 @@
 'use server';
-// تسجيل حساب عميل جديد — راجع تحذير النطاق في customer.service.ts (لا "ادّعاء" حساب ضيف موجود)
+// تسجيل حساب عميل جديد — لهاتف لم يُستخدَم إطلاقاً من قبل فقط. لهاتف له صف موجود مسبقاً (ضيف سابق
+// مثلاً)، المسار هو /account/claim (ADR-030، تحقق OTP)، لا هذا الملف.
 
 import { z } from 'zod';
 import { customerService } from '@/core/modules/customer/customer.service';
@@ -15,7 +16,7 @@ const registerInputSchema = z.object({
 });
 
 type RegisterFormInput = z.input<typeof registerInputSchema>;
-type RegisterActionResult = { success: true } | { error: string };
+type RegisterActionResult = { success: true } | { error: string; accountExists?: boolean };
 
 export async function registerCustomerAction(input: RegisterFormInput): Promise<RegisterActionResult> {
   const parsed = registerInputSchema.safeParse(input);
@@ -25,9 +26,10 @@ export async function registerCustomerAction(input: RegisterFormInput): Promise<
 
   const result = await customerService.register(parsed.data);
   if ('error' in result) {
-    // رسالة صريحة هنا (بعكس رسالة الدخول الموحَّدة) — العميل هو من يطلب التسجيل بهاتفه هو، فلا
-    // خطر Enumeration حقيقي (هو أصلاً يعرف رقمه)، والتوجيه لتسجيل الدخول تجربة استخدام أوضح.
-    return { error: 'رقم الهاتف مسجَّل بالفعل — جرّب تسجيل الدخول' };
+    // رسالة صريحة هنا (بعكس رسالة الدخول الموحَّدة) — العميل هو من يطلب التسجيل بهاتفه هو، فلا خطر
+    // Enumeration حقيقي (هو أصلاً يعرف رقمه). accountExists: true يفعِّل رابط "استرجاع الحساب"
+    // (/account/claim، ADR-030) في الواجهة بدل رسالة نصية فقط.
+    return { error: 'رقم الهاتف مسجَّل بالفعل', accountExists: true };
   }
 
   // CUSTOMER-IDENTITY-PHASE-1 — دمج سلة الضيف الحالية (إن وُجدت) داخل سلة الحساب الجديد. عند تعارض

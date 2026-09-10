@@ -24,6 +24,14 @@ export const LOGIN_RATE_LIMIT: RateLimitConfig = {
   windowMs: 15 * 60 * 1000,
 };
 
+// CUSTOMER-IDENTITY-CLAIM-FLOW (ADR-030) — أضيق من LOGIN_RATE_LIMIT عمداً: كل إرسال ناجح تكلفة
+// حقيقية بالمال (WhatsApp/SMS Misr)، لا محاولة دخول مجانية. يحدّ من استنزاف الرصيد عبر طلبات إرسال
+// متكررة لنفس الرقم، لا فقط تخمين الرمز (المحدود أصلاً بـotp_challenges.max_attempts).
+export const OTP_SEND_RATE_LIMIT: RateLimitConfig = {
+  maxAttempts: 3,
+  windowMs: 60 * 60 * 1000,
+};
+
 export function isRateLimited(key: string, config: RateLimitConfig = LOGIN_RATE_LIMIT): boolean {
   const existing = attempts.get(key);
   if (!existing) return false;
