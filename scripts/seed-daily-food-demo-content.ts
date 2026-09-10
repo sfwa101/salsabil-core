@@ -5,6 +5,13 @@
 // المنتج / caption المنشور) — آمن لإعادة التشغيل بلا تكرار صفوف.
 //
 // التشغيل: npx tsx scripts/seed-daily-food-demo-content.ts
+//
+// DD-015 (2026-09-10) — روابط placehold.co كانت بلا لاحقة صيغة صريحة (`?text=...` فقط)، فتُخدَّم
+// `image/svg+xml` افتراضياً من المصدر؛ Next.js Image Optimizer يرفض SVG افتراضياً (`400`،
+// `dangerouslyAllowSVG` غير مفعَّل — إعداد أمان قياسي، **لم يُغيَّر هنا** بقرار مؤسس صريح: تعديل
+// الروابط أنظف وأأمن من فتح الباب لأي SVG مستقبلي). أُضيفت `.png` صريحة لكل رابط — نفس الحل المطبَّق
+// أصلاً في scripts/seed-real-neighborhoods-demo-content.ts. تحقَّقتُ حياً أن 8 منتجات هذا السكربت
+// بالضبط هي كل ما تأثَّر فعلياً في القاعدة الحية (لا صفوف post_media بـplacehold.co حالياً).
 
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -44,7 +51,7 @@ const PRODUCTS: ProductSeed[] = [
     description: 'أرز مصري أبيض فاخر، حبة كاملة، مناسب للطبخ اليومي والمناسبات.',
     basePrice: 35,
     unit: 'kg',
-    imageUrl: 'https://placehold.co/800x800/f5deb3/5a3d1f?text=Rice',
+    imageUrl: 'https://placehold.co/800x800/f5deb3/5a3d1f.png?text=Rice',
     stock: 60,
   },
   {
@@ -52,7 +59,7 @@ const PRODUCTS: ProductSeed[] = [
     description: 'سكر أبيض مكرر ناعم، معبأ بإحكام للحفاظ على النقاء.',
     basePrice: 32,
     unit: 'kg',
-    imageUrl: 'https://placehold.co/800x800/ffffff/333333?text=Sugar',
+    imageUrl: 'https://placehold.co/800x800/ffffff/333333.png?text=Sugar',
     stock: 60,
   },
   {
@@ -60,7 +67,7 @@ const PRODUCTS: ProductSeed[] = [
     description: 'زيت عباد شمس نقي 100%، مناسب للقلي والطبخ اليومي.',
     basePrice: 65,
     unit: 'liter',
-    imageUrl: 'https://placehold.co/800x800/f4c430/6b4e00?text=Oil',
+    imageUrl: 'https://placehold.co/800x800/f4c430/6b4e00.png?text=Oil',
     stock: 40,
   },
   {
@@ -68,7 +75,7 @@ const PRODUCTS: ProductSeed[] = [
     description: 'بيض بلدي طازج يومياً من مزارع محلية، طبق كامل 30 بيضة.',
     basePrice: 130,
     unit: 'tray',
-    imageUrl: 'https://placehold.co/800x800/fff3d6/8a6d00?text=Eggs',
+    imageUrl: 'https://placehold.co/800x800/fff3d6/8a6d00.png?text=Eggs',
     stock: 25,
   },
   {
@@ -76,7 +83,7 @@ const PRODUCTS: ProductSeed[] = [
     description: 'طماطم بلدي حمراء طازجة، تُقطف يومياً.',
     basePrice: 18,
     unit: 'kg',
-    imageUrl: 'https://placehold.co/800x800/c0392b/ffffff?text=Tomatoes',
+    imageUrl: 'https://placehold.co/800x800/c0392b/ffffff.png?text=Tomatoes',
     stock: 80,
   },
   {
@@ -84,7 +91,7 @@ const PRODUCTS: ProductSeed[] = [
     description: 'بصل أصفر طازج، حبات متوسطة الحجم منتقاة.',
     basePrice: 15,
     unit: 'kg',
-    imageUrl: 'https://placehold.co/800x800/e8c39e/5a3d1f?text=Onions',
+    imageUrl: 'https://placehold.co/800x800/e8c39e/5a3d1f.png?text=Onions',
     stock: 80,
   },
   {
@@ -92,7 +99,7 @@ const PRODUCTS: ProductSeed[] = [
     description: 'خبز بلدي طازج يومياً، يُخبز صباحاً.',
     basePrice: 10,
     unit: 'pack',
-    imageUrl: 'https://placehold.co/800x800/d9a45f/4a2f11?text=Bread',
+    imageUrl: 'https://placehold.co/800x800/d9a45f/4a2f11.png?text=Bread',
     stock: 100,
   },
   {
@@ -100,7 +107,7 @@ const PRODUCTS: ProductSeed[] = [
     description: 'جبنة بيضاء طرية، مناسبة للفطار والطبخ.',
     basePrice: 55,
     unit: '500g',
-    imageUrl: 'https://placehold.co/800x800/fdfdfd/444444?text=Cheese',
+    imageUrl: 'https://placehold.co/800x800/fdfdfd/444444.png?text=Cheese',
     stock: 30,
   },
 ];
@@ -282,7 +289,7 @@ async function main() {
       priority: 10,
       media: [
         {
-          imageUrl: 'https://placehold.co/800x800/fceec2/6b4e00?text=Rice+Pudding',
+          imageUrl: 'https://placehold.co/800x800/fceec2/6b4e00.png?text=Rice+Pudding',
           displayOrder: 0,
           link: {
             type: 'recipe',
