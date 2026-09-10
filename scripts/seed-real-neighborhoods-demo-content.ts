@@ -15,17 +15,29 @@
 // وحدها، بل يعمل تلقائياً لأي منتج بخيارات size في أي حي، عبر السجل المركزي
 // product-page-blocks-registry.ts بلا أي كود إضافي لكل حي.
 //
-// التشغيل: npx tsx scripts/seed-real-neighborhoods-demo-content.ts
+// التشغيل (dev، افتراضي — آمن، لا يمس staging بلا طلب صريح): npx tsx scripts/seed-real-neighborhoods-demo-content.ts
+// الترقية لـstaging (طلب مؤسس صريح فقط): npx tsx scripts/seed-real-neighborhoods-demo-content.ts --staging
+//
+// PRODUCT-BOTTOM-SHEET-AND-NEIGHBORHOODS-BATCH (تكملة، 2026-09-10) — علم --staging جديد يختار
+// .env.staging.local بدل .env.local — لا "نسخ يدوي" (نفس السكربت الـIdempotent بمفاتيح طبيعية
+// حرفياً، نفس نمط ADR-017 لـscripts/seed-test-accounts.sql). الافتراضي يبقى dev دائماً — تشغيل
+// السكربت بلا العلم لا يمكن أن يكتب على staging بالخطأ.
 
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
-const envPath = path.resolve(dirname, '..', '.env.local');
+const useStaging = process.argv.includes('--staging');
+const envFile = useStaging ? '.env.staging.local' : '.env.local';
+const envPath = path.resolve(dirname, '..', envFile);
 if (existsSync(envPath)) {
   process.loadEnvFile(envPath);
+} else {
+  console.error(`✗ ملف البيئة غير موجود: ${envFile}`);
+  process.exit(1);
 }
+console.log(`(بيئة: ${useStaging ? 'STAGING' : 'dev'} — ${envFile})`);
 
 const { createClient } = await import('@supabase/supabase-js');
 

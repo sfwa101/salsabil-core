@@ -1,7 +1,7 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.33
+version: 1.34
 authority: Security & Correctness (قسم DECISION DEBT REGISTRY) + Engineering Decision Log (باقي الملف)
 last_updated: 2026-09-10
 last_verified: 2026-09-10
@@ -1760,18 +1760,37 @@ Risk: إن قرأ أي طرف بند 5 كـ"لم يُنفَّذ" بلا هذا �
           `daily-food` المزروعة سابقاً أيضاً** (تحقَّقتُ منه حياً — نفس الخطأ 400 على صورة الأرز
           الأصلية) — لم يُصلَح هنا (خارج نطاق هذه المهمة، يمسّ محتوى دفعة سابقة)، فقط صُحِّح داخل
           السكربت الجديد نفسه (`.png` صريحة في كل رابط) لتفادي تكراره في المحتوى الجديد. **الإصلاح
-          الشامل (تعديل next.config.ts لجميع الصور القديمة) يحتاج قراراً مؤسس منفصلاً** — مُسجَّل
-          أدناه.
+          الشامل (تعديل next.config.ts لجميع الصور القديمة) يحتاج قراراً مؤسس منفصلاً** — سُجِّل
+          كـDD-015، ثم حُسِم صراحة (راجع تحديث DD-015 نفسه: قرار مؤسس بتعديل الروابط، لا
+          `dangerouslyAllowSVG`).
+
+⚠️ تحديث 2026-09-10 (ترقية staging) — **الأحياء الخمسة نُقلت فعلياً لـstaging** بطلب مؤسس مباشر، عبر
+          نفس السكربت بالضبط (`--staging` جديد يختار `.env.staging.local` بدل `.env.local` — لا نسخ
+          يدوي، لا سكربت SQL منفصل). **تصحيح مرجعي:** طلب الترقية أشار إلى "مسار DD-011 الرسمي"،
+          لكن DD-011 الفعلي (راجعه أعلاه) موضوعه تعارض عزل بيانات اختبارات orders/inventory —
+          لا علاقة له بفصل dev/staging. الآلية الفعلية الموثَّقة لهذا الفصل هي **`ADR-017`**
+          (`scripts/schema-setup.sql` + `scripts/seed-test-accounts.sql`، مفاتيح طبيعية Idempotent) —
+          هذا ما اتُّبِع فعلياً هنا، بنفس الروح تماماً (نفس السكربت الآمن القابل لإعادة التشغيل، لا
+          كتابة يدوية عبر SQL Editor). تحقَّقتُ حياً أن `merchants.slug='poultry-test'` و
+          `categories.slug='daily-food'` (اللذان يعتمد عليهما السكربت) موجودان مسبقاً على staging
+          (`seed-test-accounts.sql`، ADR-017) قبل التشغيل — لا فشل متوقَّع.
+          **تحقُّق حي كامل على `staging.reefam.com` نفسها (لا dev فقط) بعد الترقية:** `/categories`
+          يعرض الأحياء الستة كلها (daily-food + الخمسة الجديدة)؛ لون كل حي صحيح ومطابق تلقائياً على
+          الخمسة؛ بلوك الإضافات وبلوك الوزن يعملان هناك أيضاً (نفس الاختبارين المُطبَّقين على dev)؛
+          صفر أخطاء 400 على الصور (إصلاح DD-015 انتقل مع البيانات)؛ صفر أخطاء console/pageerror. TTFB
+          الأحياء الخمسة على staging: 343-450ms — لا تراجع عن مستوى ما بعد DD-012 (`/daily-food`
+          562ms، `/categories` 290ms، كلاهما ضمن النطاق الطبيعي).
 Owner: Founder
 Created: 2026-09-09
-Resolved: 2026-09-10 — PRODUCT-BOTTOM-SHEET-AND-NEIGHBORHOODS-BATCH (بند 2)
-Review by: N/A — مُحسَم ومُتحقَّق منه حياً (5 أحياء، 21 منتجاً، هوية+بلوكات صحيحة)
+Resolved: 2026-09-10 — PRODUCT-BOTTOM-SHEET-AND-NEIGHBORHOODS-BATCH (بند 2) + ترقية staging
+Review by: N/A — مُحسَم ومُتحقَّق منه حياً على dev وstaging معاً (5 أحياء، 21 منتجاً، هوية+بلوكات صحيحة)
 Blocking: NO
 Status: RESOLVED
 Related: src/config/neighborhood-identity-registry.ts (ADR-024، CONFLICT-009)،
           src/config/product-page-blocks-registry.ts، src/components/ProductSheetContent.tsx،
           src/app/(reef)/product/[id]/page.tsx، ideas/IDEAS.md → IDEA-002،
-          scripts/seed-real-neighborhoods-demo-content.ts، DD-015 (خلل صور SVG، أدناه)
+          scripts/seed-real-neighborhoods-demo-content.ts، DD-015 (خلل صور SVG، أدناه)، ADR-017
+          (آلية فصل dev/staging الفعلية)، DD-011 (موضوع مختلف تماماً، لا علاقة له بهذه الترقية)
 ```
 
 ---
