@@ -1,7 +1,7 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.30
+version: 1.31
 authority: Security & Correctness (قسم DECISION DEBT REGISTRY) + Engineering Decision Log (باقي الملف)
 last_updated: 2026-09-10
 last_verified: 2026-09-10
@@ -1676,13 +1676,28 @@ Reason: قِياس حي على staging.reefam.com (COMPLETE-VISUAL-STENCIL-IMPOR
 Risk: TTFB بطيء (~1s+) يبقى قائماً على كل صفحة SSR تلمس Supabase — أهم أثر ملموس فعلي على "سرعة
           البرق" المطلوبة صراحة في هذه الدفعة، ولا يُحلّ بأي تحسين على مستوى الكود (الاستعلامات نفسها
           موازية ومُفهرسة أصلاً حسب docs/DATABASE.md §10) بل ببنية تحتية/إعداد نشر فقط.
+
+⚠️ تحديث 2026-09-10 (FIX-VERCEL-REGION-MISMATCH-DD-012) — **مُحسَم، تأكَّد حياً:** المؤسس أكَّد صراحة
+          أن مشروع Supabase (dev وstaging) في `eu-central-1` (فرانكفورت). `vercel.json` جديد
+          (`{"regions": ["fra1"]}`، Hobby يسمح بمنطقة واحدة مخصَّصة — تحقَّقتُ من توثيق Vercel الرسمي
+          الحي قبل التنفيذ، لا افتراضاً) — لا تعديل كود، بنية تحتية فقط كما توقَّعت "Risk" أعلاه
+          بالضبط. **قِياس حي كامل على `staging.reefam.com` قبل/بعد النشر:**
+          - `X-Vercel-Id`: `fra1::iad1` → `fra1::fra1` (الدالة تنفّذ الآن في نفس منطقة Supabase).
+          - TTFB `/` (8 عيّنات): avg **1160ms → 450ms** (تحسّن 61%).
+          - TTFB `/cart` (8 عيّنات): avg **1413ms → 511ms** (تحسّن 64%).
+          - أثر مُركَّب مع `FIX-SEQUENTIAL-CART-QUERIES-PARALLEL` (البند الآخر لنفس DD-014):
+            `addToCartAction` avg **1435-1555ms → 526ms** (إجمالي من الخط الأصلي 2094ms: تحسّن ~75%).
+          - سيناريو DD-014 (تنقّل فور فعل سلة): avg **1906ms → 196ms** (تحسّن ~90%، max حتى 356ms
+            فقط) — التجمّد المُدرَك عملياً **اختفى**، راجع تحديث DD-014 المصاحب.
+          هذا كان فعلياً السبب الجذري الأعمق المشترك خلف DD-010/DD-014 معاً، كما تنبَّأت DD-014 بدقة.
 Owner: Founder
 Created: 2026-09-09
-Review by: فور تأكيد Region الفعلي لمشروع Supabase من لوحة التحكم — لا تاريخ ثابت
-Blocking: NO — لا يمنع أي عمل حالي، لكنه أكبر مكسب أداء متبقٍّ غير مُنفَّذ من بند 1 في هذه الدفعة
-Status: OPEN
-Related: next.config.ts، docs/DATABASE.md §10 (Known Indexing Gaps)، هذا الملف §COMPLETE-VISUAL-
-          STENCIL-IMPORT-FULL-BATCH-NO-STOPS (تقرير المهمة الكامل، بند 1)
+Resolved: 2026-09-10 — FIX-VERCEL-REGION-MISMATCH-DD-012
+Review by: N/A — مُحسَم ومُتحقَّق منه حياً بأرقام دقيقة قبل/بعد
+Blocking: NO (كانت NO قبل الحسم أيضاً — لكنه كان أكبر مكسب أداء متبقٍّ غير مُنفَّذ، أصبح الآن مُنفَّذاً)
+Status: RESOLVED
+Related: vercel.json (جديد)، docs/DATABASE.md §10 (Known Indexing Gaps)، DD-010، DD-014، هذا الملف
+          §COMPLETE-VISUAL-STENCIL-IMPORT-FULL-BATCH-NO-STOPS (تقرير المهمة الكامل، بند 1)
 ```
 
 ---
@@ -1812,6 +1827,7 @@ Risk: **السبب الجذري ذو طبقتين مؤكَّدتين، لا طب
           لا يزال غير مبحوث. `DD-014` يبقى `OPEN` — هذا تحديث تقدّم لا إغلاق.
 Owner: Founder
 Created: 2026-09-09
+Resolved: 2026-09-10 — FIX-VERCEL-REGION-MISMATCH-DD-012
 Review by: قرار مؤسس على اتجاه الحل — مرشَّحان غير حصريَّين ولا متعارضين (كلاهما يعالج طبقة مختلفة):
           (1) حسم `DD-012` (تأكيد/مطابقة Region حقيقي بين Vercel وSupabase) يقلّص نافذة الخطر من
           ~1-2+ ثانية إلى مئات المللي ثانية على الأرجح — يُخفِّف الأثر الملحوظ بشدة حتى بلا لمس طبقة
@@ -1823,10 +1839,22 @@ Review by: قرار مؤسس على اتجاه الحل — مرشَّحان غ�
           Server Action المعلَّقة صراحة (خارج `startTransition` المشترك) — يحتاج بحثاً في نمط Next.js
           الموصى به لهذه الحالة تحديداً، لم يُبحَث بعد.
 Blocking: NO — لا يمنع أي عمل حالي، لكنه خطر تجربة مستخدم حقيقي ومقاس بأرقام دقيقة، لا نظري
-Status: OPEN
-Related: DD-012 (نفس السبب الجذري الأعمق، غير محسومة)، DD-010 (وثَّق بطء نفس المسار من زاوية مختلفة)،
+
+⚠️ تحديث 2026-09-10 (FIX-VERCEL-REGION-MISMATCH-DD-012) — **مُحسَم عملياً.** خيار الحل (1) من
+          "Review by" أعلاه نُفِّذ (`DD-012` الآن `RESOLVED`). قِياس حي لنفس سيناريو DD-014 بالضبط
+          (تنقّل لـ`/categories` فوراً بعد "أضف للسلة"، 6 عيّنات) بعد نشر `vercel.json`:
+          **avg=196ms (min=151ms، max=356ms)** — مقابل avg=2731ms الأصلي (قبل أي إصلاح) وavg=1906ms
+          (بعد موازاة الاستعلامات وحدها). **تحسّن ~90% من الخط الأصلي، ~90% أيضاً من التحسّن الجزئي
+          السابق** — التجمّد المُدرَك عملياً اختفى (356ms أقصى حالة أسوأ حالة، ليس "تجمّداً" بأي معيار
+          واقعي). السبب: طبقة (أ) (كمون Region) كانت فعلياً الحصة الأكبر بفارق كبير من زمن معاملة
+          السلة المعلَّقة — بمجرد تقليصها لمئات المللي ثانية، أصبحت نافذة "طبقة (ب)" (قفل Router خلف
+          transition معلَّق) قصيرة جداً لتُلاحَظ عملياً، حتى لو الآلية نفسها (خيار 3 أعلاه) لم
+          تُفصَل معمارياً ولا تزال قائمة نظرياً. **الحسم: `Status` ينتقل إلى `RESOLVED`** — الخطر
+          الفعلي (لا الآلية النظرية) هو ما وثَّقته `DD-014` أصلاً، وقد زال بالقياس الحي.
+Status: RESOLVED
+Related: DD-012 (السبب الجذري الأعمق، أُحسِم)، DD-010 (وثَّق بطء نفس المسار من زاوية مختلفة)،
           ADR-027، ADR-028، src/core/modules/cart/cart.service.ts، src/app/(reef)/cart/actions.ts،
-          AGENTS.md §17 (Guardian Matrix → Inventory Concurrency)
+          vercel.json، AGENTS.md §17 (Guardian Matrix → Inventory Concurrency)
 ```
 
 ---
