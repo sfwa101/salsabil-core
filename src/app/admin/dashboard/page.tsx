@@ -35,12 +35,20 @@ export default async function AdminDashboardPage() {
         </form>
       </div>
 
-      <Link
-        href="/admin/posts"
-        className="self-start rounded-xl border border-border px-4 py-3 text-sm font-medium text-foreground transition hover:bg-muted"
-      >
-        إدارة منشورات بيان ←
-      </Link>
+      <div className="flex flex-wrap gap-3">
+        <Link
+          href="/admin/posts"
+          className="rounded-xl border border-border px-4 py-3 text-sm font-medium text-foreground transition hover:bg-muted"
+        >
+          إدارة منشورات بيان ←
+        </Link>
+        <Link
+          href="/admin/catalog"
+          className="rounded-xl border border-border px-4 py-3 text-sm font-medium text-foreground transition hover:bg-muted"
+        >
+          الكتالوج الأساسي ←
+        </Link>
+      </div>
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-medium text-foreground">التجار ({merchants.length})</h2>

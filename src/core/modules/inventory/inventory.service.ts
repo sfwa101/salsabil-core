@@ -26,6 +26,12 @@ export class InventoryService {
   async release(productId: string, quantity: number): Promise<void> {
     return inventoryRepository.restore(productId, quantity);
   }
+
+  // CATALOG-IMPORT-WORKFLOW (ADR-025) — يُستدعى من catalogService.importMerchantExcel فقط، بعد
+  // إنشاء/إيجاد صف منتج التاجر. استبدال كامل، لا جمع تراكمي (راجع تعليق inventory.repository.ts).
+  async setStockForImport(productId: string, quantityAvailable: number, costPrice: number): Promise<void> {
+    await inventoryRepository.upsertForImport(productId, quantityAvailable, costPrice);
+  }
 }
 
 export const inventoryService = new InventoryService();

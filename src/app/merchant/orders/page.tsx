@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import { getMerchantSession } from '@/core/modules/merchant/merchant-session';
 import { ordersService } from '@/core/modules/orders/orders.service';
 import { ORDER_TRANSITIONS, ORDER_TRANSITION_ACTORS } from '@/core/modules/orders/types';
@@ -31,6 +32,13 @@ export default async function MerchantOrdersPage() {
           </button>
         </form>
       </div>
+
+      <Link
+        href="/merchant/import"
+        className="self-start rounded-xl border border-border px-4 py-3 text-sm font-medium text-foreground transition hover:bg-muted"
+      >
+        استيراد الكتالوج (Excel) ←
+      </Link>
 
       {orders.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-border p-8 text-center text-muted-foreground">

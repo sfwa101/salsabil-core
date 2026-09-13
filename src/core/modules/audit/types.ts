@@ -19,7 +19,12 @@ export type AuditAction =
   | 'auth.register_success'
   // CUSTOMER-IDENTITY-CLAIM-FLOW (ADR-030) — ادّعاء حساب عميل ضيف موجود مسبقاً، بعد تحقق OTP ناجح
   | 'auth.account_claimed'
-  | 'inventory.release_failed';
+  | 'inventory.release_failed'
+  // CATALOG-IMPORT-WORKFLOW (ADR-025) — منطق مالي (سعر بيع) وقرارات مراجعة تمسّ بيانات تاجر
+  | 'catalog.master_item_created'
+  | 'catalog.master_item_price_updated'
+  | 'catalog.review_queue_resolved_new'
+  | 'catalog.review_queue_resolved_merge';
 
 export interface AuditLogEntry {
   id: string;

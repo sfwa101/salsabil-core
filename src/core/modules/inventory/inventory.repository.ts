@@ -13,6 +13,7 @@ import type { InventoryRecord } from './types';
 interface InventoryRow {
   product_id: string;
   quantity_available: number;
+  cost_price: number | null;
   updated_at: string;
 }
 
@@ -20,6 +21,7 @@ function toInventoryRecord(row: InventoryRow): InventoryRecord {
   return {
     productId: row.product_id,
     quantityAvailable: row.quantity_available,
+    costPrice: row.cost_price ?? undefined,
     updatedAt: row.updated_at,
   };
 }
@@ -71,6 +73,23 @@ export class InventoryRepository {
       .update({ quantity_available: current.quantityAvailable + quantity, updated_at: new Date().toISOString() })
       .eq('product_id', productId);
     if (error) throw error;
+  }
+
+  // CATALOG-IMPORT-WORKFLOW (ADR-025) — استبدال كامل (لا جمع تراكمي) لكمية/تكلفة منتج تاجر عند
+  // كل استيراد Excel: الملف يمثّل "الكمية المتاحة الآن"، لقطة كاملة لا فرقاً تراكمياً. مستقل تماماً
+  // عن decrementIfAvailable/restore أعلاه (تلك تخص استهلاك Checkout الذري، هذه تخص تحديث المخزون
+  // المصدري من التاجر) — لا قفل تفاؤلي هنا عمداً، لا مسار تزامن حقيقي يتنافس مع استيراد Excel.
+  async upsertForImport(productId: string, quantityAvailable: number, costPrice: number): Promise<InventoryRecord> {
+    const { data, error } = await supabaseAdmin
+      .from('inventory')
+      .upsert(
+        { product_id: productId, quantity_available: quantityAvailable, cost_price: costPrice, updated_at: new Date().toISOString() },
+        { onConflict: 'product_id' }
+      )
+      .select('*')
+      .single();
+    if (error) throw error;
+    return toInventoryRecord(data as InventoryRow);
   }
 }
 
