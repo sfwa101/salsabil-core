@@ -2416,6 +2416,33 @@ Related: src/core/modules/catalog/types.ts، src/config/product-page-blocks-regi
           src/components/ProductOptions.tsx، ADR-024 (نفس مبدأ "لا بناء استباقي بلا استخدام حقيقي")
 ```
 
+### DD-017
+```
+Decision: هل يُضاف Dedup صريح لمعرّفات الإضافات (`selection.addonIds`) داخل
+          `CatalogService.calculatePrice`/`validateSelection` (catalog.service.ts)، أم يُعتمَد التكرار
+          الحالي كسلوك مقصود (يسمح للعميل بكمية مضاعفة من نفس الإضافة)؟
+Reason: اكتُشِف أثناء TASK-06 (اختبارات وحدة جديدة لـcalculatePrice/validateSelection، راجع
+          catalog.service.test.ts) أن `calculatePrice` تجمع `priceModifier` لكل تكرار `addonId` في
+          `selection.addonIds` بلا أي فحص تكرار — مثال: نفس الإضافة مُرسَلة مرتين تُحسَب مرتين (ضعف
+          السعر). `validateSelection` لا ترفض هذا التكرار أيضاً طالما كل id صالح فردياً على حدة. لا
+          واجهة مستخدم حالية تُنتِج IDs إضافات مكررة عمداً (تحقَّق منه أثناء TASK-06) — فلا مسار استغلال
+          حي معروف اليوم.
+Risk: غير واضح إن كان هذا سلوكاً مقصوداً (تكرار الـid = طلب كمية مضاعفة من الإضافة) أو ثغرة مدخلات عميل
+          تحتاج Dedup من جهة الخادم لمنع تلاعب عميل خبيث بإرسال IDs مكررة يدوياً عبر طلب مُعدَّل. الخطر
+          يتصاعد إن أُضيف مستقبلاً أي مسار واجهة (مثل مُحدِّد كمية لكل إضافة) قد يُنتِج IDs مكررة دون
+          قصد المستخدم فعلياً، لا عبر تلاعب متعمَّد فقط.
+Owner: Engineering
+Created: 2026-09-14
+Review by: قبل تفعيل أي مسار واجهة قد يُنتِج IDs إضافات مكررة (مثل مُحدِّد كمية لكل إضافة)، أو قبل توسيع
+          محرك الإضافات لأي حي جديد يعتمد على إضافات متعددة الكمية
+Blocking: NO — لا مسار استغلال حي معروف اليوم، ولا واجهة تُنتِج تكراراً فعلياً
+Status: OPEN
+Related: src/core/modules/catalog/catalog.service.ts (calculatePrice/validateSelection)،
+          src/core/modules/catalog/catalog.service.test.ts (TASK-06)،
+          docs/audits/2026-09-14-reef-v1-engineering-audit.md،
+          specs/orders/REEF_V1_MASTER_EXECUTION_PLAN.md → TASK-06، DD-004 (اختبارات الوحدة التي كشفت هذا)
+```
+
 ---
 
 ### مراجَع ولم يُحوَّل إلى Decision Debt (مع التبرير)
