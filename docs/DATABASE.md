@@ -468,13 +468,13 @@ Supabase SQL Editor (`scripts/day23-bayan-schema.sql`، نفس قيد عدم و�
 |---|---|---|---|---|---|---|---|---|
 | `users` | خليل (Khalil) | لا | `AUTH_SECRET` (الهاتف = بيانات اعتماد الدخول الفعلية) | قراءة الذات (`auth.uid()=id`) — **معطَّلة عملياً**، §6 | — | `PK(id)`, `UNIQUE(phone)` | غير محسوم (`OPEN_QUESTION`، §7 Soft/Hard Delete) | جزئي — `auth.login_success`/`auth.login_failed` في `audit_log` فقط، لا كل تعديل |
 | `categories` | Catalog | لا | `PUBLIC` | النمط 1 (قراءة عامة) | `parent_id → categories` | `PK(id)`, `UNIQUE(slug)` | غير موثَّق صراحة | لا |
-| `products` | Catalog | **نعم** (`tenant_id`) | `PUBLIC` (القراءة)، `tenant_id` نفسه بيانات عزل | النمط 1 | `category_id → categories`, `tenant_id → merchants` (nullable) | `PK(id)` فقط — **`tenant_id` بلا فهرس، راجع §10** | غير موثَّق صراحة | لا |
+| `products` | Catalog | **نعم** (`tenant_id`) | `PUBLIC` (القراءة)، `tenant_id` نفسه بيانات عزل | النمط 1 | `category_id → categories`, `tenant_id → merchants` (nullable) | `PK(id)`, `products_tenant_id_idx`, `products_category_id_idx` — راجع §10 (TASK-07، مُنفَّذ 2026-09-14) | غير موثَّق صراحة | لا |
 | `merchants` | Merchant | لا (هو كيان التاجر نفسه) | `TENANT_PRIVATE` | النمط 2 (قفل كامل منذ اليوم 10، `ADR-012`) | `owner_id` (بلا FK صريح موثَّق — تعريف الجدول نفسه `INFERRED`، §3) | `PK(id)`, `UNIQUE(slug)` | غير موثَّق صراحة | جزئي — `merchant.activated`/`merchant.deactivated` فقط |
 | `inventory` | Catalog | **نعم** (عبر `product_id → merchants` بشكل غير مباشر) | `PUBLIC` (قراءة الكمية) | النمط 1 (قراءة)؛ الكتابة عبر `service_role` (`ADR-022`) | `product_id → products` (هو `PK` نفسه) | `PK(product_id)` | غير موثَّق صراحة | لا — `INV-AUDIT-001` `VIOLATED` جزئياً (خصم/استرجاع ناجح بلا سجل مباشر) |
 | `carts` | Cart | لا (هوية عميل/زائر، لا تاجر) | `TENANT_PRIVATE` (خاصة بالعميل/الزائر) | النمط 2 (`ADR-008`) | `user_id → users` (nullable) | `PK(id)`, `UNIQUE(session_token)`, `UNIQUE(user_id)` | غير موثَّق صراحة | لا |
-| `cart_items` | Cart | يرث `carts` | `TENANT_PRIVATE` | النمط 2 | `cart_id → carts` (**cascade**), `product_id → products` | `PK(id)` فقط — **`cart_id` بلا فهرس منفصل، راجع §10** | `cart_id`: cascade | لا |
-| `orders` | Orders | **نعم** (`tenant_id`) | `FINANCIAL` | النمط 2 (`ADR-009`) | `user_id → users`, `tenant_id → merchants` | `PK(id)` فقط — **`tenant_id` و`user_id` بلا فهرس، راجع §10** | غير موثَّق صراحة | نعم (`order_status_history`) |
-| `order_items` | Orders | يرث `orders` | `FINANCIAL` (`unit_price_snapshot` مجمَّد) | النمط 2 | `order_id → orders` (**cascade**), `product_id → products` | `PK(id)` فقط — **`order_id` بلا فهرس منفصل، راجع §10** | `order_id`: cascade | جزئي — عبر `order_status_history`، لا سجل مباشر لبنود الطلب نفسها |
+| `cart_items` | Cart | يرث `carts` | `TENANT_PRIVATE` | النمط 2 | `cart_id → carts` (**cascade**), `product_id → products` | `PK(id)`, `cart_items_cart_id_idx` — راجع §10 (TASK-07، مُنفَّذ 2026-09-14) | `cart_id`: cascade | لا |
+| `orders` | Orders | **نعم** (`tenant_id`) | `FINANCIAL` | النمط 2 (`ADR-009`) | `user_id → users`, `tenant_id → merchants` | `PK(id)`, `orders_tenant_id_idx`, `orders_user_id_idx` — راجع §10 (TASK-07، مُنفَّذ 2026-09-14) | غير موثَّق صراحة | نعم (`order_status_history`) |
+| `order_items` | Orders | يرث `orders` | `FINANCIAL` (`unit_price_snapshot` مجمَّد) | النمط 2 | `order_id → orders` (**cascade**), `product_id → products` | `PK(id)`, `order_items_order_id_idx` — راجع §10 (TASK-07، مُنفَّذ 2026-09-14) | `order_id`: cascade | جزئي — عبر `order_status_history`، لا سجل مباشر لبنود الطلب نفسها |
 | `order_status_history` | Orders | يرث `orders` | `TENANT_PRIVATE` (سجل تشغيلي) | النمط 2 (`ADR-010`) | `order_id → orders` (**cascade**), `actor_id → users` (nullable) | `PK(id)`, `order_status_history_order_id_idx` | `order_id`: cascade | نعم — هو نفسه سجل التدقيق |
 | `sessions` | خليل (Khalil) | Nullable (تاجر) / `null` (إدارة/عميل) | `AUTH_SECRET` | النمط 2 (`ADR-012`) | `user_id → users`, `tenant_id → merchants` (nullable), `active_persona_id → user_personas` (nullable) | `PK(token)`, `sessions_user_id_idx` | غير موثَّق صراحة (حذف يدوي فقط عبر `destroySession`) | جزئي — محاولات الدخول فقط، لا كل إنشاء/إبطال جلسة |
 | `audit_log` | Audit | لا (نطاق منصّة عام) | `TENANT_PRIVATE` (بيانات تشغيلية/أمنية حساسة) | النمط 2 (`ADR-014`) | `actor_id → users` (nullable) | `PK(id)`, `audit_log_entity_idx`, `audit_log_created_at_idx` | غير موثَّق صراحة | هو نفسه سجل التدقيق |
@@ -602,8 +602,10 @@ Supabase SQL Editor (`scripts/day23-bayan-schema.sql`، نفس قيد عدم و�
 > Found" للتفصيل الكامل لفجوة عدم بقاء تقارير التدقيق كملفات دائمة.
 
 Postgres **لا** يُنشئ فهرساً تلقائياً على عمود FK (بخلاف `PRIMARY KEY`/`UNIQUE`). الأعمدة الخمسة
-التالية مراجع FK فعلية، بلا فهرس مباشر، **وتُستهلَك فعلياً في استعلامات متكررة** (لا نظرية) عبر
-`*.repository.ts`:
+التالية مراجع FK فعلية، **كانت** بلا فهرس مباشر وقت هذا التحليل (2026-09-06)، **وتُستهلَك فعلياً في
+استعلامات متكررة** (لا نظرية) عبر `*.repository.ts` — **الجدول أدناه تحليل تاريخي كما وقفت عليه
+الحالة وقتها؛ راجع التحديث ✅ 2026-09-14 أسفل الجدول للحالة الفعلية الحالية (مفهرَسة على `staging`
+الآن):**
 
 | # | العمود | الجدول | يُستهلَك في | الأثر التشغيلي المحتمل |
 |---|---|---|---|---|
@@ -622,11 +624,16 @@ Debt` جديد سُجِّل لهذا في `docs/DECISIONS.md` ضمن هذه ال
 `docs/DECISIONS.md` — موثَّق هنا بدل تركه صامتاً (`AGENTS.md §12`، No Silent Risk Acceptance)، وفي
 Task Report هذه الدفعة تحت Outstanding Risks.
 
-**⚠️ تحديث 2026-09-14 (TASK-07، `docs/audits/2026-09-14-reef-v1-engineering-audit.md` §13/§22) —
-لم تُصلَح بعد، سكربت جاهز بانتظار تنفيذ يدوي:** أُعِدّ `scripts/2026-09-14-add-missing-indexes.sql`
-(`CREATE INDEX IF NOT EXISTS` idempotent لكل الخمسة أعلاه + عمود سادس مُضاف بدليل كود حقيقي جديد،
-`products.category_id` — راجع تعليقات الملف نفسه للتبرير الكامل بمسار كود لكل فهرس). **لم يُنفَّذ
-على أي بيئة بعد** — بانتظار مراجعة وتنفيذ يدوي من المؤسس عبر Supabase SQL Editor (dev ثم staging)،
-بنفس قيد `DD-005` القائم (لا Migrations رسمية، لا اتصال Postgres مباشر لـClaude Code). هذا القسم
-(§10) يبقى دقيقاً كوصف للحالة الفعلية الحالية للفهرسة (لا تغيير — الفهارس لم تُطبَّق بعد فعلياً)
-إلى حين تأكيد المؤسس للتنفيذ اليدوي، وعندها يُحدَّث هذا القسم والجدول في §3.1 لعكس الحالة الجديدة.
+**✅ تحديث 2026-09-14 (TASK-07، `docs/audits/2026-09-14-reef-v1-engineering-audit.md` §13/§22) —
+مُنفَّذ فعلياً على staging، مُتحقَّق منه حياً:** الستة فهارس في `scripts/2026-09-14-add-missing-
+indexes.sql` (`products_tenant_id_idx`, `products_category_id_idx`, `orders_tenant_id_idx`,
+`orders_user_id_idx`, `cart_items_cart_id_idx`, `order_items_order_id_idx`) نُفِّذت يدويًا عبر
+Supabase SQL Editor على **`salsabil-staging`**، وتأكَّد وجودها فعليًا عبر استعلام `pg_indexes`
+(المُرفَق نهاية السكربت نفسه) — لا افتراضًا. **حالة `dev` غير مؤكَّدة في هذا التحديث** — لم يُذكَر
+صراحة أنها نُفِّذت أيضًا هناك؛ لا تفترض تطابق البيئتين بلا تأكيد منفصل. الجدول أعلاه في هذا القسم
+(الخمسة الأصلية) والجدول الموسَّع في `§3.1` يعكسان الآن الحالة الفعلية الجديدة لهذه الأعمدة الستة
+(`indexes الفعلية`، لا "بلا فهرس"). **الخطر المذكور أعلاه (Sequential Scan عند نمو البيانات) أُغلِق
+فعليًا لهذه الأعمدة على `staging`** — لم يُقَس أثر الأداء الفعلي قبل/بعد بعد (لا `EXPLAIN ANALYZE`
+حياً مُرفَق هنا بعد)؛ استعلامات `EXPLAIN ANALYZE` الجاهزة في نهاية السكربت متاحة لذلك متى احتاج
+المؤسس تأكيدًا كميًا إضافيًا. `products.category_id` يبقى **إضافة خارج قائمة التدقيق الأصلية** —
+راجع تعليقات السكربت نفسه للتبرير الكامل بمسار كود (`src/app/(reef)/[category]/page.tsx:33`).
