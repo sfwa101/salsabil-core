@@ -1,5 +1,5 @@
 -- scripts/catalog-import-schema.sql
--- سير عمل الكتالوج المبسَّط للإطلاق (CATALOG-IMPORT-WORKFLOW) — راجع docs/DECISIONS.md → ADR-025
+-- سير عمل الكتالوج المبسَّط للإطلاق (CATALOG-IMPORT-WORKFLOW) — راجع docs/DECISIONS.md → ADR-031
 -- للتفصيل الكامل (السبب، الجداول المتأثرة، التوافق العكسي، التراجع، تأثير الفهارس/RLS — docs/DATABASE.md §9).
 --
 -- ⚠️ لا اتصال Postgres مباشر لـClaude Code في هذا المشروع — يُلصَق هذا الملف يدوياً في

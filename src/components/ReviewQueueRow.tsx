@@ -1,7 +1,7 @@
 'use client';
 // صف قائمة مراجعة استيراد — المالك يحسم: منتج جديد كلياً، أو دمج مع عنصر كتالوج أساسي موجود
-// (CATALOG-IMPORT-WORKFLOW، ADR-025). بحث نصي بسيط عبر التصفية المحلية (الكتالوج صغير اليوم) —
-// لا مطابقة تقريبية (fuzzy)/اقتراحات مرتَّبة، قرار مؤسس صريح (راجع docs/DECISIONS.md → ADR-025).
+// (CATALOG-IMPORT-WORKFLOW، ADR-031). بحث نصي بسيط عبر التصفية المحلية (الكتالوج صغير اليوم) —
+// لا مطابقة تقريبية (fuzzy)/اقتراحات مرتَّبة، قرار مؤسس صريح (راجع docs/DECISIONS.md → ADR-031).
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';

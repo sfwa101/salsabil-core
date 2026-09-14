@@ -1,5 +1,5 @@
 'use server';
-// عمليات إدارة الكتالوج الأساسي (CATALOG-IMPORT-WORKFLOW، ADR-025) — كل دالة تتحقق أولاً من جلسة
+// عمليات إدارة الكتالوج الأساسي (CATALOG-IMPORT-WORKFLOW، ADR-031) — كل دالة تتحقق أولاً من جلسة
 // platform_admin فعلياً (getAdminSession)، نفس نمط src/app/admin/posts/actions.ts حرفياً.
 
 import { revalidatePath } from 'next/cache';

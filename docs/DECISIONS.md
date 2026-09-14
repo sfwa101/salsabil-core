@@ -1,10 +1,10 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.35
+version: 1.36
 authority: Security & Correctness (قسم DECISION DEBT REGISTRY) + Engineering Decision Log (باقي الملف)
-last_updated: 2026-09-10
-last_verified: 2026-09-10
+last_updated: 2026-09-14
+last_verified: 2026-09-14
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف
 ---
@@ -1428,6 +1428,114 @@ Related Documents: ADR-029 (السياق المباشر، قسم "ليس الآ�
           otp.service.ts,otp.service.test.ts}، src/core/modules/customer/{customer.service.ts,
           customer.service.test.ts}، src/app/(reef)/account/claim/، src/components/CustomerClaimForm.tsx،
           .env.example
+```
+
+---
+
+## ADR-031
+```
+Title: توثيق رجعي — الكتالوج الأساسي (MasterCatalogItem) وقائمة مراجعة الاستيراد (Review Queue)
+          لحل تكرار المنتجات عبر التجار؛ تصحيح مرجع "ADR-025" الخاطئ في تعليقات الكود
+Status: ACCEPTED — توثيق رجعي (Retroactive Documentation) لقرار مُنفَّذ فعلياً وحيّ في الكود منذ
+          2026-09-13 (commit `1c62fd9`)، لا قراراً جديداً ولا تغييراً في السلوك. يُغلِق ثغرة حوكمة
+          حقيقية رصدها `docs/audits/2026-09-14-reef-v1-engineering-audit.md` (§10، §17 بند 4): الكود
+          كان يشير لمرجع "ADR-025" الذي هو فعلياً قرار تركيب shadcn/ui (راجع `ADR-025` أعلاه — موضوع
+          مختلف كلياً)، بلا أي سجل ADR حقيقي لهذا القرار المعماري — انتهاك مباشر لـ`AGENTS.md §13`
+          ("No Silent State Change": تغيير Schema/قاعدة عمل يجب الإعلان عنه صراحة) و`AGENTS.md §16`
+          (تحديث التوثيق جزء من Definition of Done).
+Date: 2026-09-14 (تاريخ كتابة هذا التوثيق). القرار المعماري نفسه نُفِّذ فعلياً في 2026-09-13
+          (commit `1c62fd9`، رسالة commit عامة "chore: save state before ui refactoring" لا تكشف
+          طبيعة التغيير الحقيقية — وهذا بالضبط ما جعله يفوت أي مراجعة/توثيق وقت التنفيذ).
+Decision: نموذج ثلاثي الطبقات، مُطابِق لِما هو منفَّذ فعلياً في `catalog.service.ts`/`catalog.repository.ts`/
+          `types.ts` اليوم (لا تغيير على أي منها في هذه المهمة، توثيق بحت):
+          (أ) **`MasterCatalogItem`** (`catalog_master_items`، `scripts/catalog-import-schema.sql`) —
+          عنصر كتالوج مرجعي واحد يملكه `platform_admin` حصراً: الاسم، الوصف، **سعر البيع المعتمَد**
+          (`basePrice`)، الوحدة، الصورة، التصنيف. لا كتابة عليه إلا عبر `supabaseAdmin`
+          (`catalog.repository.ts:180-225`) — نفس نمط "قفل كامل، service_role فقط" المتَّبع لكل
+          جدول حساس آخر في المشروع.
+          (ب) **`products` كنسخة تاجر (Clone)** — كل تاجر يستورد عنصراً من الكتالوج الأساسي يحصل على
+          صف `products` خاص به، مربوط بـ`master_item_id` (عمود جديد، nullable، `products.master_item_id`)،
+          **سعر بيعه مقفول على سعر الكتالوج الأساسي** (`upsertTenantProductFromMaster`،
+          `catalog.service.ts:133-145`) — التاجر لا يملك صلاحية تعديل سعر البيع لصف مُستنسَخ، فقط
+          كميته وتكلفته الخاصة عبر `inventoryService.setStockForImport` (`inventory.service.ts`).
+          تعديل سعر الكتالوج الأساسي (`updateMasterItemPrice`، `catalog.service.ts:112-129`) **يتدفَّق
+          تلقائياً (Cascade)** لكل صف تاجر مرتبط (`cascadeBasePriceToLinkedProducts`،
+          `catalog.repository.ts:229-237`) — "سعر البيع يحدده المالك فقط" مطبَّق فعلياً في الكود، لا
+          مجرد نية معمارية.
+          (ج) **استيراد Excel التاجر ومطابقة تلقائية/قائمة مراجعة** (`importMerchantExcel`،
+          `catalog.service.ts:150-173`) — التاجر يرفع ملف بثلاثة أعمدة فقط (اسم، كمية، تكلفة — **لا
+          سعر بيع إطلاقاً**، `MerchantImportRow`)، `tenantId` يصل من جلسة التاجر (`merchant-session`)
+          لا من أي مدخل عميل (عزل مستأجرين، `INV-TEN-001` بلا تغيير). لكل صف: تطابق **حرفي بعد تطبيع
+          الاسم فقط** (`normalizeProductName`، `text-normalize.ts`) مع أسماء الكتالوج الأساسي — **لا
+          مطابقة تقريبية (fuzzy)** (قرار مؤسس صريح موثَّق في تعليق `text-normalize.ts:3-5`، لتفادي دمج
+          مالي/مخزوني خاطئ صامت، `AGENTS.md §8 Fail Closed`). عند تطابق: يُنشأ/يُحدَّث صف `products`
+          التاجر تلقائياً (`matched++`). عند عدم تطابق: يُضاف صف `catalog_review_queue` (بحماية من
+          التكديس، `findPendingReviewQueueItem`) بانتظار قرار `platform_admin`.
+          (د) **حسم قائمة المراجعة — بيد `platform_admin` حصراً** (`getAdminSession` في
+          `src/app/admin/catalog/review/actions.ts`)، بخيارين لا ثالث لهما:
+          `resolveReviewQueueAsNew` (`catalog.service.ts:181-209`) — يعتبر الصف منتجاً جديداً كلياً،
+          الأدمن يحدد الاسم/التصنيف/سعر البيع/الوحدة بنفسه، فيُنشأ `MasterCatalogItem` جديد وصف
+          `products` تاجر مرتبط به؛ أو `resolveReviewQueueAsMerge` (`catalog.service.ts:213-237`) —
+          يدمج الصف مع عنصر كتالوج أساسي **موجود بالفعل**، فيُنشأ فقط صف `products` تاجر مرتبط بذلك
+          العنصر القائم — هذا الخيار هو الحل المباشر لمشكلة "منتجات متطابقة عبر تجار متعددين". كل
+          الحالات الأربع (إنشاء عنصر أساسي، تعديل سعره، حسم مراجعة كمنتج جديد، حسم مراجعة كدمج) تُسجَّل
+          في `auditService.log` (`entityType: 'catalog_master_item' | 'catalog_review_queue'`).
+Context: المشكلة الحقيقية التي استوجبت هذا الحل: إبلاغ مؤسس مباشر (`docs/ROADMAP.md → "🚨 أولوية
+          عاجلة جديدة"`، 2026-09-08) بأن **70 تاجراً حقيقياً** منتظرون الانضمام (~5000 منتج متوقَّع
+          خلال أسبوع)، منهم **10 تجار (من الـ70) بمنتجات متطابقة أو شديدة التشابه فيما بينهم** — بلا
+          هذا الحل، كل تاجر يُدخِل نفس المنتج (مثال موثَّق: "أرز مصري 5 كجم") كنسخة كاملة مستقلة عبر
+          `tenant_id` (النموذج القديم، ما زال يعمل بلا تغيير لأي صف `master_item_id = null`)، ما يعني
+          تكراراً بصرياً حقيقياً للعميل (نفس المنتج بعشر بطاقات مختلفة) وجهد إدخال بيانات مكرَّراً على
+          كل تاجر. راجع أيضاً `ideas/IDEAS.md → IDEA-004` ("الكتالوج الموحَّد") — سجَّل نفس المشكلة
+          والحاجة صراحة بوصفها `PROPOSED — عاجل` بانتظار "مناقشة الجاهزية" قبل التنفيذ؛ الكود الفعلي
+          (`1c62fd9`) نفَّذ حلاً عملياً لهذه المشكلة تحديداً بعد ذلك بخمسة أيام **دون** إغلاق ذلك
+          الـIDEA أو تسجيل ADR وقتها — هذا الـADR يُغلِق فجوة التوثيق تلك رجعياً، لا يُقرِّر شيئاً
+          جديداً.
+Alternatives: (أ) **الوضع القديم — كل تاجر منتج مستقل بالكامل** (`products.tenant_id` بلا أي مفهوم
+          "منتج مرجعي" مشترك، `docs/DATABASE.md §3` الأصلي) — هذا هو النموذج الذي كان قائماً فعلياً
+          قبل `1c62fd9`، ولا يزال **مدعوماً بالتوافق العكسي** (`master_item_id` عمود nullable، كل صف
+          `products` قديم/تجريبي يبقى صالحاً بلا ربط) — لم يُستبدَل، بل أُضيف مسار جديد اختياري بجانبه.
+          مرفوض كحل وحيد للمستقبل: لا يحل مشكلة الـ10 تجار المتطابقين إطلاقاً، وكان سيُضاعِف مشكلة
+          التكرار البصري مع دخول 70 تاجراً حقيقياً دفعة واحدة.
+          (ب) **نموذج "السوق المفتوح" الكامل** (`merchant_offers` كجدول ربط مستقل يفصل "المنتج
+          المرجعي" عن "عروض التجار" — عدة تجار يعرضون نفس المنتج المرجعي كل بسعره الخاص، العميل يختار
+          البائع) — هذا هو ما وصفه `ideas/IDEAS.md → IDEA-004` فعلياً كسؤال معماري مفتوح، ومرتبط
+          بـ`docs/BUSINESS_RULES.md → BR-017` ("نموذج ظهور البائع": علامة موحَّدة تُخفي هوية البائع
+          مقابل سوق مفتوح يُظهرها). **لم يُبنَ ولا يُقترَح بناؤه الآن** — النموذج الحالي (نسخة واحدة
+          مقفولة السعر لكل تاجر) كافٍ تماماً لموجة الـ70 تاجراً القادمة ولأي قسم يتبع نموذج "العلامة
+          الموحَّدة" (BR-017، خيار أ)؛ نموذج السوق المفتوح الحقيقي يصير مطلوباً فقط لأقسام محدَّدة
+          يختارها المؤسس صراحة لهذا النموذج (مثال مذكور: الأسماك، اللحوم) — وBR-017 نفسه **لا يزال
+          PROPOSED** بلا قرار مؤسس نهائي بعد. هذا حد معروف مسجَّل، لا خطة تنفيذ.
+Consequences: النموذج الحالي **يحل فعلياً وبالكامل** مشكلة "10 من 70 تاجراً بمنتجات متطابقة" لموجة
+          الاستقبال القادمة — دمج عبر `resolveReviewQueueAsMerge` يعني عنصر كتالوج واحد فقط لكل منتج
+          حقيقي متكرر، بصرف النظر عن عدد التجار الذين يبيعونه. **حدود معروفة تبقى بلا حل هنا (لا
+          إخفاءً لها):** (1) لا مطابقة تقريبية (fuzzy) — أي اختلاف حرفي (خطأ إملائي، ترتيب كلمات مختلف)
+          بعد التطبيع يُعامَل كمنتج جديد، تحديداً بقرار مؤسس (Fail Closed أوضح من دمج خاطئ صامت)، لا
+          عيباً غير مقصود؛ (2) لا اختبار وحدة مخصَّص لمنطق الـmaster-item/cascade/مطابقة اليوم — مسجَّل
+          فعلياً كـ`DD-004` في `AGENTS.md §12` DECISION DEBT REGISTRY، ومهمة منفصلة (`TASK-06`) تُغلِقه
+          لاحقاً، خارج نطاق هذا الـADR التوثيقي البحت؛ (3) هذا **ليس** نموذج "سوق مفتوح" — راجع
+          Alternatives (ب) أعلاه، قرار مستقبلي منفصل يعتمد على حسم `BR-017` أولاً، لا خطة معلَنة هنا.
+          **تصحيح مرجعي:** كل تعليق كود كان يشير خطأً لـ"ADR-025" في سياق "CATALOG-IMPORT-WORKFLOW"
+          (17 موضعاً عبر 16 ملفاً — `scripts/catalog-import-schema.sql`،
+          `src/core/modules/catalog/{catalog.service.ts,catalog.repository.ts,types.ts,
+          text-normalize.ts}`، `src/core/modules/inventory/{inventory.service.ts,
+          inventory.repository.ts,types.ts}`، `src/core/modules/audit/types.ts`،
+          `src/app/admin/catalog/actions.ts`، `src/app/admin/catalog/review/actions.ts`،
+          `src/app/merchant/import/actions.ts`، `src/components/{MasterItemForm.tsx,MasterItemRow.tsx,
+          MerchantImportForm.tsx,ReviewQueueRow.tsx}`) صُحِّح ليشير لهذا الـADR-031. مراجع "ADR-025"
+          الأخرى في الكود (`src/app/globals.css`، `src/app/layout.tsx`، `src/components/FeedTabBar.tsx`،
+          `src/config/personal-theme-registry.ts`) **لم تُلمَس** — هي إشارات صحيحة فعلياً لقرار
+          shadcn/ui الحقيقي (`ADR-025` أعلاه)، لا خطأً.
+Related Documents: docs/audits/2026-09-14-reef-v1-engineering-audit.md → §10 (Catalog Architecture)،
+          §17 بند 4، §19 بند 11؛ docs/ROADMAP.md → "🚨 أولوية عاجلة جديدة" (2026-09-08)؛
+          ideas/IDEAS.md → IDEA-004؛ docs/BUSINESS_RULES.md → BR-017؛ AGENTS.md §12 (DECISION DEBT
+          Registry → DD-004)، §13 (No Silent State Change)، §16 (Definition of Done)؛ ADR-025 (الموضوع
+          الحقيقي — shadcn/ui، غير ذي صلة بهذا القرار)؛ scripts/catalog-import-schema.sql؛
+          src/core/modules/catalog/{catalog.service.ts,catalog.repository.ts,types.ts,
+          text-normalize.ts,excel-import.ts}، src/core/modules/inventory/{inventory.service.ts,
+          inventory.repository.ts,types.ts}، src/core/modules/audit/types.ts،
+          src/app/admin/catalog/{actions.ts,page.tsx,review/}، src/app/merchant/import/{actions.ts,page.tsx}،
+          src/components/{MasterItemForm.tsx,MasterItemRow.tsx,MerchantImportForm.tsx,ReviewQueueRow.tsx}
 ```
 
 ---

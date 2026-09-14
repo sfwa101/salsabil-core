@@ -1,7 +1,7 @@
 // src/core/modules/catalog/catalog.repository.ts
 // الاتصال بقاعدة البيانات الخاص بالكتالوج — لا منطق أعمال هنا، فقط قراءة/كتابة
 // كل القراءات (categories/products) تستخدم العميل العام (anon) — RLS يسمح بقراءة عامة (النمط 1،
-// docs/DATABASE.md §6). كل الكتابات الجديدة (CATALOG-IMPORT-WORKFLOW، ADR-025) تستخدم service_role
+// docs/DATABASE.md §6). كل الكتابات الجديدة (CATALOG-IMPORT-WORKFLOW، ADR-031) تستخدم service_role
 // — لا سياسة كتابة anon على products/categories، نفس القاعدة المتَّبعة لكل جدول آخر في المشروع
 // (merchants/carts/orders/inventory...) — يحسم OPEN_QUESTION الموثَّق في docs/DATABASE.md §6.
 
@@ -174,7 +174,7 @@ export class CatalogRepository {
   }
 
   // ==========================================================================
-  // الكتالوج الأساسي (CATALOG-IMPORT-WORKFLOW، ADR-025) — كتابة عبر service_role حصراً
+  // الكتالوج الأساسي (CATALOG-IMPORT-WORKFLOW، ADR-031) — كتابة عبر service_role حصراً
   // ==========================================================================
 
   async listMasterItems(): Promise<MasterCatalogItem[]> {

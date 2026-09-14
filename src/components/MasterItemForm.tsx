@@ -1,5 +1,5 @@
 'use client';
-// نموذج إنشاء عنصر كتالوج أساسي — سعر البيع هنا فقط، يحدده المالك (CATALOG-IMPORT-WORKFLOW، ADR-025).
+// نموذج إنشاء عنصر كتالوج أساسي — سعر البيع هنا فقط، يحدده المالك (CATALOG-IMPORT-WORKFLOW، ADR-031).
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';

@@ -84,7 +84,7 @@ export class CatalogService {
   }
 
   // ==========================================================================
-  // سير عمل الكتالوج المبسَّط للإطلاق (CATALOG-IMPORT-WORKFLOW) — راجع docs/DECISIONS.md → ADR-025
+  // سير عمل الكتالوج المبسَّط للإطلاق (CATALOG-IMPORT-WORKFLOW) — راجع docs/DECISIONS.md → ADR-031
   // ==========================================================================
 
   async listMasterItems(): Promise<MasterCatalogItem[]> {

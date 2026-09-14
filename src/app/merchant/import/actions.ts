@@ -1,5 +1,5 @@
 'use server';
-// استيراد Excel ذاتي للتاجر (CATALOG-IMPORT-WORKFLOW، ADR-025) — يفرض عزل المستأجرين عبر tenantId
+// استيراد Excel ذاتي للتاجر (CATALOG-IMPORT-WORKFLOW، ADR-031) — يفرض عزل المستأجرين عبر tenantId
 // من الجلسة، لا من أي مدخل عميل (نفس نمط merchant/orders/actions.ts). قالب 3 أعمدة فقط: اسم
 // المنتج، الكمية، التكلفة — لا سعر بيع (يحدده المالك فقط عبر /admin/catalog).
 
