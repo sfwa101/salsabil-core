@@ -625,15 +625,18 @@ Debt` جديد سُجِّل لهذا في `docs/DECISIONS.md` ضمن هذه ال
 Task Report هذه الدفعة تحت Outstanding Risks.
 
 **✅ تحديث 2026-09-14 (TASK-07، `docs/audits/2026-09-14-reef-v1-engineering-audit.md` §13/§22) —
-مُنفَّذ فعلياً على staging، مُتحقَّق منه حياً:** الستة فهارس في `scripts/2026-09-14-add-missing-
-indexes.sql` (`products_tenant_id_idx`, `products_category_id_idx`, `orders_tenant_id_idx`,
-`orders_user_id_idx`, `cart_items_cart_id_idx`, `order_items_order_id_idx`) نُفِّذت يدويًا عبر
-Supabase SQL Editor على **`salsabil-staging`**، وتأكَّد وجودها فعليًا عبر استعلام `pg_indexes`
-(المُرفَق نهاية السكربت نفسه) — لا افتراضًا. **حالة `dev` غير مؤكَّدة في هذا التحديث** — لم يُذكَر
-صراحة أنها نُفِّذت أيضًا هناك؛ لا تفترض تطابق البيئتين بلا تأكيد منفصل. الجدول أعلاه في هذا القسم
-(الخمسة الأصلية) والجدول الموسَّع في `§3.1` يعكسان الآن الحالة الفعلية الجديدة لهذه الأعمدة الستة
-(`indexes الفعلية`، لا "بلا فهرس"). **الخطر المذكور أعلاه (Sequential Scan عند نمو البيانات) أُغلِق
-فعليًا لهذه الأعمدة على `staging`** — لم يُقَس أثر الأداء الفعلي قبل/بعد بعد (لا `EXPLAIN ANALYZE`
-حياً مُرفَق هنا بعد)؛ استعلامات `EXPLAIN ANALYZE` الجاهزة في نهاية السكربت متاحة لذلك متى احتاج
-المؤسس تأكيدًا كميًا إضافيًا. `products.category_id` يبقى **إضافة خارج قائمة التدقيق الأصلية** —
-راجع تعليقات السكربت نفسه للتبرير الكامل بمسار كود (`src/app/(reef)/[category]/page.tsx:33`).
+مُنفَّذ فعلياً على كلا البيئتين (`dev` و`staging`)، مُتحقَّق منه حياً:** الستة فهارس في
+`scripts/2026-09-14-add-missing-indexes.sql` (`products_tenant_id_idx`, `products_category_id_idx`,
+`orders_tenant_id_idx`, `orders_user_id_idx`, `cart_items_cart_id_idx`, `order_items_order_id_idx`)
+نُفِّذت يدويًا عبر Supabase SQL Editor على **`salsabil-staging`** (تأكَّد وجودها عبر استعلام
+`pg_indexes` المُرفَق نهاية السكربت) **و`salsabil-core` (dev)** (تأكَّد وجودها/استخدامها عبر
+`EXPLAIN ANALYZE` حي — `Index Scan` فعلي على `products_category_id_idx` على الأقل، لا `Seq Scan`) —
+لا افتراضًا في كلتا الحالتين. الجدول أعلاه في هذا القسم (الخمسة الأصلية) والجدول الموسَّع في `§3.1`
+يعكسان الآن الحالة الفعلية الجديدة لهذه الأعمدة الستة (`indexes الفعلية`، لا "بلا فهرس") على كلا
+البيئتين. **الخطر المذكور أعلاه (Sequential Scan عند نمو البيانات) أُغلِق فعليًا لهذه الأعمدة على
+كلا البيئتين** — مؤكَّد أداءً (لا بنيويًا فقط) على `dev` عبر `Index Scan` حي على الأقل لفهرس واحد
+(`products_category_id_idx`)؛ الفهارس الخمسة الباقية مؤكَّدة الوجود بنيويًا (`pg_indexes`/DDL) على
+الحالتين، بلا قياس `EXPLAIN ANALYZE` مُبلَّغ صراحة لكل واحد منها على حدة — استعلامات `EXPLAIN
+ANALYZE` الجاهزة في نهاية السكربت متاحة لذلك متى احتاج المؤسس تأكيدًا إضافيًا لكل فهرس على حدة.
+`products.category_id` يبقى **إضافة خارج قائمة التدقيق الأصلية** — راجع تعليقات السكربت نفسه
+للتبرير الكامل بمسار كود (`src/app/(reef)/[category]/page.tsx:33`).
