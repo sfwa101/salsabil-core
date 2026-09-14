@@ -1,10 +1,12 @@
 import { Suspense } from 'react';
 import { catalogService } from '@/core/modules/catalog/catalog.service';
 import type { Category } from '@/core/modules/catalog/types';
+import type { CartSummary } from '@/core/modules/cart/types';
 import { StoryBar } from '@/components/StoryBar';
 import { Feed } from '@/components/Feed';
 import { DesktopCategorySidebar } from '@/components/storefront/DesktopCategorySidebar';
 import { DesktopCartSidebar } from '@/components/storefront/DesktopCartSidebar';
+import { CartLoadErrorPanel } from '@/components/storefront/CartLoadErrorPanel';
 import { loadFeedPageAction } from './feed-actions';
 import { getCartSummaryAction } from '@/app/(reef)/cart/actions';
 import { FEED_TAB_KEYS, getPostTypesForTab, type FeedTabKey } from '@/config/content-type-registry';
@@ -21,20 +23,31 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
   let categories: Category[] = [];
   let firstPage: any = { posts: [], hasMore: false, products: [] };
-  let cartSummary: any = null;
+  let cartSummary: CartSummary | null = null;
+  let cartLoadFailed = false;
 
-  try {
-    const data = await Promise.all([
-      catalogService.listCategories(),
-      loadFeedPageAction({ postTypes, offset: 0 }),
-      getCartSummaryAction(),
-    ]);
-    categories = data[0] || [];
-    firstPage = data[1] || { posts: [], hasMore: false, products: [] };
-    cartSummary = data[2] || null;
-  } catch (err) {
-    console.error('Failed to load storefront data:', err);
+  // فشل جلب السلة يُعالَج بمعزل عن فشل الكتالوج/الخلاصة (Promise.allSettled لا try/catch مشترك) —
+  // بدون هذا الفصل لا سبيل للتمييز بين "السلة فارغة فعلياً" و"فشل جلبها" (كلاهما كانا يسقطان معاً في
+  // نفس catch واحد، فتُعرَض كأنها فارغة دائماً). راجع TASK-03.
+  const [catalogFeedResult, cartResult] = await Promise.allSettled([
+    Promise.all([catalogService.listCategories(), loadFeedPageAction({ postTypes, offset: 0 })]),
+    getCartSummaryAction(),
+  ]);
+
+  if (catalogFeedResult.status === 'fulfilled') {
+    categories = catalogFeedResult.value[0] || [];
+    firstPage = catalogFeedResult.value[1] || { posts: [], hasMore: false, products: [] };
+  } else {
+    console.error('Failed to load storefront data:', catalogFeedResult.reason);
   }
+
+  if (cartResult.status === 'fulfilled') {
+    cartSummary = cartResult.value || null;
+  } else {
+    console.error('Failed to load cart summary:', cartResult.reason);
+    cartLoadFailed = true;
+  }
+
   const activeCategories = categories.filter((c) => c.isActive);
 
   return (
@@ -80,17 +93,21 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
         {/* Left Sidebar (Desktop only) */}
         <div className="hidden lg:block h-full">
-          <DesktopCartSidebar 
-            items={cartSummary?.lines?.map((line: any) => ({
-              id: line.product.id,
-              itemId: line.item.id,
-              name: line.product.name,
-              price: line.unitPrice,
-              quantity: line.item.quantity,
-              imageUrl: line.product.imageUrl || undefined
-            })) || []}
-            total={cartSummary?.total || 0}
-          />
+          {cartLoadFailed ? (
+            <CartLoadErrorPanel />
+          ) : (
+            <DesktopCartSidebar
+              items={cartSummary?.lines?.map((line: any) => ({
+                id: line.product.id,
+                itemId: line.item.id,
+                name: line.product.name,
+                price: line.unitPrice,
+                quantity: line.item.quantity,
+                imageUrl: line.product.imageUrl || undefined
+              })) || []}
+              total={cartSummary?.total || 0}
+            />
+          )}
         </div>
 
       </div>
