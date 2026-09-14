@@ -27,38 +27,130 @@
 // مصدر منفصل. النبضة (pulsing) تبقى تعمل بنفس الآلية بلا تغيير — فقط تتفاعل الآن مع تغيّر فوري بدل
 // تغيّر بعد ثانية أو أكثر.
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ShoppingCart } from 'lucide-react';
 import { useCartTotal } from '@/components/CartTotalProvider';
 import { BottomSheet } from '@/components/BottomSheet';
-import { getCartSummaryAction, updateCartItemAction } from '@/app/(reef)/cart/actions';
+import { getCartSummaryAction } from '@/app/(reef)/cart/actions';
 import { QuantityStepper } from '@/components/QuantityStepper';
+import { useOptimisticCartLine } from '@/components/useOptimisticCartLine';
+import { useCartToast } from '@/components/useCartToast';
+import type { CartLineSummary, CartSummary } from '@/core/modules/cart/types';
 
 const PULSE_DURATION_MS = 500;
+
+function getSafeNumber(val: unknown, fallback = 0) {
+  const num = Number(val);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+// كل صف يملك نسخته الخاصة من useOptimisticCartLine (نفس مصدر التراجع عند الفشل المستخدَم في
+// CartLineItem.tsx/ProductCard.tsx) — لا يمكن استدعاء hook داخل map() على المكوّن الأب مباشرة (عدد
+// البنود متغيّر)، فكل بند سلة أصبح مكوّناً فرعياً يستدعي الـ hook مرة واحدة لنفسه. onQuantityChange
+// يرفع الكمية التفاؤلية الحيّة (بما فيها التراجع التلقائي عند الفشل) للأب فقط لحساب إجمالي الشيت
+// وحالة "السلة فارغة" — لا منطق تحديث/تراجع مكرَّر هنا.
+function CartCapsuleLineRow({
+  line,
+  variant,
+  onError,
+  onQuantityChange,
+}: {
+  line: CartLineSummary;
+  variant: 'mobile' | 'desktop';
+  onError: (message: string) => void;
+  onQuantityChange: (itemId: string, quantity: number) => void;
+}) {
+  const { quantity, setQuantity } = useOptimisticCartLine(
+    line.product.id,
+    line.unitPrice,
+    { itemId: line.item.id, quantity: getSafeNumber(line.item.quantity, 0) },
+    onError
+  );
+
+  useEffect(() => {
+    onQuantityChange(line.item.id, quantity);
+  }, [line.item.id, quantity, onQuantityChange]);
+
+  if (quantity <= 0) return null;
+
+  if (variant === 'mobile') {
+    return (
+      <div className="flex items-center gap-3 border-b border-border py-4">
+        {line.product.imageUrl && (
+          <div className="w-16 h-16 shrink-0 rounded-xl bg-muted overflow-hidden border border-border/50">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={line.product.imageUrl} alt={line.product.name} className="w-full h-full object-cover" />
+          </div>
+        )}
+        <div className="flex flex-col flex-1">
+          <span className="text-sm font-bold text-foreground line-clamp-1">{line.product.name}</span>
+          <span className="text-xs text-muted-foreground font-medium">{line.unitPrice.toLocaleString('ar-EG')} ج.م</span>
+        </div>
+        <div className="shrink-0">
+          <QuantityStepper
+            quantity={quantity}
+            onIncrement={() => setQuantity(quantity + 1)}
+            onDecrement={() => setQuantity(quantity - 1)}
+            variant="pill"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3 border-b border-border py-3">
+      {line.product.imageUrl && (
+        <div className="w-14 h-14 shrink-0 rounded-lg bg-muted overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={line.product.imageUrl} alt={line.product.name} className="w-full h-full object-cover" />
+        </div>
+      )}
+      <div className="flex flex-col flex-1">
+        <span className="text-sm font-semibold text-foreground line-clamp-1">{line.product.name}</span>
+        <span className="text-xs text-muted-foreground">{line.unitPrice.toLocaleString('ar-EG')} ج.م</span>
+      </div>
+      <div className="shrink-0">
+        <QuantityStepper
+          quantity={quantity}
+          onIncrement={() => setQuantity(quantity + 1)}
+          onDecrement={() => setQuantity(quantity - 1)}
+          variant="pill"
+        />
+      </div>
+    </div>
+  );
+}
 
 export function CartCapsule() {
   const { total } = useCartTotal();
   const [pulsing, setPulsing] = useState(false);
   const prevTotal = useRef(total);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [cartData, setCartData] = useState<any>(null);
-  const [localItems, setLocalItems] = useState<any[]>([]);
-
-  const getSafeNumber = (val: unknown, fallback = 0) => {
-    const num = Number(val);
-    return Number.isFinite(num) ? num : fallback;
-  };
+  const [cartData, setCartData] = useState<CartSummary | null>(null);
+  const [localItems, setLocalItems] = useState<CartLineSummary[]>([]);
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const { showToast, toastNode } = useCartToast();
 
   // The button always uses the global optimistic total
   const displayTotalButton = getSafeNumber(total, 0);
 
-  // The sheet uses the exact local items total to ensure absolute real-time sync with button clicks
+  // The sheet total is derived from each row's live (optimistic, rollback-aware) quantity —
+  // same real-time sync with button clicks as before, now sourced from useOptimisticCartLine
+  // instead of a locally-duplicated update path.
   const displayTotalSheet = localItems.reduce((acc, line) => {
-    const p = getSafeNumber(line.price ?? line.unitPrice, 0);
-    const q = getSafeNumber(line.quantity, 1);
-    return acc + (p * q);
+    const q = quantities[line.item.id] ?? getSafeNumber(line.item.quantity, 0);
+    return acc + line.unitPrice * q;
   }, 0);
+
+  const hasVisibleItems = localItems.some(
+    (line) => (quantities[line.item.id] ?? getSafeNumber(line.item.quantity, 0)) > 0
+  );
+
+  const handleQuantityChange = useCallback((itemId: string, quantity: number) => {
+    setQuantities((prev) => ({ ...prev, [itemId]: quantity }));
+  }, []);
 
   useEffect(() => {
     if (total > prevTotal.current) {
@@ -76,28 +168,9 @@ export function CartCapsule() {
     setCartData(data);
     if (data?.lines) {
       setLocalItems(data.lines);
+      setQuantities(Object.fromEntries(data.lines.map((line) => [line.item.id, getSafeNumber(line.item.quantity, 0)])));
     }
   }
-
-  const handleUpdateQuantity = (itemId: string, delta: number) => {
-    // Find target before pure update to extract side-effects
-    const targetLine = localItems.find(line => line.item.id === itemId);
-    if (!targetLine) return;
-
-    const currentQty = getSafeNumber(targetLine.quantity, 1);
-    const newQuantity = Math.max(0, currentQty + delta);
-
-    // Side-effects MUST be outside the setState functional updater!
-    updateCartItemAction(itemId, newQuantity).catch(console.error);
-
-    // Pure state update
-    setLocalItems(prev => prev.map(line => {
-      if (line.item.id === itemId) {
-        return { ...line, quantity: newQuantity };
-      }
-      return line;
-    }).filter(line => getSafeNumber(line.quantity, 1) > 0));
-  };
 
   return (
     <>
@@ -133,40 +206,23 @@ export function CartCapsule() {
           <div className="flex-1 overflow-y-auto px-4 py-2">
             {!cartData ? (
               <div className="py-10 text-center text-sm text-muted-foreground">جاري تحميل السلة...</div>
-            ) : localItems.length === 0 ? (
+            ) : !hasVisibleItems ? (
               <div className="py-10 text-center text-sm text-muted-foreground">السلة فارغة</div>
             ) : (
               <div className="flex flex-col">
-                {localItems.map((line: any) => {
-                  const unitPrice = getSafeNumber(line.price ?? line.unitPrice, 0);
-                  const qty = getSafeNumber(line.quantity, 1);
-                  return (
-                    <div key={line.item.id} className="flex items-center gap-3 border-b border-border py-4">
-                      {line.product.imageUrl && (
-                        <div className="w-16 h-16 shrink-0 rounded-xl bg-muted overflow-hidden border border-border/50">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={line.product.imageUrl} alt={line.product.name} className="w-full h-full object-cover" />
-                        </div>
-                      )}
-                      <div className="flex flex-col flex-1">
-                        <span className="text-sm font-bold text-foreground line-clamp-1">{line.product.name}</span>
-                        <span className="text-xs text-muted-foreground font-medium">{unitPrice.toLocaleString('ar-EG')} ج.م</span>
-                      </div>
-                      <div className="shrink-0">
-                        <QuantityStepper 
-                          quantity={qty} 
-                          onIncrement={() => handleUpdateQuantity(line.item.id, 1)} 
-                          onDecrement={() => handleUpdateQuantity(line.item.id, -1)} 
-                          variant="pill"
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+                {localItems.map((line) => (
+                  <CartCapsuleLineRow
+                    key={line.item.id}
+                    line={line}
+                    variant="mobile"
+                    onError={showToast}
+                    onQuantityChange={handleQuantityChange}
+                  />
+                ))}
               </div>
             )}
           </div>
-          {cartData && localItems.length > 0 && (
+          {cartData && hasVisibleItems && (
             <div className="shrink-0 border-t border-border bg-white p-4 pb-6 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
               <div className="flex items-center justify-between font-bold text-foreground mb-4">
                 <span className="text-muted-foreground">الإجمالي</span>
@@ -190,40 +246,23 @@ export function CartCapsule() {
           <div className="flex flex-col gap-2 pb-6">
             {!cartData ? (
               <div className="py-10 text-center text-sm text-muted-foreground">جاري تحميل السلة...</div>
-            ) : localItems.length === 0 ? (
+            ) : !hasVisibleItems ? (
               <div className="py-10 text-center text-sm text-muted-foreground">السلة فارغة</div>
             ) : (
               <div className="flex flex-col max-h-[50vh] overflow-y-auto no-scrollbar mb-4">
-                {localItems.map((line: any) => {
-                  const unitPrice = getSafeNumber(line.price ?? line.unitPrice, 0);
-                  const qty = getSafeNumber(line.quantity, 1);
-                  return (
-                    <div key={line.item.id} className="flex items-center gap-3 border-b border-border py-3">
-                      {line.product.imageUrl && (
-                        <div className="w-14 h-14 shrink-0 rounded-lg bg-muted overflow-hidden">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={line.product.imageUrl} alt={line.product.name} className="w-full h-full object-cover" />
-                        </div>
-                      )}
-                      <div className="flex flex-col flex-1">
-                        <span className="text-sm font-semibold text-foreground line-clamp-1">{line.product.name}</span>
-                        <span className="text-xs text-muted-foreground">{unitPrice.toLocaleString('ar-EG')} ج.م</span>
-                      </div>
-                      <div className="shrink-0">
-                        <QuantityStepper 
-                          quantity={qty} 
-                          onIncrement={() => handleUpdateQuantity(line.item.id, 1)} 
-                          onDecrement={() => handleUpdateQuantity(line.item.id, -1)} 
-                          variant="pill"
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+                {localItems.map((line) => (
+                  <CartCapsuleLineRow
+                    key={line.item.id}
+                    line={line}
+                    variant="desktop"
+                    onError={showToast}
+                    onQuantityChange={handleQuantityChange}
+                  />
+                ))}
               </div>
             )}
 
-            {cartData && localItems.length > 0 && (
+            {cartData && hasVisibleItems && (
               <div className="flex flex-col gap-3 mt-4 pt-4 border-t border-border">
                 <div className="flex items-center justify-between font-bold text-foreground">
                   <span>الإجمالي</span>
@@ -241,6 +280,7 @@ export function CartCapsule() {
           </div>
         </BottomSheet>
       </div>
+      {toastNode}
     </>
   );
 }

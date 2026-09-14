@@ -1,10 +1,11 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { QuantityStepper } from '@/components/QuantityStepper';
 import { useRouter } from 'next/navigation';
-import { updateCartItemAction } from '@/app/(reef)/cart/actions';
+import { useOptimisticCartLine } from '@/components/useOptimisticCartLine';
+import { useCartToast } from '@/components/useCartToast';
 
 interface CartItem {
   id: string;
@@ -21,44 +22,87 @@ interface DesktopCartSidebarProps {
   onCheckout?: () => void;
 }
 
-export function DesktopCartSidebar({ items = [], total = 0, onCheckout }: DesktopCartSidebarProps) {
-  const [localItems, setLocalItems] = useState(items);
-  const router = useRouter();
+function getSafeNumber(val: unknown, fallback = 0) {
+  const num = Number(val);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+// نفس نمط CartCapsuleLineRow (src/components/CartCapsule.tsx) — بند سلة واحد لكل استدعاء hook، لا
+// يمكن استدعاء useOptimisticCartLine داخل map() على المكوّن الأب مباشرة. `item.id` هنا هو معرّف
+// المنتج فعلياً رغم الاسم (HomePage يمرّره كـ line.product.id — راجع Task Report، التسمية موروثة من
+// الكود القديم ولم تُغيَّر لتقليل حجم التعديل).
+function DesktopCartLineRow({
+  item,
+  onError,
+  onQuantityChange,
+}: {
+  item: CartItem;
+  onError: (message: string) => void;
+  onQuantityChange: (itemId: string, quantity: number) => void;
+}) {
+  const { quantity, setQuantity } = useOptimisticCartLine(
+    item.id,
+    getSafeNumber(item.price, 0),
+    { itemId: item.itemId, quantity: getSafeNumber(item.quantity, 0) },
+    onError
+  );
 
   useEffect(() => {
-    setLocalItems(items);
+    onQuantityChange(item.itemId, quantity);
+  }, [item.itemId, quantity, onQuantityChange]);
+
+  if (quantity <= 0) return null;
+
+  const unitPrice = getSafeNumber(item.price, 0);
+  const lineTotal = unitPrice * quantity;
+
+  return (
+    <div className="flex gap-3 border-b border-border pb-3 last:border-0">
+      {item.imageUrl && (
+        <div className="w-16 h-16 rounded-lg overflow-hidden shrink-0 bg-muted">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+        </div>
+      )}
+      <div className="flex flex-col flex-1">
+        <span className="font-semibold text-sm line-clamp-1 text-foreground">{item.name}</span>
+        <span className="text-muted-foreground text-xs">{unitPrice.toLocaleString('ar-EG')} جنيه</span>
+        <div className="mt-auto flex items-center justify-between">
+          <span className="font-bold text-primary">{lineTotal.toLocaleString('ar-EG')} ج.م</span>
+          <QuantityStepper
+            quantity={quantity}
+            onIncrement={() => setQuantity(quantity + 1)}
+            onDecrement={() => setQuantity(quantity - 1)}
+            variant="separate"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function DesktopCartSidebar({ items = [], total = 0, onCheckout }: DesktopCartSidebarProps) {
+  const router = useRouter();
+  const { showToast, toastNode } = useCartToast();
+  const [quantities, setQuantities] = useState<Record<string, number>>(() =>
+    Object.fromEntries(items.map((item) => [item.itemId, getSafeNumber(item.quantity, 0)]))
+  );
+
+  useEffect(() => {
+    setQuantities(Object.fromEntries(items.map((item) => [item.itemId, getSafeNumber(item.quantity, 0)])));
   }, [items]);
 
-  const getSafeNumber = (val: unknown, fallback = 0) => {
-    const num = Number(val);
-    return Number.isFinite(num) ? num : fallback;
-  };
+  const handleQuantityChange = useCallback((itemId: string, quantity: number) => {
+    setQuantities((prev) => ({ ...prev, [itemId]: quantity }));
+  }, []);
 
-  const safeTotal = localItems.reduce((sum, item) => {
+  const safeTotal = items.reduce((sum, item) => {
     const p = getSafeNumber(item.price, 0);
-    const q = getSafeNumber(item.quantity, 1);
+    const q = quantities[item.itemId] ?? getSafeNumber(item.quantity, 0);
     return sum + (p * q);
   }, 0);
 
-  const handleUpdate = (itemId: string, delta: number) => {
-    // Find target before pure update to extract side-effects
-    const targetItem = localItems.find(i => i.itemId === itemId);
-    if (!targetItem) return;
-
-    const currentQty = getSafeNumber(targetItem.quantity, 1);
-    const newQuantity = Math.max(0, currentQty + delta);
-
-    // Side-effects MUST be outside the setState functional updater!
-    updateCartItemAction(itemId, newQuantity).catch(console.error);
-
-    // Pure state update
-    setLocalItems(prev => prev.map(item => {
-      if (item.itemId === itemId) {
-        return { ...item, quantity: newQuantity };
-      }
-      return item;
-    }).filter(item => getSafeNumber(item.quantity, 1) > 0));
-  };
+  const hasVisibleItems = items.some((item) => (quantities[item.itemId] ?? getSafeNumber(item.quantity, 0)) > 0);
 
   return (
     <aside className="w-80 shrink-0 h-full flex flex-col bg-white rounded-xl shadow-sm border lg:my-4 overflow-hidden hidden lg:flex">
@@ -70,44 +114,24 @@ export function DesktopCartSidebar({ items = [], total = 0, onCheckout }: Deskto
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 space-y-3 py-4">
-        {localItems.length === 0 ? (
+        {!hasVisibleItems ? (
           <div className="flex flex-col items-center justify-center text-center text-muted-foreground gap-4 py-10">
             <ShoppingBag size={48} className="opacity-20" />
             <p className="font-medium text-sm">السلة فارغة حالياً</p>
           </div>
         ) : (
-          localItems.map((item) => {
-            const unitPrice = getSafeNumber(item.price, 0);
-            const qty = getSafeNumber(item.quantity, 1);
-            const lineTotal = unitPrice * qty;
-            return (
-              <div key={item.id} className="flex gap-3 border-b border-border pb-3 last:border-0">
-                {item.imageUrl && (
-                  <div className="w-16 h-16 rounded-lg overflow-hidden shrink-0 bg-muted">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
-                  </div>
-                )}
-                <div className="flex flex-col flex-1">
-                  <span className="font-semibold text-sm line-clamp-1 text-foreground">{item.name}</span>
-                  <span className="text-muted-foreground text-xs">{unitPrice.toLocaleString('ar-EG')} جنيه</span>
-                  <div className="mt-auto flex items-center justify-between">
-                    <span className="font-bold text-primary">{lineTotal.toLocaleString('ar-EG')} ج.م</span>
-                    <QuantityStepper 
-                      quantity={qty} 
-                      onIncrement={() => handleUpdate(item.itemId, 1)} 
-                      onDecrement={() => handleUpdate(item.itemId, -1)} 
-                      variant="separate"
-                    />
-                  </div>
-                </div>
-              </div>
-            );
-          })
+          items.map((item) => (
+            <DesktopCartLineRow
+              key={item.itemId}
+              item={item}
+              onError={showToast}
+              onQuantityChange={handleQuantityChange}
+            />
+          ))
         )}
       </div>
 
-      {localItems.length > 0 && (
+      {hasVisibleItems && (
         <div className="p-4 shrink-0 border-t bg-white mt-auto">
           <div className="flex justify-between items-center mb-4 text-foreground">
             <span className="font-semibold">الإجمالي</span>
@@ -118,6 +142,7 @@ export function DesktopCartSidebar({ items = [], total = 0, onCheckout }: Deskto
           </Button>
         </div>
       )}
+      {toastNode}
     </aside>
   );
 }

@@ -86,7 +86,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
               itemId: line.item.id,
               name: line.product.name,
               price: line.unitPrice,
-              quantity: line.quantity,
+              quantity: line.item.quantity,
               imageUrl: line.product.imageUrl || undefined
             })) || []}
             total={cartSummary?.total || 0}
