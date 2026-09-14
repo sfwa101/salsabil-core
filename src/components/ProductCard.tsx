@@ -79,7 +79,7 @@ export function ProductCard({
       fill
       loading="lazy"
       sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1280px) 25vw, 20vw"
-      className="object-cover"
+      className="object-contain"
     />
   ) : (
     <div className="flex h-full w-full items-center justify-center text-muted-foreground">

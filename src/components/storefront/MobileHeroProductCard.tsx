@@ -1,0 +1,133 @@
+'use client';
+
+import Image from 'next/image';
+import Link from 'next/link';
+import { Heart, Share2, ImageOff, ShoppingCart, ChevronLeft } from 'lucide-react';
+import type { Product, Category } from '@/core/modules/catalog/types';
+import type { CartLineSummary } from '@/core/modules/cart/types';
+import { QuantityStepper } from '@/components/QuantityStepper';
+import { useOptimisticCartLine } from '@/components/useOptimisticCartLine';
+import { useCartToast } from '@/components/useCartToast';
+
+export function MobileHeroProductCard({
+  product,
+  category,
+  cartLine,
+}: {
+  product: Product;
+  category?: Category;
+  cartLine?: CartLineSummary;
+}) {
+  const { showToast, toastNode } = useCartToast();
+  const { quantity, setQuantity } = useOptimisticCartLine(
+    product.id,
+    cartLine?.unitPrice ?? product.basePrice,
+    cartLine ? { itemId: cartLine.item.id, quantity: cartLine.item.quantity } : undefined,
+    showToast
+  );
+
+  return (
+    <div className="relative overflow-hidden rounded-3xl bg-white shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-gray-100/50">
+      {/* Social Header (Publisher) */}
+      {category && (
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50/50">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center shrink-0 border border-gray-100 overflow-hidden">
+              <span className="text-sm font-bold text-gray-400">{category.name.substring(0, 1)}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[13px] font-bold text-gray-900 flex items-center gap-1">
+                {category.name}
+                <span className="text-emerald-500 text-[10px]">✓</span>
+              </span>
+              <span className="text-[11px] text-gray-500 font-medium">
+                {category.name}
+              </span>
+            </div>
+          </div>
+          <Link href={`/${category.slug}`} className="bg-gray-100 text-gray-600 text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-0.5 active:scale-95 transition-transform hover:bg-gray-200">
+            القسم
+            <ChevronLeft size={14} />
+          </Link>
+        </div>
+      )}
+
+      {/* Hero Image & Floating Actions */}
+      <div className="relative h-56 w-full overflow-hidden bg-white">
+        {/* Top Badges (Right side) */}
+        {/* Placeholder for future dynamic badges */}
+
+        {/* Top Action Buttons (Left side) */}
+        <div className="absolute left-3 top-3 z-10 flex flex-col gap-2 pointer-events-auto">
+          <button className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-gray-500 shadow-[0_2px_8px_rgba(0,0,0,0.08)] backdrop-blur-md transition hover:text-red-500 active:scale-95">
+            <Heart size={18} />
+          </button>
+          <button className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-gray-500 shadow-[0_2px_8px_rgba(0,0,0,0.08)] backdrop-blur-md transition hover:text-blue-500 active:scale-95">
+            <Share2 size={18} />
+          </button>
+        </div>
+
+        <Link href={`/product/${product.id}`} className="block w-full h-full">
+          {product.imageUrl ? (
+            <Image
+              src={product.imageUrl}
+              alt={product.name}
+              fill
+              className="object-contain p-4"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+              <ImageOff size={40} />
+            </div>
+          )}
+        </Link>
+      </div>
+
+      {/* Content Details */}
+      <div className="flex flex-col px-5 pb-5">
+        <Link href={`/product/${product.id}`}>
+          <h2 className="text-2xl font-bold text-foreground leading-tight transition hover:text-primary mt-2">
+            {product.name}
+          </h2>
+        </Link>
+        
+        {product.description && (
+          <p className="mt-2 text-sm text-muted-foreground line-clamp-2">
+            {product.description}
+          </p>
+        )}
+
+        <div className="mt-4 flex flex-row items-center justify-between gap-3">
+          <div className="flex flex-col text-right">
+            <span className="text-[24px] font-extrabold leading-none text-gray-900 flex items-baseline gap-1">
+              {product.basePrice}
+              <span className="text-sm font-bold text-gray-500">ج.م</span>
+            </span>
+            <span className="text-[11px] text-gray-400 font-bold mt-1">{product.unit}</span>
+          </div>
+
+          <div className="flex-1 flex items-center justify-end min-w-[130px]">
+            {quantity > 0 ? (
+              <QuantityStepper
+                variant="pill"
+                quantity={quantity}
+                onDecrement={() => setQuantity(quantity - 1)}
+                onIncrement={() => setQuantity(quantity + 1)}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); setQuantity(1); }}
+                className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full bg-emerald-600 text-white text-[13px] font-bold shadow-sm active:scale-95 transition-transform"
+              >
+                <ShoppingCart size={16} strokeWidth={2.5} />
+                + أضف إلى السلة
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+      {toastNode}
+    </div>
+  );
+}
