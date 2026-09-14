@@ -6,7 +6,6 @@ import type { Product, Category } from '@/core/modules/catalog/types';
 import type { CartLineSummary } from '@/core/modules/cart/types';
 import type { PostWithDetails } from '@/core/modules/bayan/types';
 import { StoryBar } from '@/components/StoryBar';
-import { ReelsFeed } from '@/components/ReelsFeed';
 import { MobileHeroProductCard } from './MobileHeroProductCard';
 import { MobileSmallProductCard } from './MobileSmallProductCard';
 import { HorizontalShelf } from '@/components/HorizontalShelf';
@@ -28,13 +27,11 @@ export function MobileStorefront({
   cartLines,
   hasMorePosts,
 }: MobileStorefrontProps) {
-  if (feedTab === 'reel') {
-    return (
-      <div className="h-[calc(100vh-140px)] w-full">
-        <ReelsFeed />
-      </div>
-    );
-  }
+  // TASK-04 — فرع "reel" (كان يعرض <ReelsFeed /> ببيانات MOCK_REELS ثابتة بلا أي علاقة بمنشورات
+  // حقيقية — لا عمود فيديو في post_media أصلاً، راجع Header.tsx) أُزيل عمداً. زر التبويب المؤدي لهذه
+  // القيمة أُزيل من Header.tsx أيضاً؛ حتى عبر رابط ?tab=reel يدوي، feedTab غير مستخدَم في أي مكان آخر
+  // بهذا المكوّن — القيمة تسقط تلقائياً إلى نفس الخلاصة العادية أدناه بدل عرض بيانات وهمية، بنفس منطق
+  // "Cycle 5: Mini Reels Bar (Disabled until real data is available)" الموجود أصلاً أسفل هذا الملف.
 
   return (
     <div className="w-full space-y-4 py-4 bg-background min-h-screen">

@@ -35,6 +35,9 @@ import { BottomSheet } from './BottomSheet';
 import { ProductSheetContent } from './ProductSheetContent';
 import { RecipeSheetContent } from './RecipeSheetContent';
 import { PostSheetContent } from './PostSheetContent';
+import { useOptimisticCartLine } from './useOptimisticCartLine';
+import { useCartToast } from './useCartToast';
+import { QuantityStepper } from './QuantityStepper';
 
 interface PostCardProps {
   post: PostWithDetails;
@@ -56,6 +59,21 @@ export function PostCard({ post, products }: PostCardProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const isProductCentric = PRODUCT_CENTRIC_TYPES.includes(post.postType);
+
+  // TASK-04 — ربط زر "أضف إلى السلة" (قسم 3، Hero Product Details) بنفس آلية السلة الحقيقية
+  // المستخدَمة في ProductCard.tsx حرفياً (useOptimisticCartLine → addToCartAction/updateCartItemAction)،
+  // لا مساراً موازياً. لا cartLine مُمرَّرة هنا (Feed.tsx لا يجلبها لهذا المكوّن اليوم، خارج نطاق
+  // TASK-04) — نفس نمط استدعاء ProductCard الآخر في هذا الملف بالضبط (رف "منتجات هذا المنشور" أسفله،
+  // بلا cartLine أيضاً)، فيبدأ العدّاد من صفر عند كل mount ثم يتزامن مع الخادم بعد أول إضافة ناجحة.
+  const heroProduct = products[0];
+  const heroHasSizeOptions = heroProduct?.options.some((o) => o.type === 'size') ?? false;
+  const { showToast, toastNode: cartToastNode } = useCartToast();
+  const { quantity: heroQuantity, setQuantity: setHeroQuantity } = useOptimisticCartLine(
+    heroProduct?.id ?? '',
+    heroProduct?.basePrice ?? 0,
+    undefined,
+    showToast
+  );
 
   function handleScroll() {
     const el = scrollRef.current;
@@ -157,9 +175,23 @@ export function PostCard({ post, products }: PostCardProps) {
               <span className="text-2xl font-extrabold leading-none text-foreground">{products[0].basePrice}</span>
               <span className="text-sm font-medium text-muted-foreground">جنيه</span>
             </div>
-            <button className="flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-sm font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90">
-              <Plus size={16} strokeWidth={3} /> أضف إلى السلة
-            </button>
+            {!heroHasSizeOptions &&
+              (heroQuantity > 0 ? (
+                <QuantityStepper
+                  variant="pill"
+                  quantity={heroQuantity}
+                  onDecrement={() => setHeroQuantity(heroQuantity - 1)}
+                  onIncrement={() => setHeroQuantity(heroQuantity + 1)}
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setHeroQuantity(1)}
+                  className="flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-sm font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+                >
+                  <Plus size={16} strokeWidth={3} /> أضف إلى السلة
+                </button>
+              ))}
           </div>
         </div>
       )}
@@ -194,6 +226,7 @@ export function PostCard({ post, products }: PostCardProps) {
           <PostSheetContent post={post} products={products} onSelectProduct={openProductSheet} />
         )}
       </BottomSheet>
+      {cartToastNode}
     </article>
   );
 }

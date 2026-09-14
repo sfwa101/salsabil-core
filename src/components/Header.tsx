@@ -18,15 +18,18 @@
 // تتموضع في نفس الإحداثيات تماماً (نفس max-width/padding)، فتبدو جزءاً من هذا الصف عند ظهور الهيدر.
 
 import Link from 'next/link';
-import { ShoppingCart, User, Home, ShoppingBag, Clapperboard, Newspaper, Wallet, Headset, ChevronDown } from 'lucide-react';
+import { ShoppingCart, User, Home, ShoppingBag, Newspaper, Wallet, Headset, ChevronDown } from 'lucide-react';
 import { HeaderSearchBar } from './HeaderSearchBar';
 import { DeliveryAddressButton } from './DeliveryAddressButton';
 import { CartCapsule } from './CartCapsule';
 
+// TASK-04 — تبويب "ريلز" أُزيل من هنا عمداً (لا يظهر للمستخدم إطلاقاً): لا عمود فيديو في post_media
+// (image_url فقط، docs/DATABASE.md §3) ولا أي حقل فيديو في PostMedia (bayan/types.ts) — بيانات
+// الريلز الحقيقية غير موجودة أصلاً اليوم، لا مجرد تحويل بيانات ناقص. راجع Task Report لمعيار القرار
+// الكامل (§3.2 من موجّه المهمة). يُعاد التبويب هنا فقط عند وجود مصدر فيديو حقيقي فعلياً.
 const tabs = [
   { id: 'all', label: 'الكل', href: '/?tab=all', isActive: true },
   { id: 'products', label: 'المنتجات', href: '/?tab=products', isActive: false },
-  { id: 'reel', label: 'ريلز', href: '/?tab=reel', isActive: false },
   { id: 'posts', label: 'منشورات', href: '/?tab=posts', isActive: false }
 ];
 
@@ -34,7 +37,6 @@ function getTabIcon(id: string) {
   switch (id) {
     case 'all': return <Home size={26} />;
     case 'products': return <ShoppingBag size={26} />;
-    case 'reel': return <Clapperboard size={26} />;
     case 'posts': return <Newspaper size={26} />;
     default: return <Home size={26} />;
   }
