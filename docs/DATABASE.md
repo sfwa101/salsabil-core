@@ -491,6 +491,23 @@ Supabase SQL Editor (`scripts/day23-bayan-schema.sql`، نفس قيد عدم و�
 
 ---
 
+## 3.1 Phase 2 — الطلب متعدد التجار / موظفو التاجر / مكتب الدليفري — `APPROVED`، بانتظار تنفيذ يدوي (TASK-12)
+
+عشرة جداول جديدة (`customer_orders`, `merchant_suborders`, `merchant_suborder_items`,
+`merchant_suborder_status_history`, `delivery_quotes`, `merchant_staff`, `delivery_offices`,
+`drivers`, `delivery_jobs`, `delivery_job_suborders`) — **مصدر الحقيقة الكامل لكل تعريف حقل/قيد/فهرس
+هو `specs/orders/PHASE_2_DOMAIN_DESIGN.md` (status: `APPROVED`، اعتمده المؤسس 2026-09-15)، لا يُكرَّر
+هنا تفادياً لازدواج مصدر الحقيقة.** كلها `CREATE TABLE` بحت (بلا `ALTER` على أي جدول مالي حي)، بإضافة
+استثناءين آمنين فقط على جداول قائمة: توسيع قيد `users.role` ليشمل `'driver'`، وعمود جديد
+`merchants.default_settlement_model` (`nullable`).
+
+السكربت الكامل جاهز، **لم يُنفَّذ على أي بيئة بعد**: `scripts/2026-09-15-phase-2-multi-merchant-schema.sql`
+(TASK-12). كل جدول جديد يُقفَل بالكامل عبر RLS بلا أي `policy` (النمط 2 — وصول حصري عبر `service_role`).
+حالة هذا القسم: `APPROVED_PENDING_MANUAL_EXECUTION` — يُحدَّث إلى `IMPLEMENTED` فقط بعد تأكيد المؤسس
+تنفيذ السكربت فعلياً على `dev` (ثم `staging`).
+
+---
+
 ## 4. الجداول — CONCEPTUAL (مخطَّطة في الدستور، لم تُبنَ)
 
 راجع `SALSABIL_CONSTITUTION.md §8` للقائمة الكاملة. أبرزها بالترتيب المتوقع للبناء:
