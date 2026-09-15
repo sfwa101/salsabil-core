@@ -13,6 +13,7 @@ interface MerchantRow {
   commission_rate: number;
   is_active: boolean;
   created_at: string;
+  default_settlement_model: 'driver_fronted' | 'reef_collected' | null;
 }
 
 function toMerchant(row: MerchantRow): Merchant {
@@ -25,6 +26,7 @@ function toMerchant(row: MerchantRow): Merchant {
     commissionRate: row.commission_rate,
     isActive: row.is_active,
     createdAt: row.created_at,
+    defaultSettlementModel: row.default_settlement_model,
   };
 }
 

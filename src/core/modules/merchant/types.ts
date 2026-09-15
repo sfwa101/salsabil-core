@@ -14,6 +14,12 @@ export interface Merchant {
   commissionRate: number;
   isActive: boolean;
   createdAt: string;
+  // TASK-13 (specs/orders/PHASE_2_DOMAIN_DESIGN.md §7.3) — يُنسَخ حرفياً إلى
+  // merchant_suborders.settlement_model وقت إنشاء كل suborder عند Checkout. عمود جديد nullable —
+  // كل التجار الحاليين NULL حتى يُحدَّد لكل تاجر يدوياً؛ orders.service.ts يفترض 'reef_collected'
+  // (قرار مؤسس صريح) لأي تاجر لم يحدّده بعد، حفاظاً على عمل Checkout فوراً لكل التجار الحاليين —
+  // اختياري هنا (لا `| null` إلزامي) لتفادي كسر أي بناء كائن Merchant حرفي قديم في الاختبارات.
+  defaultSettlementModel?: 'driver_fronted' | 'reef_collected' | null;
 }
 
 // عقد الاتفاقية بين المنصة والتاجر — إسقاط من بيانات التاجر الأساسية

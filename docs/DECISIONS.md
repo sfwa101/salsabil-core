@@ -1613,6 +1613,93 @@ Related Documents: ADR-022 (السابقة المباشرة — نفس نمط ا
 
 ---
 
+## ADR-033
+```
+Title: TASK-13 — Checkout متعدد التجار الفعلي: استبدال رفض ADR-009 بتقسيم حقيقي حسب tenant_id،
+          إعادة توجيه كل دوال Orders لجداول TASK-12، إلزامية سبب الإلغاء، وافتراض settlement_model
+Status: ACCEPTED — طُبِّق ومُتحقَّق منه حياً (كود + 226 اختبار وحدة + 57 اختبار تكامل، بما فيها
+          دليل Regression مباشر لكل سيناريو إطلاق: تاجران، ثلاثة تجار من فئات مختلفة، فشل ذرّي أثناء
+          الإنشاء مع تعويض كامل)
+Date: 2026-09-15
+Decision: (أ) `OrdersService.checkout()` (`orders.service.ts`) لم يعد يرفض سلة بأكثر من `tenant_id`
+          واحد (`ADR-009`، مُستبدَل هنا حرفياً) — يجمّع بنود السلة حسب `tenant_id`، وينشئ صفاً واحداً
+          في `customer_orders` + صفاً واحداً في `merchant_suborders` لكل مجموعة تاجر (+
+          `merchant_suborder_items`/`merchant_suborder_status_history` لكل منها)، عبر مستودع جديد
+          `customerOrder.repository.ts` (لا تعديل على `orders.repository.ts` القديم — Create-only،
+          صفر لمس على `orders`/`order_items`/`order_status_history`).
+          (ب) **كل دالة أخرى في `OrdersService`** (`transitionStatus`، `getOrderWithItems`،
+          `getStatusHistory`، `getOrdersForTenant`، `getAllOrders`، `getOrderForCustomerView`،
+          `getRecentStatusHistory`) أُعيد توجيهها لنفس الجداول الجديدة — قرار مؤسس صريح (لا
+          "Write Path فقط" كما اقترح الموجِّه الأصلي؛ الأثر البديل كان يترك بوابتي التاجر/الإدارة
+          عمياوين تماماً عن أي طلب بعد هذه المهمة). `merchant_suborders` بديل Drop-in حرفي لصف
+          `orders` (يطابق §2.2 من `specs/orders/PHASE_2_DOMAIN_DESIGN.md`) — العقد الخارجي
+          (`Order`/`OrderItem`/`OrderStatusHistoryEntry` في `types.ts`) لم يتغيّر شكلاً، فقط أُضيف
+          حقل اختياري جديد `Order.customerOrderId`؛ لا حاجة لمس أي `page.tsx`/Server Action مستهلك
+          (`merchant/orders`، `admin/dashboard`، `/order/[id]`، `checkout/actions.ts`) — توافق خلفي
+          تام للسلة أحادية التاجر (الحالة الشائعة اليوم، ~100% من الطلبات الحالية).
+          (ج) **`merchants.default_settlement_model = NULL`** (وضع كل التجار الحاليين فعلياً بعد
+          `TASK-12`، عمود جديد `nullable`) → `checkout()` يفترض `'reef_collected'` صراحة بدل رفض
+          Checkout أو قيمة عشوائية أخرى — قرار مؤسس مباشر (2026-09-15)، يطابق الوضع التشغيلي الحالي
+          (ريف تجمّع التحصيل يدوياً عبر مكاتبها). `Merchant.defaultSettlementModel` أُضيف اختيارياً
+          إلى `merchant/types.ts`/`merchant.repository.ts` لدعم هذا فقط.
+          (د) **إصلاح فجوة اكتُشفت أثناء إعادة التوجيه، غير موصوفة في `PHASE_2_DOMAIN_DESIGN.md`**:
+          `merchant_suborder_status_history` يفرض `CHECK (to_status <> 'cancelled' OR note IS NOT
+          NULL)` (قيد جديد لم يكن على `order_status_history` القديم، `TASK-12`) — لو تُرك للقيد
+          وحده، `transitionStatus` كان يُحدِّث حالة الـ`suborder` إلى `cancelled` فعلياً (سطر منفصل
+          سابق) ثم يفشل عند إدراج سجل التاريخ بخطأ DB خام، تاركاً الطلب "ملغياً" فعلياً بلا أي سجل
+          يوثّق السبب/الفاعل وبلا استرجاع مخزون (الكود يتوقف عند الاستثناء قبل الوصول لذلك السطر) —
+          حالة غير متسقة تماماً. أُضيف فحص صريح في `transitionStatus` (`toStatus==='cancelled' &&
+          !note` → رفض فوري قبل أي كتابة DB)، يطابق فلسفة "فشل صريح لا نجاح صامت" القائمة أصلاً.
+          (هـ) `delivery_fee_snapshot` = صفر مؤقت دائماً (`TODO` صريح في الكود) — لا خوارزمية حساب
+          فعلية مبنية بعد (خارج نطاق TASK-13 صراحة، `PHASE_2_DOMAIN_DESIGN.md §5/§9`)؛ جدول
+          `delivery_quotes` (من `TASK-12`) يبقى بلا أي صف حتى تُبنى تلك المهمة المستقبلية.
+Context: `specs/orders/PHASE_2_DOMAIN_DESIGN.md` (`APPROVED`، 2026-09-15) صمَّم الجداول العشرة
+          (`TASK-12`، نُفِّذت فعلياً على `salsabil-core` dev — تحقَّق منها المؤسس صراحة عند بدء هذه
+          المهمة) لكنه ترك عمداً "تفصيلاً تنفيذياً لـTASK-13" ثلاث نقاط حاسمة لم تُحسَم إلا هنا: (1)
+          هل تُعاد بقية دوال `OrdersService` لقراءة/كتابة الجداول الجديدة أم تبقى فقط تقرأ القديم؟ —
+          حُسمت بند (ب) أعلاه. (2) ما سلوك `checkout()` لتاجر بلا `default_settlement_model` محدَّد
+          — حُسمت بند (ج). (3) مصير رابط `/order/[id]` — لم يتغيّر: يبقى مفتاحه `merchant_suborder.id`
+          (كان `orders.id`)، تماماً كأي `Order` آخر — لا حاجة لحسم "أزدواجية" لأن التوافق الخلفي
+          الكامل (بند ب) يجعل السؤال غير ذي موضوع للسلة أحادية التاجر؛ يبقى مفتوحاً فقط لعرض تجميع
+          متعدد التجار بصرياً للعميل (`TASK-16`، غير مبني هنا عمداً).
+Alternatives: (أ) الإبقاء على `orders.service.ts` يقرأ فقط من `orders` القديم لكل شيء عدا
+          `checkout()` نفسه (تفسير حرفي لـ"نطاق هذه المهمة الإنشاء لا العرض" في موجّه المهمة) — رُفض
+          صراحة من المؤسس: كان يعني أن بوابتي التاجر/الإدارة (`merchant/orders`, `admin/dashboard`)
+          لا تريان أي طلب جديد إطلاقاً بعد نشر هذه المهمة — انحداراً وظيفياً حقيقياً على عمل التاجر
+          اليومي، لا مجرد نقص عرض بصري مؤجَّل.
+          (ب) رفض Checkout صراحة لأي تاجر بلا `default_settlement_model` محدَّد (بدل الافتراض) —
+          رُفض: كان سيُعطِّل Checkout فعلياً لكل الـ~70 تاجراً الحاليين فوراً عند النشر (كلهم `NULL`
+          اليوم)، بلا أي فائدة تعويضية حقيقية الآن.
+          (ج) الاعتماد على قيد `merchant_suborder_status_history` وحده لفرض إلزامية `note` (بلا فحص
+          تطبيقي) — رُفض: يترك حالة غير متسقة فعلية (حالة `cancelled` بلا سجل ولا استرجاع مخزون) كما
+          وُصف في بند (د) أعلاه، بعكس فلسفة "فشل صريح قبل أي أثر جانبي" المتَّبعة في كل مسارات
+          Checkout/الانتقال الأخرى.
+Consequences: **تغيير حالة يُعلَن صراحة هنا (`AGENTS.md §13`)** — العقد الخارجي لـ`transitionStatus`
+          الآن يرفض أي `toStatus:'cancelled'` بلا `note` (كان مقبولاً بلا `note` سابقاً ضد
+          `order_status_history` القديم؛ أي مستدعٍ حالي — `merchant/orders/actions.ts`،
+          `admin/dashboard/actions.ts` — يمرّر `note` اختيارياً من واجهة موجودة أصلاً، لا يحتاج
+          تعديلاً). `getMostOrderedProductIds` (توصية "غالباً ما يُشترى معه") تبقى الوحيدة المتَّصلة
+          بـ`orders.repository.ts` القديم — ستُصبح تدريجياً مبنية على بيانات مجمَّدة من قبل هذا
+          التحوّل فقط (`order_items` يتوقف عن استقبال صفوف جديدة) — ميزة غير حرجة، لا تصحيح فوري
+          مطلوب، تحتاج إعادة بناء على `merchant_suborder_items` في مهمة منفصلة لاحقة إن استمر
+          استخدامها. جدول `delivery_quotes` يبقى فارغاً بالكامل حتى بناء حساب فعلي لرسوم التوصيل
+          (مهمة مستقبلية منفصلة). واجهة العميل لا تعرض بعد تجميع الطلب متعدد التجار بصرياً (تبقى
+          مهمة `TASK-16` كما خُطِّط أصلاً) — العميل يرى فعلياً نصيب أول تاجر في طلبه فقط عبر
+          `/order/[id]` الحالي لو كانت سلته متعددة التجار (حالة نادرة اليوم، الوضع الافتراضي لا يزال
+          سلة تاجر واحد تعمل بلا أي تغيير ظاهري).
+Related Documents: ADR-009 (القرار المُستبدَل)، ADR-010 (آلة الحالات المُعاد استخدامها حرفياً)،
+          specs/orders/PHASE_2_DOMAIN_DESIGN.md (التصميم المعتمَد الكامل)، AGENTS.md §13 (No Silent
+          State Change)، §17 (Guardian Matrix → Orders State Machine/Financial Logic = DEEP)،
+          scripts/2026-09-15-phase-2-multi-merchant-schema.sql (TASK-12، الجداول العشرة)،
+          src/core/modules/orders/{orders.service.ts,customerOrder.repository.ts,types.ts,
+          orders.service.test.ts,orders.integration.test.ts}،
+          src/core/modules/merchant/{types.ts,merchant.repository.ts}،
+          src/core/e2e/reef-city-journey.integration.test.ts،
+          src/core/modules/admin/admin.integration.test.ts
+```
+
+---
+
 ## سجل التعارضات (CONFLICT LOG)
 
 ### CONFLICT-001
