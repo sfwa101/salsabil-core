@@ -22,7 +22,10 @@ export class InventoryService {
     return inventoryRepository.decrementIfAvailable(productId, quantity);
   }
 
-  // تعويضي (بند 3) — يُستدعى فقط عند فشل خطوة لاحقة في checkout() بعد reserve() ناجح لنفس المنتج.
+  // تعويضي (بند 3) — يُستدعى عند فشل خطوة لاحقة في checkout() بعد reserve() ناجح لنفس المنتج، وأيضاً
+  // (TASK-08) من orders.service.ts → transitionStatus عند إلغاء طلب موجود فعلياً (* → cancelled)
+  // لكل بند من order_items. restore() نفسها محمية بقفل تفاؤلي (inventory.repository.ts) يمنع فقد
+  // أثر استرجاع تحت تزامن حقيقي بين مستدعيَين معاً.
   async release(productId: string, quantity: number): Promise<void> {
     return inventoryRepository.restore(productId, quantity);
   }

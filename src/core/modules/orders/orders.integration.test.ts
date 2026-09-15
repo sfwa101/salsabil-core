@@ -8,6 +8,7 @@ import { supabaseAdmin } from '../../kernel/database/supabase-admin-client';
 import { catalogRepository } from '../catalog/catalog.repository';
 import { cartService } from '../cart/cart.service';
 import { ordersService } from './orders.service';
+import { inventoryRepository } from '../inventory/inventory.repository';
 
 describe('Orders/Checkout integration (Supabase حقيقي)', () => {
   let productId: string;
@@ -434,4 +435,79 @@ describe('Orders lifecycle integration (Supabase حقيقي، اليوم 9)', ()
     expect(orders.some((o) => o.id === order.id)).toBe(true);
     expect(orders.every((o) => o.tenantId === tenantId)).toBe(true);
   });
+
+  async function readInventory(): Promise<number> {
+    const { data, error } = await supabaseAdmin.from('inventory').select('quantity_available').eq('product_id', productId).single();
+    if (error) throw error;
+    return data.quantity_available as number;
+  }
+
+  // TASK-08 — الإصلاح الأساسي حياً: إلغاء طلب حقيقي موجود فعلياً (بعد نجاح Checkout، لا فشله)
+  // كان يترك مخزونه محجوزاً للأبد قبل هذا الإصلاح (release() لم يكن يُستدعى إلا من مسار تعويض
+  // فشل Checkout نفسه). الآن transitionStatus(* → cancelled) يسترجعه فعلياً عبر
+  // InventoryService.release() ضد قاعدة بيانات حقيقية، لا تمويهاً.
+  it('TASK-08: إلغاء طلب حقيقي يسترجع مخزونه فعلياً في قاعدة البيانات (الفجوة الأصلية)', async () => {
+    const before = await readInventory();
+    const order = await createTestOrder(); // يخصم 1 فعلياً
+
+    const afterCheckout = await readInventory();
+    expect(afterCheckout).toBe(before - 1);
+
+    await ordersService.transitionStatus({ orderId: order.id, toStatus: 'cancelled', actorRole: 'merchant_owner', tenantId });
+
+    const afterCancel = await readInventory();
+    expect(afterCancel).toBe(before); // استُرجعت الكمية بالضبط — لا محجوزة للأبد
+  });
+
+  // TASK-08، §4 — الحالة الحرجة الأولى: إلغاء نفس الطلب مرتين متزامنتين فعليًا (Promise.all، لا
+  // تسلسلاً) يجب أن يسترجع المخزون مرة واحدة بالضبط، لا مرتين. القفل التفاؤلي في
+  // orders.repository.ts (updateOrderStatus) يضمن أن استدعاءً واحداً فقط ينجح فعلياً في تنفيذ
+  // الانتقال وأثره (الاسترجاع)؛ الآخر يُرفَض صريحاً بخطأ تعارض تزامن واضح.
+  it(
+    'TASK-08 §4: إلغاء نفس الطلب مرتين متزامنتين فعليًا يسترجع المخزون مرة واحدة فقط (لا استرجاع مضاعف)',
+    async () => {
+      const before = await readInventory();
+      const order = await createTestOrder(); // يخصم 1
+
+      const cancelOnce = () =>
+        ordersService.transitionStatus({ orderId: order.id, toStatus: 'cancelled', actorRole: 'merchant_owner', tenantId });
+
+      const [resultA, resultB] = await Promise.allSettled([cancelOnce(), cancelOnce()]);
+      const outcomes = [resultA, resultB];
+      const succeeded = outcomes.filter((r) => r.status === 'fulfilled');
+      const failed = outcomes.filter((r) => r.status === 'rejected');
+
+      expect(succeeded).toHaveLength(1); // واحد فقط نفَّذ الانتقال فعلياً
+      expect(failed).toHaveLength(1);
+      expect((failed[0] as PromiseRejectedResult).reason.message).toMatch(/تعارض تزامن/);
+
+      const after = await readInventory();
+      expect(after).toBe(before); // استُرجعت مرة واحدة بالضبط (خُصمت 1 عند الإنشاء، استُرجعت 1 عند الإلغاء) — لا استرجاع مضاعف
+    },
+    20000
+  );
+
+  // TASK-08، §4 — الحالة الحرجة الثانية: عدة استرجاعات حقيقية متزامنة لنفس المنتج (مثلاً عدة طلبات
+  // مختلفة تحوي المنتج نفسه تُلغى في نفس اللحظة تقريباً). يختبر مباشرة القفل التفاؤلي الجديد في
+  // InventoryRepository.restore() نفسه — عبر استدعائه مباشرة عدة مرات متزامنة فعليًا (Promise.all
+  // بلا خطوات وسيطة)، لا عبر مسار transitionStatus الكامل: الخطوات الوسيطة في ذلك المسار (بحث
+  // الطلب، القفل التفاؤلي لحالته، سجل التاريخ) تُدخِل تأخيراً شبكياً كافياً لتفريق توقيت
+  // الاستدعاءات فعلياً فيُخفي السباق أحياناً مع عدد قليل من الاستدعاءات (تحقَّق منه أثناء كتابة
+  // هذا الاختبار: استدعاءان متزامنان فقط عبر restore() مباشرة لم يُظهرا Lost Update بثبات). سكربت
+  // منفصل مباشر ضد Supabase حقيقي أظهر أن 10 استدعاءات متزامنة بلا قفل تُفقِد 9 من أصل 10 تحديثات
+  // فعلياً (101 بدل 110 متوقَّعة) — سباق حقيقي شديد الوضوح. 5 استدعاءات هنا كافية لإثباته بثبات
+  // معقول بلا إبطاء الاختبار كثيراً.
+  it(
+    'TASK-08 §4: خمسة استرجاعات متزامنة فعلياً لنفس المنتج (InventoryRepository.restore) تنجح كلها بلا فقد أثر (Lost Update)',
+    async () => {
+      const before = await readInventory();
+      const concurrentRestores = 5;
+
+      await Promise.all(Array.from({ length: concurrentRestores }, () => inventoryRepository.restore(productId, 1)));
+
+      const after = await readInventory();
+      expect(after).toBe(before + concurrentRestores); // كل الاسترجاعات طُبِّقت فعلياً — لا فقد أثر أي منها
+    },
+    20000
+  );
 });

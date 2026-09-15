@@ -270,6 +270,13 @@ export class OrdersService {
 
   // ينفّذ انتقال حالة واحداً وفق آلة الحالات في types.ts (ORDER_TRANSITIONS)، ويرفض أي انتقال
   // غير مسموح أو فاعل غير مخوَّل بدل تنفيذه صامتاً — نفس منطق الرفض الصريح في checkout()
+  //
+  // TASK-08 — إصلاح فجوة حقيقية: الانتقال * → cancelled كان يترك مخزون الطلب محجوزاً للأبد (كان
+  // release() يُستدعى فقط من مسار تعويض فشل Checkout نفسه، لا هنا). الآن يُسترجَع مخزون كل بند من
+  // order_items عبر نفس آلية InventoryService.release() المُختبَرة أصلاً في ذلك المسار — لا منطق
+  // استرجاع جديد. طول الدالة تجاوز حد الـ50 سطراً (Complexity Budget، AGENTS.md §4) — تبرير: نفس
+  // فلسفة performCheckout أعلاه، تسلسل خطوات انتقال واحد منطقياً (فحص → تحديث ذرّي → سجل → أثر
+  // جانبي عند الإلغاء)، تقسيمها لدوال فرعية يُشتِّت القراءة بلا فائدة حقيقية.
   async transitionStatus(input: TransitionOrderStatusInput): Promise<Order> {
     const order = await ordersRepository.findOrderById(input.orderId);
     if (!order) {
@@ -293,7 +300,13 @@ export class OrdersService {
       throw new Error(`الدور "${input.actorRole}" غير مخوَّل لتغيير الحالة إلى "${input.toStatus}"`);
     }
 
-    const updatedOrder = await ordersRepository.updateOrderStatus(input.orderId, input.toStatus);
+    // TASK-08 — قفل تفاؤلي (orders.repository.ts): يطابق أيضاً على order.status المقروء أعلاه بالذات.
+    // null يعني طرف آخر غيَّر حالة هذا الطلب فعلياً بين قراءتنا وكتابتنا (سباق حقيقي، مثلاً إلغاءان
+    // متزامنان لنفس الطلب) — رفض صريح بدل تنفيذ أثر الانتقال (استرجاع المخزون) مرتين لطلب واحد.
+    const updatedOrder = await ordersRepository.updateOrderStatus(input.orderId, order.status, input.toStatus);
+    if (!updatedOrder) {
+      throw new Error('تعارض تزامن: تغيّرت حالة هذا الطلب من طرف آخر أثناء هذا الانتقال بالذات — أعد المحاولة');
+    }
 
     await ordersRepository.insertStatusHistory({
       orderId: input.orderId,
@@ -303,6 +316,38 @@ export class OrdersService {
       actorId: input.actorId,
       note: input.note,
     });
+
+    if (input.toStatus === 'cancelled') {
+      const items = await ordersRepository.findOrderItems(input.orderId);
+      const failures: string[] = [];
+      await Promise.all(
+        items.map(async (item) => {
+          try {
+            await inventoryService.release(item.productId, item.quantity);
+          } catch (releaseError) {
+            failures.push(item.productId);
+            await auditService
+              .log({
+                actorRole: 'system',
+                action: 'inventory.release_failed',
+                entityType: 'inventory',
+                entityId: item.productId,
+                metadata: {
+                  quantity: item.quantity,
+                  orderId: input.orderId,
+                  reason: releaseError instanceof Error ? releaseError.message : String(releaseError),
+                },
+              })
+              .catch(() => {});
+          }
+        })
+      );
+      if (failures.length > 0) {
+        throw new Error(
+          `الطلب أُلغي بنجاح لكن فشل استرجاع مخزون المنتجات: ${failures.join(', ')} — راجع سجل التدقيق`
+        );
+      }
+    }
 
     return updatedOrder;
   }

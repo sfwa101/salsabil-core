@@ -297,7 +297,7 @@ describe('OrdersService.transitionStatus', () => {
     });
 
     expect(order.status).toBe('confirmed');
-    expect(ordersRepository.updateOrderStatus).toHaveBeenCalledWith('order-1', 'confirmed');
+    expect(ordersRepository.updateOrderStatus).toHaveBeenCalledWith('order-1', 'pending', 'confirmed');
     expect(ordersRepository.insertStatusHistory).toHaveBeenCalledWith({
       orderId: 'order-1',
       fromStatus: 'pending',
@@ -311,6 +311,7 @@ describe('OrdersService.transitionStatus', () => {
   it('ينجح: يمكن الإلغاء من preparing (وليس فقط من pending)', async () => {
     vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'preparing' }) as never);
     vi.mocked(ordersRepository.updateOrderStatus).mockResolvedValue(makeOrder({ status: 'cancelled' }) as never);
+    vi.mocked(ordersRepository.findOrderItems).mockResolvedValue([]);
 
     const order = await ordersService.transitionStatus({
       orderId: 'order-1',
@@ -319,6 +320,70 @@ describe('OrdersService.transitionStatus', () => {
     });
 
     expect(order.status).toBe('cancelled');
+  });
+
+  // TASK-08 — الإصلاح الأساسي: الانتقال إلى cancelled يجب أن يسترجع مخزون كل بند فعلياً عبر
+  // InventoryService.release() الموجودة أصلاً (لا منطق استرجاع جديد)، لا أن يُترك المخزون محجوزاً.
+  it('TASK-08: يسترجع مخزون كل بند من order_items عند الإلغاء (* → cancelled)', async () => {
+    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
+    vi.mocked(ordersRepository.updateOrderStatus).mockResolvedValue(makeOrder({ status: 'cancelled' }) as never);
+    vi.mocked(ordersRepository.findOrderItems).mockResolvedValue([
+      { id: 'oi-1', orderId: 'order-1', productId: chicken.id, quantity: 2, selection: {}, unitPriceSnapshot: 100, createdAt: new Date().toISOString() },
+      { id: 'oi-2', orderId: 'order-1', productId: fish.id, quantity: 3, selection: {}, unitPriceSnapshot: 50, createdAt: new Date().toISOString() },
+    ] as never);
+    const { inventoryRepository } = await import('../inventory/inventory.repository');
+
+    const order = await ordersService.transitionStatus({
+      orderId: 'order-1',
+      toStatus: 'cancelled',
+      actorRole: 'merchant_owner',
+      tenantId: 'tenant-a',
+    });
+
+    expect(order.status).toBe('cancelled');
+    expect(inventoryRepository.restore).toHaveBeenCalledWith(chicken.id, 2);
+    expect(inventoryRepository.restore).toHaveBeenCalledWith(fish.id, 3);
+  });
+
+  // TASK-08، §4 — الانتقال إلى cancelled لا يستدعي أي استرجاع لطلب لم يُلغَ (تحقّق سلبي: لا استرجاع
+  // مخزون غير مبرَّر عند انتقالات أخرى غير الإلغاء).
+  it('TASK-08: لا يستدعي استرجاع المخزون عند انتقال غير الإلغاء', async () => {
+    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'pending' }) as never);
+    vi.mocked(ordersRepository.updateOrderStatus).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
+    const { inventoryRepository } = await import('../inventory/inventory.repository');
+
+    await ordersService.transitionStatus({
+      orderId: 'order-1',
+      toStatus: 'confirmed',
+      actorRole: 'merchant_owner',
+      tenantId: 'tenant-a',
+    });
+
+    expect(ordersRepository.findOrderItems).not.toHaveBeenCalled();
+    expect(inventoryRepository.restore).not.toHaveBeenCalled();
+  });
+
+  // TASK-08، §4 — التحقق من الحالة الحرجة "استرجاع مضاعف": قفل orders.repository.ts التفاؤلي
+  // (updateOrderStatus يعيد null عند تعارض) يجب أن يمنع تنفيذ الانتقال + الاسترجاع، لا فقط يفشل
+  // بصمت — استدعاء transitionStatus عندما يُغيّر طرف آخر الحالة فعلياً بين القراءة والكتابة (محاكى
+  // هنا بجعل updateOrderStatus يعيد null، وهو ما تعيده هذه الدالة فعلياً عند فشل القفل التفاؤلي حياً).
+  it('TASK-08: يرفض الانتقال ولا يسترجع مخزوناً عند تعارض تزامن (updateOrderStatus يعيد null)', async () => {
+    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
+    vi.mocked(ordersRepository.updateOrderStatus).mockResolvedValue(null);
+    const { inventoryRepository } = await import('../inventory/inventory.repository');
+
+    await expect(
+      ordersService.transitionStatus({
+        orderId: 'order-1',
+        toStatus: 'cancelled',
+        actorRole: 'merchant_owner',
+        tenantId: 'tenant-a',
+      })
+    ).rejects.toThrow(/تعارض تزامن/);
+
+    expect(ordersRepository.insertStatusHistory).not.toHaveBeenCalled();
+    expect(ordersRepository.findOrderItems).not.toHaveBeenCalled();
+    expect(inventoryRepository.restore).not.toHaveBeenCalled();
   });
 
   it('يرفض تاجراً يحاول تغيير حالة طلب تاجر آخر (عزل المستأجرين، اليوم 10)', async () => {

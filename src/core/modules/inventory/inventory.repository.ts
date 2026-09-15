@@ -62,17 +62,38 @@ export class InventoryRepository {
     return false; // استُنفدت المحاولات تحت تزاحم شديد — رفض البيع أسلم من المخاطرة ببيع مضاعف
   }
 
-  // تعويضي (بند 3، Transaction Boundaries) — يُستدعى فقط عند فشل خطوة لاحقة في checkout() بعد
-  // خصم ناجح لهذا المنتج بالذات (فشل دفع/إنشاء طلب/بنود) لإعادة الكمية المخصومة. لا قفل تفاؤلي
-  // هنا عمداً: نطاق استدعائه ضيق (تعويض فوري لخصم واحد معروف)، لا مسار متزامن حقيقي يتنافس عليه.
-  async restore(productId: string, quantity: number): Promise<void> {
-    const current = await this.findByProductId(productId);
-    if (!current) return; // لا سجل مخزون لمنتج نجح خصمه للتو — حالة غير متوقعة، لا شيء نعيده إليه
-    const { error } = await supabaseAdmin
-      .from('inventory')
-      .update({ quantity_available: current.quantityAvailable + quantity, updated_at: new Date().toISOString() })
-      .eq('product_id', productId);
-    if (error) throw error;
+  // تعويضي (بند 3، Transaction Boundaries) — يُستدعى عند فشل خطوة لاحقة في checkout() بعد خصم
+  // ناجح لهذا المنتج بالذات، وأيضاً عند إلغاء طلب موجود فعلياً (TASK-08، orders.service.ts →
+  // transitionStatus). القفل التفاؤلي أدناه (نفس نمط decrementIfAvailable بالضبط) أُضيف في
+  // TASK-08: التعليق الأصلي هنا افترض "لا مسار متزامن حقيقي يتنافس عليه" لأن المستدعي الوحيد وقتها
+  // كان تعويض فشل Checkout لبند واحد معروف. إضافة مسار الإلغاء كمستدعٍ ثانٍ كسرت ذلك الافتراض
+  // فعلياً: استرجاعان حقيقيان متزامنان لنفس المنتج (مثلاً إلغاء طلبين مختلفين للمنتج نفسه في نفس
+  // اللحظة) كانا سيقرآن نفس current.quantityAvailable قبل أن يكتب أي منهما، فيكتب الثاني فوق
+  // الأول (Lost Update) — يُفقَد أثر استرجاع كامل بصمت، لا "استرجاع مضاعف" بل عكسه تماماً. القفل
+  // هنا يمنع ذلك بالضبط بنفس آلية decrementIfAvailable المُختبَرة والمُتحقَّق منها حياً. maxAttempts
+  // الافتراضي هنا أعلى من نظيره في decrementIfAvailable (3) عمداً — استُبين حياً (اختبار تزامن حقيقي
+  // بـ5 استدعاءات متزامنة فعلياً) أن 3 غير كافية تحت تزاحم حقيقي على الصف نفسه، واستنفاد المحاولات
+  // هنا (خلافاً لـdecrementIfAvailable) ليس نتيجة عمل آمنة — "رفض بيع" منطقي هناك، لكنه هنا يعني
+  // فقدان استرجاع مخزون مستحق فعلياً. إعادة المحاولة رخيصة الكلفة (قراءة/كتابة صف واحد) فلا خطر
+  // حقيقي من رفع العدد.
+  async restore(productId: string, quantity: number, maxAttempts = 8): Promise<void> {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const current = await this.findByProductId(productId);
+      if (!current) return; // لا سجل مخزون لمنتج نجح خصمه للتو — حالة غير متوقعة، لا شيء نعيده إليه
+
+      const { data, error } = await supabaseAdmin
+        .from('inventory')
+        .update({ quantity_available: current.quantityAvailable + quantity, updated_at: new Date().toISOString() })
+        .eq('product_id', productId)
+        .eq('quantity_available', current.quantityAvailable) // القفل التفاؤلي: لا يُطابِق إلا القيمة التي قرأناها بالضبط
+        .select('*')
+        .maybeSingle();
+      if (error) throw error;
+      if (data) return; // نجح الاسترجاع — لم يُعدِّل أحد الصف بيننا
+
+      // 0 صفوف تأثرت: طرف آخر عدَّل الكمية بين قراءتنا وكتابتنا (سباق حقيقي) — أعد المحاولة بقراءة جديدة
+    }
+    throw new Error(`فشل استرجاع المخزون للمنتج ${productId} بعد ${maxAttempts} محاولات تحت تزاحم شديد`);
   }
 
   // CATALOG-IMPORT-WORKFLOW (ADR-031) — استبدال كامل (لا جمع تراكمي) لكمية/تكلفة منتج تاجر عند
