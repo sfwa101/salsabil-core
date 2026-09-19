@@ -26,9 +26,9 @@ export function MobileSmallProductCard({
   );
 
   return (
-    <div className="flex h-[200px] w-[140px] shrink-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)] transition hover:border-emerald-200">
+    <div className="flex h-[200px] w-[140px] shrink-0 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-[0_2px_8px_rgba(0,0,0,0.02)] transition hover:border-primary/40">
       {/* Image Area */}
-      <Link href={`/product/${product.id}`} className="relative h-24 w-full flex-1 overflow-hidden bg-white p-2 block">
+      <Link href={`/product/${product.id}`} className="relative h-24 w-full flex-1 overflow-hidden bg-card p-2 block">
         {/* Top Badges (Right side) */}
         <div className="absolute right-2 top-2 z-10 pointer-events-none">
           <span className="bg-rose-50 text-rose-600 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm">
@@ -44,7 +44,7 @@ export function MobileSmallProductCard({
             className="object-contain p-2"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-gray-300">
+          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
             <ImageOff size={24} />
           </div>
         )}
@@ -53,16 +53,16 @@ export function MobileSmallProductCard({
       {/* Content Area */}
       <div className="flex flex-col p-3 pb-3">
         <Link href={`/product/${product.id}`} className="block">
-          <h3 className="truncate text-[13px] font-bold leading-tight text-gray-900 transition hover:text-emerald-600">
+          <h3 className="truncate text-[13px] font-bold leading-tight text-card-foreground transition hover:text-primary">
             {product.name}
           </h3>
         </Link>
-        
+
         <div className="mt-2.5 flex items-center justify-between">
           <div className="flex flex-col">
-            <span className="text-[10px] text-gray-400 font-medium leading-none mb-1">{product.unit}</span>
-            <span className="text-[15px] font-extrabold leading-none text-gray-900 flex items-baseline gap-0.5">
-              {product.basePrice} <span className="text-[9px] text-gray-500 font-bold">ج.م</span>
+            <span className="text-[10px] text-muted-foreground font-medium leading-none mb-1">{product.unit}</span>
+            <span className="text-[15px] font-extrabold leading-none text-foreground flex items-baseline gap-0.5">
+              {product.basePrice} <span className="text-[9px] text-muted-foreground font-bold">ج.م</span>
             </span>
           </div>
 
@@ -81,7 +81,7 @@ export function MobileSmallProductCard({
                 type="button"
                 onClick={(e) => { e.preventDefault(); setQuantity(1); }}
                 aria-label="أضف للسلة"
-                className="flex items-center justify-center h-8 w-8 rounded-full shadow-[0_2px_8px_rgba(16,185,129,0.25)] bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition-transform"
+                className="flex items-center justify-center h-8 w-8 rounded-full shadow-[var(--sb-shadow-pill)] bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 transition-transform"
               >
                 <Plus size={16} strokeWidth={3} />
               </button>

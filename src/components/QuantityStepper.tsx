@@ -40,7 +40,7 @@ export function QuantityStepper({ quantity, onDecrement, onIncrement, variant = 
         >
           <Minus size={14} />
         </Button>
-        <span className="min-w-[1ch] text-center text-sm font-bold tabular-nums text-white px-1.5">{quantity}</span>
+        <span className="min-w-[1ch] text-center text-sm font-bold tabular-nums text-primary-foreground px-1.5">{quantity}</span>
         <Button
           type="button"
           onClick={onIncrement}
@@ -60,7 +60,7 @@ export function QuantityStepper({ quantity, onDecrement, onIncrement, variant = 
       <Button type="button" onClick={onDecrement} aria-label="إنقاص" variant="outline" size="icon" className="rounded-full shadow-sm">
         <Minus size={14} />
       </Button>
-      <span className="min-w-[1.5ch] text-center text-sm tabular-nums text-gray-900 font-bold px-2">{quantity}</span>
+      <span className="min-w-[1.5ch] text-center text-sm tabular-nums text-foreground font-bold px-2">{quantity}</span>
       <Button type="button" onClick={onIncrement} aria-label="زيادة" variant="default" size="icon" className="rounded-full shadow-sm">
         <Plus size={14} />
       </Button>

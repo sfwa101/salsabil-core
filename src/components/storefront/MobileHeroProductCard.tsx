@@ -27,25 +27,25 @@ export function MobileHeroProductCard({
   );
 
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-white shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-gray-100/50">
+    <div className="relative overflow-hidden rounded-3xl bg-card shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-border/50">
       {/* Social Header (Publisher) */}
       {category && (
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50/50">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center shrink-0 border border-gray-100 overflow-hidden">
-              <span className="text-sm font-bold text-gray-400">{category.name.substring(0, 1)}</span>
+            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center shrink-0 border border-border overflow-hidden">
+              <span className="text-sm font-bold text-muted-foreground">{category.name.substring(0, 1)}</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-[13px] font-bold text-gray-900 flex items-center gap-1">
+              <span className="text-[13px] font-bold text-card-foreground flex items-center gap-1">
                 {category.name}
-                <span className="text-emerald-500 text-[10px]">✓</span>
+                <span className="text-primary text-[10px]">✓</span>
               </span>
-              <span className="text-[11px] text-gray-500 font-medium">
+              <span className="text-[11px] text-muted-foreground font-medium">
                 {category.name}
               </span>
             </div>
           </div>
-          <Link href={`/${category.slug}`} className="bg-gray-100 text-gray-600 text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-0.5 active:scale-95 transition-transform hover:bg-gray-200">
+          <Link href={`/${category.slug}`} className="bg-muted text-muted-foreground text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-0.5 active:scale-95 transition-transform hover:bg-accent">
             القسم
             <ChevronLeft size={14} />
           </Link>
@@ -53,16 +53,16 @@ export function MobileHeroProductCard({
       )}
 
       {/* Hero Image & Floating Actions */}
-      <div className="relative h-56 w-full overflow-hidden bg-white">
+      <div className="relative h-56 w-full overflow-hidden bg-card">
         {/* Top Badges (Right side) */}
         {/* Placeholder for future dynamic badges */}
 
         {/* Top Action Buttons (Left side) */}
         <div className="absolute left-3 top-3 z-10 flex flex-col gap-2 pointer-events-auto">
-          <button className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-gray-500 shadow-[0_2px_8px_rgba(0,0,0,0.08)] backdrop-blur-md transition hover:text-red-500 active:scale-95">
+          <button className="flex h-9 w-9 items-center justify-center rounded-full bg-card/90 text-muted-foreground shadow-[0_2px_8px_rgba(0,0,0,0.08)] backdrop-blur-md transition hover:text-destructive active:scale-95">
             <Heart size={18} />
           </button>
-          <button className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-gray-500 shadow-[0_2px_8px_rgba(0,0,0,0.08)] backdrop-blur-md transition hover:text-blue-500 active:scale-95">
+          <button className="flex h-9 w-9 items-center justify-center rounded-full bg-card/90 text-muted-foreground shadow-[0_2px_8px_rgba(0,0,0,0.08)] backdrop-blur-md transition hover:text-primary active:scale-95">
             <Share2 size={18} />
           </button>
         </div>
@@ -99,11 +99,11 @@ export function MobileHeroProductCard({
 
         <div className="mt-4 flex flex-row items-center justify-between gap-3">
           <div className="flex flex-col text-right">
-            <span className="text-[24px] font-extrabold leading-none text-gray-900 flex items-baseline gap-1">
+            <span className="text-[24px] font-extrabold leading-none text-foreground flex items-baseline gap-1">
               {product.basePrice}
-              <span className="text-sm font-bold text-gray-500">ج.م</span>
+              <span className="text-sm font-bold text-muted-foreground">ج.م</span>
             </span>
-            <span className="text-[11px] text-gray-400 font-bold mt-1">{product.unit}</span>
+            <span className="text-[11px] text-muted-foreground font-bold mt-1">{product.unit}</span>
           </div>
 
           <div className="flex-1 flex items-center justify-end min-w-[130px]">
@@ -118,7 +118,7 @@ export function MobileHeroProductCard({
               <button
                 type="button"
                 onClick={(e) => { e.preventDefault(); setQuantity(1); }}
-                className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full bg-emerald-600 text-white text-[13px] font-bold shadow-sm active:scale-95 transition-transform"
+                className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full bg-primary text-primary-foreground text-[13px] font-bold shadow-sm active:scale-95 transition-transform"
               >
                 <ShoppingCart size={16} strokeWidth={2.5} />
                 + أضف إلى السلة

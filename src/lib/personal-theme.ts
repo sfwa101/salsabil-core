@@ -39,12 +39,19 @@ export function readStoredPersonalMode(): PersonalColorMode {
   return isPersonalColorMode(stored) ? stored : DEFAULT_PERSONAL_MODE;
 }
 
-// theme = null → إزالة السمتين كلياً من <html> (لا "تطبيق ثيم افتراضي") — يسمح لتوكنز [data-world]
-// العادية بالظهور بلا أي تدخل، بدل فرض 'masculine' على من لم يختر شيئاً بعد.
+// theme = null بوضع 'light' → إزالة السمتين كلياً من <html> (لا "تطبيق ثيم افتراضي") — يسمح لتوكنز
+// [data-world] العادية بالظهور بلا أي تدخل، بدل فرض 'masculine' على من لم يختر شيئاً بعد. لكن
+// [data-world] الافتراضية فاتحة دائماً (globals.css) — theme = null بوضع 'dark' كان يعني عملياً
+// "الغِ اختيار داكن صامتاً" (حذف كلا السمتين يُسقط قاعدة CSS المركَّبة التي تتطلبهما معاً)، لا تطبيقه
+// فعلياً. الإصلاح: ثيم افتراضي معقول (DEFAULT_PERSONAL_THEME_FOR_DARK) يُطبَّق مع 'dark' في هذه الحالة
+// تحديداً — المستخدم لم يفقد شيئاً (لم يكن قد اختار ثيماً أصلاً)، والوضع الداكن الذي طلبه صراحة يعمل.
+export const DEFAULT_PERSONAL_THEME_FOR_DARK: PersonalThemeSlug = 'sage';
+
 export function applyPersonalThemeToDocument(theme: PersonalThemeSlug | null, mode: PersonalColorMode): void {
   if (typeof document === 'undefined') return;
-  if (theme) {
-    document.documentElement.dataset.personalTheme = theme;
+  const effectiveTheme = theme ?? (mode === 'dark' ? DEFAULT_PERSONAL_THEME_FOR_DARK : null);
+  if (effectiveTheme) {
+    document.documentElement.dataset.personalTheme = effectiveTheme;
     document.documentElement.dataset.personalMode = mode;
   } else {
     delete document.documentElement.dataset.personalTheme;

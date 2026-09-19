@@ -62,7 +62,7 @@ export function MobileStorefront({
               return (
                 <div key={post.id} className="py-2">
                   <div className="flex items-center justify-between mb-3 px-1.5">
-                    <h2 className="text-lg font-extrabold text-gray-900">
+                    <h2 className="text-lg font-extrabold text-foreground">
                       {postCategory?.name || 'أحدث المنتجات'}
                     </h2>
                     {/* TASK-18: كان الرابط يؤدي لـ /${postCategory.slug} (مسار قسم المنشور القديم،
