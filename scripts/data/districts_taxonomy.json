@@ -1,0 +1,538 @@
+[
+  {
+    "sort_order": 1,
+    "name_ar": "حي الرجل",
+    "categories": [
+      {
+        "sort_order": 1,
+        "name_ar": "عناية وحلاقة",
+        "subcategories": [
+          {
+            "name_ar": "شفرات وماكينات حلاقة",
+            "slug": "shfrat-wmakynat-hlaqa"
+          },
+          {
+            "name_ar": "عناية باللحية",
+            "slug": "anaya-ballhya"
+          }
+        ],
+        "slug": "anaya-whlaqa"
+      }
+    ],
+    "slug": "hy-alrjl"
+  },
+  {
+    "sort_order": 2,
+    "name_ar": "حي المرأة",
+    "categories": [
+      {
+        "sort_order": 1,
+        "name_ar": "عناية بالبشرة والشعر",
+        "subcategories": [],
+        "slug": "anaya-balbshra-walshar"
+      },
+      {
+        "sort_order": 2,
+        "name_ar": "عناية أنثوية ومكياج",
+        "subcategories": [
+          {
+            "name_ar": "فوط صحية",
+            "slug": "fwt-shya"
+          },
+          {
+            "name_ar": "مكياج",
+            "slug": "mkyaj"
+          }
+        ],
+        "slug": "anaya-anthwya-wmkyaj"
+      }
+    ],
+    "slug": "hy-almraa"
+  },
+  {
+    "sort_order": 3,
+    "name_ar": "حي الطفل",
+    "categories": [
+      {
+        "sort_order": 1,
+        "name_ar": "حفاضات ومستلزمات العناية",
+        "subcategories": [],
+        "slug": "hfadat-wmstlzmat-alanaya"
+      },
+      {
+        "sort_order": 2,
+        "name_ar": "غذاء وعناية بالرضع",
+        "subcategories": [],
+        "slug": "ghza-wanaya-balrda"
+      }
+    ],
+    "slug": "hy-altfl"
+  },
+  {
+    "sort_order": 4,
+    "name_ar": "حي الملابس",
+    "categories": [
+      {
+        "sort_order": 1,
+        "name_ar": "ملابس رجالي",
+        "subcategories": [
+          {
+            "name_ar": "ملابس داخلية",
+            "slug": "mlabs-dakhlya"
+          }
+        ],
+        "slug": "mlabs-rjaly"
+      },
+      {
+        "sort_order": 2,
+        "name_ar": "ملابس حريمي",
+        "subcategories": [],
+        "slug": "mlabs-hrymy"
+      },
+      {
+        "sort_order": 3,
+        "name_ar": "ملابس أطفال",
+        "subcategories": [],
+        "slug": "mlabs-atfal"
+      }
+    ],
+    "slug": "hy-almlabs"
+  },
+  {
+    "sort_order": 5,
+    "name_ar": "حي اللحوم والدواجن والأسماك",
+    "categories": [
+      {
+        "sort_order": 1,
+        "name_ar": "الدواجن",
+        "subcategories": [
+          {
+            "name_ar": "طازج",
+            "slug": "tazj"
+          },
+          {
+            "name_ar": "مجمد",
+            "slug": "mjmd"
+          }
+        ],
+        "slug": "aldwajn"
+      },
+      {
+        "sort_order": 2,
+        "name_ar": "اللحوم",
+        "subcategories": [],
+        "slug": "allhwm"
+      },
+      {
+        "sort_order": 3,
+        "name_ar": "الأسماك ومأكولات بحرية",
+        "subcategories": [],
+        "slug": "alasmak-wmakwlat-bhrya"
+      },
+      {
+        "sort_order": 4,
+        "name_ar": "لحوم مصنّعة",
+        "subcategories": [
+          {
+            "name_ar": "سلامي ولانشون",
+            "slug": "slamy-wlanshwn"
+          },
+          {
+            "name_ar": "مقانق وسجق",
+            "slug": "mqanq-wsjq"
+          }
+        ],
+        "slug": "lhwm-msn-aa"
+      }
+    ],
+    "slug": "hy-allhwm-waldwajn-walasmak"
+  },
+  {
+    "sort_order": 6,
+    "name_ar": "حي الخضراوات والفواكه",
+    "categories": [
+      {
+        "sort_order": 1,
+        "name_ar": "خضراوات",
+        "subcategories": [],
+        "slug": "khdrawat"
+      },
+      {
+        "sort_order": 2,
+        "name_ar": "فواكه",
+        "subcategories": [],
+        "slug": "fwakh"
+      }
+    ],
+    "slug": "hy-alkhdrawat-walfwakh"
+  },
+  {
+    "sort_order": 7,
+    "name_ar": "حي الألبان والأجبان",
+    "categories": [
+      {
+        "sort_order": 1,
+        "name_ar": "ألبان ومشتقاتها",
+        "subcategories": [],
+        "slug": "alban-wmshtqatha"
+      },
+      {
+        "sort_order": 2,
+        "name_ar": "أجبان",
+        "subcategories": [],
+        "slug": "ajban"
+      }
+    ],
+    "slug": "hy-alalban-walajban"
+  },
+  {
+    "sort_order": 8,
+    "name_ar": "حي المطبخ والمؤن",
+    "categories": [
+      {
+        "sort_order": 1,
+        "name_ar": "بقالة وحبوب",
+        "subcategories": [],
+        "slug": "bqala-whbwb"
+      },
+      {
+        "sort_order": 2,
+        "name_ar": "زيوت وتوابل وصوصات",
+        "subcategories": [],
+        "slug": "zywt-wtwabl-wswsat"
+      },
+      {
+        "sort_order": 3,
+        "name_ar": "مواد تحلية ومخبوزات",
+        "subcategories": [],
+        "slug": "mwad-thlya-wmkhbwzat"
+      }
+    ],
+    "slug": "hy-almtbkh-walmwn"
+  },
+  {
+    "sort_order": 9,
+    "name_ar": "حي المفرحات",
+    "categories": [
+      {
+        "sort_order": 1,
+        "name_ar": "شيبس ومقرمشات",
+        "subcategories": [],
+        "slug": "shybs-wmqrmshat"
+      },
+      {
+        "sort_order": 2,
+        "name_ar": "شوكولاتة وحلويات",
+        "subcategories": [],
+        "slug": "shwkwlata-whlwyat"
+      },
+      {
+        "sort_order": 3,
+        "name_ar": "بسكويت وويفر",
+        "subcategories": [],
+        "slug": "bskwyt-wwyfr"
+      }
+    ],
+    "slug": "hy-almfrhat"
+  },
+  {
+    "sort_order": 10,
+    "name_ar": "حي المشروبات",
+    "categories": [
+      {
+        "sort_order": 1,
+        "name_ar": "مشروبات ساخنة",
+        "subcategories": [
+          {
+            "name_ar": "شاي",
+            "slug": "shay"
+          },
+          {
+            "name_ar": "قهوة ونسكافيه",
+            "slug": "qhwa-wnskafyh"
+          }
+        ],
+        "slug": "mshrwbat-sakhna"
+      },
+      {
+        "sort_order": 2,
+        "name_ar": "عصائر ومشروبات غازية",
+        "subcategories": [],
+        "slug": "asayr-wmshrwbat-ghazya"
+      }
+    ],
+    "slug": "hy-almshrwbat"
+  },
+  {
+    "sort_order": 11,
+    "name_ar": "حي السلال",
+    "categories": [
+      {
+        "sort_order": 1,
+        "name_ar": "سلال أسبوعية",
+        "subcategories": [],
+        "slug": "slal-asbwaya"
+      },
+      {
+        "sort_order": 2,
+        "name_ar": "سلال شهرية",
+        "subcategories": [],
+        "slug": "slal-shhrya"
+      },
+      {
+        "sort_order": 3,
+        "name_ar": "اشتراكات",
+        "subcategories": [],
+        "slug": "ashtrakat"
+      },
+      {
+        "sort_order": 4,
+        "name_ar": "سلال متنوعة",
+        "subcategories": [],
+        "slug": "slal-mtnwaa"
+      },
+      {
+        "sort_order": 5,
+        "name_ar": "سلال كاملة",
+        "subcategories": [],
+        "slug": "slal-kamla"
+      },
+      {
+        "sort_order": 6,
+        "name_ar": "سلال لحوم ودواجن",
+        "subcategories": [],
+        "slug": "slal-lhwm-wdwajn"
+      },
+      {
+        "sort_order": 7,
+        "name_ar": "سلال خضار وفواكه",
+        "subcategories": [],
+        "slug": "slal-khdar-wfwakh"
+      },
+      {
+        "sort_order": 8,
+        "name_ar": "سلال إفطار",
+        "subcategories": [],
+        "slug": "slal-aftar"
+      }
+    ],
+    "slug": "hy-alslal"
+  },
+  {
+    "sort_order": 12,
+    "name_ar": "حي الوصفات",
+    "categories": [
+      {
+        "sort_order": 1,
+        "name_ar": "إفطار",
+        "subcategories": [],
+        "slug": "aftar"
+      },
+      {
+        "sort_order": 2,
+        "name_ar": "غداء",
+        "subcategories": [],
+        "slug": "ghda"
+      },
+      {
+        "sort_order": 3,
+        "name_ar": "عشاء",
+        "subcategories": [],
+        "slug": "asha"
+      }
+    ],
+    "slug": "hy-alwsfat"
+  },
+  {
+    "sort_order": 13,
+    "name_ar": "حي الطعام",
+    "categories": [
+      {
+        "sort_order": 1,
+        "name_ar": "مطاعم",
+        "subcategories": [
+          {
+            "name_ar": "عالمي",
+            "slug": "aalmy"
+          },
+          {
+            "name_ar": "مصري",
+            "slug": "msry"
+          }
+        ],
+        "slug": "mtaam"
+      },
+      {
+        "sort_order": 2,
+        "name_ar": "طعام منزلي",
+        "subcategories": [
+          {
+            "name_ar": "بيوت أكل",
+            "slug": "bywt-akl"
+          },
+          {
+            "name_ar": "شيفات منزليين",
+            "slug": "shyfat-mnzlyyn"
+          }
+        ],
+        "slug": "taam-mnzly"
+      }
+    ],
+    "slug": "hy-altaam"
+  },
+  {
+    "sort_order": 14,
+    "name_ar": "حي الصحة والدواء",
+    "categories": [
+      {
+        "sort_order": 1,
+        "name_ar": "عناية شخصية عامة",
+        "subcategories": [
+          {
+            "name_ar": "عناية بالشعر والبشرة",
+            "slug": "anaya-balshar-walbshra"
+          },
+          {
+            "name_ar": "عناية بالفم والأسنان",
+            "slug": "anaya-balfm-walasnan"
+          }
+        ],
+        "slug": "anaya-shkhsya-aama"
+      },
+      {
+        "sort_order": 2,
+        "name_ar": "أدوية وفيتامينات",
+        "subcategories": [],
+        "slug": "adwya-wfytamynat"
+      }
+    ],
+    "slug": "hy-alsha-waldwa"
+  },
+  {
+    "sort_order": 15,
+    "name_ar": "حي الدراسة والتعليم",
+    "categories": [
+      {
+        "sort_order": 1,
+        "name_ar": "كتب ومطبوعات",
+        "subcategories": [],
+        "slug": "ktb-wmtbwaat"
+      },
+      {
+        "sort_order": 2,
+        "name_ar": "قرطاسية",
+        "subcategories": [],
+        "slug": "qrtasya"
+      }
+    ],
+    "slug": "hy-aldrasa-waltalym"
+  },
+  {
+    "sort_order": 16,
+    "name_ar": "حي مستلزمات المنزل",
+    "categories": [
+      {
+        "sort_order": 1,
+        "name_ar": "أدوات مطبخ",
+        "subcategories": [],
+        "slug": "adwat-mtbkh"
+      },
+      {
+        "sort_order": 2,
+        "name_ar": "تخزين وتنظيم",
+        "subcategories": [],
+        "slug": "tkhzyn-wtnzym"
+      },
+      {
+        "sort_order": 3,
+        "name_ar": "أثاث ومفروشات صغيرة",
+        "subcategories": [],
+        "slug": "athath-wmfrwshat-sghyra"
+      }
+    ],
+    "slug": "hy-mstlzmat-almnzl"
+  },
+  {
+    "sort_order": 17,
+    "name_ar": "حي المنظفات",
+    "categories": [
+      {
+        "sort_order": 1,
+        "name_ar": "منظفات ومطهرات",
+        "subcategories": [
+          {
+            "name_ar": "مساحيق غسيل",
+            "slug": "msahyq-ghsyl"
+          }
+        ],
+        "slug": "mnzfat-wmthrat"
+      },
+      {
+        "sort_order": 2,
+        "name_ar": "مناديل وأكياس",
+        "subcategories": [
+          {
+            "name_ar": "أكياس قمامة",
+            "slug": "akyas-qmama"
+          },
+          {
+            "name_ar": "مناديل ورقية",
+            "slug": "mnadyl-wrqya"
+          }
+        ],
+        "slug": "mnadyl-wakyas"
+      }
+    ],
+    "slug": "hy-almnzfat"
+  },
+  {
+    "sort_order": 18,
+    "name_ar": "حي الإلكترونيات",
+    "categories": [
+      {
+        "sort_order": 1,
+        "name_ar": "هواتف وإكسسوارات",
+        "subcategories": [],
+        "slug": "hwatf-waksswarat"
+      },
+      {
+        "sort_order": 2,
+        "name_ar": "لابتوبات وكمبيوتر",
+        "subcategories": [],
+        "slug": "labtwbat-wkmbywtr"
+      },
+      {
+        "sort_order": 3,
+        "name_ar": "أجهزة منزلية صغيرة",
+        "subcategories": [],
+        "slug": "ajhza-mnzlya-sghyra"
+      }
+    ],
+    "slug": "hy-alalktrwnyat"
+  },
+  {
+    "sort_order": 19,
+    "name_ar": "حي الهدايا والتغليف",
+    "categories": [
+      {
+        "sort_order": 1,
+        "name_ar": "هدايا جاهزة",
+        "subcategories": [],
+        "slug": "hdaya-jahza"
+      },
+      {
+        "sort_order": 2,
+        "name_ar": "تغليف وتنسيق",
+        "subcategories": [],
+        "slug": "tghlyf-wtnsyq"
+      },
+      {
+        "sort_order": 3,
+        "name_ar": "بطاقات ومناسبات",
+        "subcategories": [],
+        "slug": "btaqat-wmnasbat"
+      }
+    ],
+    "slug": "hy-alhdaya-waltghlyf"
+  }
+]
