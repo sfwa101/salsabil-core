@@ -149,6 +149,13 @@ export class KhalilRepository {
     return toUser(data as UserRow);
   }
 
+  // TASK-14 (merchantStaffService.addStaff) — ترقية دور مستخدم موجود (عادة 'customer' إلى
+  // 'employee' عند إضافته موظف تاجر لأول مرة، §6.2 من specs/orders/PHASE_2_DOMAIN_DESIGN.md).
+  async setUserRole(userId: string, role: UserRole): Promise<void> {
+    const { error } = await supabaseAdmin.from('users').update({ role }).eq('id', userId);
+    if (error) throw error;
+  }
+
   /**
    * سجل خام لتدفق الدخول فقط — يُرجِع passwordHash/mustChangePassword صراحة، بعكس
    * findUserByPhone/findUserByPhoneAdmin التي تُسقطهما عمداً (User لا يحملهما أبداً).
