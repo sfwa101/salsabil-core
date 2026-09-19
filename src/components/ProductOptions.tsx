@@ -5,6 +5,7 @@ import { calculatePriceAction } from '@/app/(reef)/product/[id]/actions';
 import { addToCartAction } from '@/app/(reef)/cart/actions';
 import { useCartToast } from '@/components/useCartToast';
 import { useCartTotal } from '@/components/CartTotalProvider';
+import { trackCartMutation } from '@/components/cartMutationGate';
 import type { Product } from '@/core/modules/catalog/types';
 import { getVisibleProductPageBlockIds, type ProductPageBlockId } from '@/config/product-page-blocks-registry';
 
@@ -67,7 +68,11 @@ export function ProductOptions({ product, accentColor }: { product: Product; acc
     startAddTransition(async () => {
       setOptimisticAdded(true);
       applyOptimisticDelta(price ?? 0);
-      const result = await addToCartAction({ productId: product.id, quantity: 1, selection: { sizeId, addonIds } });
+      // FIX-LIVE-BUG-SILENT-ADD-TO-CART-FAILURE — تُسجَّل في القفل المشترك (cartMutationGate) حتى لا
+      // تسبقها قراءة سلة (فتح الكبسولة أو التنقل لـ/cart) قبل اكتمالها فعلياً في قاعدة البيانات.
+      const result = await trackCartMutation(() =>
+        addToCartAction({ productId: product.id, quantity: 1, selection: { sizeId, addonIds } })
+      );
       if ('error' in result) {
         showToast(result.error);
       } else {

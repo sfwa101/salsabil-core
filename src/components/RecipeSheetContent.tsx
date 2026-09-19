@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getProductsByIdsAction, scaleRecipeIngredientsAction } from '@/app/(reef)/feed-actions';
 import { addToCartAction } from '@/app/(reef)/cart/actions';
+import { trackCartMutation } from '@/components/cartMutationGate';
 import type { RecipeLink } from '@/core/modules/bayan/types';
 import type { AddItemInput } from '@/core/modules/cart/types';
 import type { Product } from '@/core/modules/catalog/types';
@@ -60,7 +61,7 @@ export function RecipeSheetContent({ recipe }: { recipe: RecipeLink }) {
   async function addIngredient(product: Product): Promise<boolean> {
     setLineStates((prev) => ({ ...prev, [product.id]: 'adding' }));
     const quantity = quantities[product.id] ?? 1;
-    const result = await addToCartAction(buildAddItemInput(product, quantity));
+    const result = await trackCartMutation(() => addToCartAction(buildAddItemInput(product, quantity)));
     const success = !('error' in result);
     setLineStates((prev) => ({ ...prev, [product.id]: success ? 'added' : 'error' }));
     return success;

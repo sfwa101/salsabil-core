@@ -6,6 +6,7 @@ import { QuantityStepper } from '@/components/QuantityStepper';
 import { useRouter } from 'next/navigation';
 import { useOptimisticCartLine } from '@/components/useOptimisticCartLine';
 import { useCartToast } from '@/components/useCartToast';
+import { awaitPendingCartMutations } from '@/components/cartMutationGate';
 
 interface CartItem {
   id: string;
@@ -104,6 +105,17 @@ export function DesktopCartSidebar({ items = [], total = 0, onCheckout }: Deskto
 
   const hasVisibleItems = items.some((item) => (quantities[item.itemId] ?? getSafeNumber(item.quantity, 0)) > 0);
 
+  // FIX-LIVE-BUG-SILENT-ADD-TO-CART-FAILURE — نفس ضمان CartCapsule.tsx→handleNavigateToCart: ينتظر
+  // أي كتابة سلة معلَّقة (تعديل كمية للتو في هذا الشريط نفسه) قبل التنقّل، وإلا قد تصل صفحة /cart قبل
+  // وصول تلك الكتابة فعلياً.
+  function handleCheckoutClick() {
+    if (onCheckout) {
+      onCheckout();
+      return;
+    }
+    awaitPendingCartMutations().then(() => router.push('/cart'));
+  }
+
   return (
     <aside className="w-80 shrink-0 h-full flex flex-col bg-white rounded-xl shadow-sm border lg:my-4 overflow-hidden hidden lg:flex">
       <div className="p-4 shrink-0 border-b border-border bg-muted/30">
@@ -137,7 +149,7 @@ export function DesktopCartSidebar({ items = [], total = 0, onCheckout }: Deskto
             <span className="font-semibold">الإجمالي</span>
             <span className="font-extrabold text-lg text-primary">{safeTotal.toLocaleString('ar-EG')} ج.م</span>
           </div>
-          <Button onClick={onCheckout || (() => router.push('/cart'))} className="w-full rounded-xl font-bold h-12 text-md shadow-sm">
+          <Button onClick={handleCheckoutClick} className="w-full rounded-xl font-bold h-12 text-md shadow-sm">
             إتمام الطلب
           </Button>
         </div>

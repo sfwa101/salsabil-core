@@ -27,12 +27,14 @@
 // مصدر منفصل. النبضة (pulsing) تبقى تعمل بنفس الآلية بلا تغيير — فقط تتفاعل الآن مع تغيّر فوري بدل
 // تغيّر بعد ثانية أو أكثر.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ShoppingCart } from 'lucide-react';
 import { useCartTotal } from '@/components/CartTotalProvider';
 import { BottomSheet } from '@/components/BottomSheet';
 import { getCartSummaryAction } from '@/app/(reef)/cart/actions';
+import { awaitPendingCartMutations } from '@/components/cartMutationGate';
 import { QuantityStepper } from '@/components/QuantityStepper';
 import { useOptimisticCartLine } from '@/components/useOptimisticCartLine';
 import { useCartToast } from '@/components/useCartToast';
@@ -124,6 +126,7 @@ function CartCapsuleLineRow({
 }
 
 export function CartCapsule() {
+  const router = useRouter();
   const { total } = useCartTotal();
   const [pulsing, setPulsing] = useState(false);
   const prevTotal = useRef(total);
@@ -164,12 +167,26 @@ export function CartCapsule() {
 
   async function handleOpenSheet() {
     setSheetOpen(true);
+    // FIX-LIVE-BUG-SILENT-ADD-TO-CART-FAILURE — ينتظر أي كتابة سلة معلَّقة (نقرة "أضف للسلة" لم تصل
+    // بعد لقاعدة البيانات) قبل قراءة الملخّص، وإلا قد تُقرَأ السلة قبل وصول تلك الكتابة فتظهر فارغة
+    // زوراً رغم نجاحها فعلياً لحظات لاحقة (راجع تعليق cartMutationGate.ts للتشخيص الحي الكامل).
+    await awaitPendingCartMutations();
     const data = await getCartSummaryAction();
     setCartData(data);
     if (data?.lines) {
       setLocalItems(data.lines);
       setQuantities(Object.fromEntries(data.lines.map((line) => [line.item.id, getSafeNumber(line.item.quantity, 0)])));
     }
+  }
+
+  // FIX-LIVE-BUG-SILENT-ADD-TO-CART-FAILURE — رابط "إتمام الطلب" قد يُنقَر فور تعديل كمية داخل
+  // الكبسولة نفسها (زر +/- في CartCapsuleLineRow)؛ بلا هذا الانتظار، التنقّل لـ/cart قد يسبق وصول تلك
+  // الكتابة الأخيرة لقاعدة البيانات فتعرض الصفحة بيانات أقدم/فارغة زوراً (نفس آلية الخلل في
+  // cartMutationGate.ts، هنا على مسار التنقّل الفعلي بدل قراءة الكبسولة).
+  function handleNavigateToCart(e: MouseEvent<HTMLAnchorElement>) {
+    e.preventDefault();
+    setSheetOpen(false);
+    awaitPendingCartMutations().then(() => router.push('/cart'));
   }
 
   return (
@@ -228,9 +245,9 @@ export function CartCapsule() {
                 <span className="text-muted-foreground">الإجمالي</span>
                 <span className="text-primary text-2xl">{displayTotalSheet.toLocaleString('ar-EG')} ج.م</span>
               </div>
-              <Link 
-                href="/cart" 
-                onClick={() => setSheetOpen(false)}
+              <Link
+                href="/cart"
+                onClick={handleNavigateToCart}
                 className="w-full flex items-center justify-center h-14 rounded-2xl bg-primary text-primary-foreground text-lg font-bold transition hover:bg-primary/90 shadow-[var(--sb-shadow-pill)]"
               >
                 إتمام الطلب
@@ -268,9 +285,9 @@ export function CartCapsule() {
                   <span>الإجمالي</span>
                   <span className="text-primary text-lg">{displayTotalSheet.toLocaleString('ar-EG')} ج.م</span>
                 </div>
-                <Link 
-                  href="/cart" 
-                  onClick={() => setSheetOpen(false)}
+                <Link
+                  href="/cart"
+                  onClick={handleNavigateToCart}
                   className="w-full flex items-center justify-center h-12 rounded-xl bg-primary text-primary-foreground font-bold transition hover:opacity-90"
                 >
                   إتمام الطلب

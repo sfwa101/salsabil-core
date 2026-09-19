@@ -24,6 +24,9 @@ import type { CartSummary } from '@/core/modules/cart/types';
 import type { Product } from '@/core/modules/catalog/types';
 import { CartTotalProvider } from './CartTotalProvider';
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
 vi.mock('@/app/(reef)/cart/actions', () => ({
   getCartSummaryAction: vi.fn(),
   addToCartAction: vi.fn(),

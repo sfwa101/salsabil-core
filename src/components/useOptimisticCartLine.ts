@@ -15,6 +15,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { addToCartAction, updateCartItemAction } from '@/app/(reef)/cart/actions';
 import { useCartTotal } from '@/components/CartTotalProvider';
+import { trackCartMutation } from '@/components/cartMutationGate';
 
 export function useOptimisticCartLine(
   productId: string,
@@ -42,23 +43,29 @@ export function useOptimisticCartLine(
     setQuantityState(next);
     applyOptimisticDelta(delta);
     
-    // Queue server actions safely
-    queueRef.current = queueRef.current.then(async () => {
-      const result = itemIdRef.current
-        ? await updateCartItemAction(itemIdRef.current, next)
-        : await addToCartAction({ productId, quantity: next });
-      if ('error' in result) {
-        onError(result.error);
-        // Revert on failure
-        setQuantityState(quantity);
-        applyOptimisticDelta(-delta);
-        return;
-      }
-      if (!itemIdRef.current) {
-        const line = result.summary.lines.find((l) => l.product.id === productId);
-        if (line) itemIdRef.current = line.item.id;
-      }
-    }).catch(console.error);
+    // Queue server actions safely — وتُسجَّل أيضاً في القفل المشترك (cartMutationGate) حتى لا تسبقها
+    // قراءة سلة (فتح الكبسولة أو التنقل لـ/cart) قبل اكتمالها فعلياً (FIX-LIVE-BUG-SILENT-ADD-TO-CART-
+    // FAILURE). previousInQueue تُلتقَط قبل إعادة تعيين queueRef.current — لا تُقرَأ من داخل نفسها.
+    const previousInQueue = queueRef.current;
+    const task = trackCartMutation(() =>
+      previousInQueue.then(async () => {
+        const result = itemIdRef.current
+          ? await updateCartItemAction(itemIdRef.current, next)
+          : await addToCartAction({ productId, quantity: next });
+        if ('error' in result) {
+          onError(result.error);
+          // Revert on failure
+          setQuantityState(quantity);
+          applyOptimisticDelta(-delta);
+          return;
+        }
+        if (!itemIdRef.current) {
+          const line = result.summary.lines.find((l) => l.product.id === productId);
+          if (line) itemIdRef.current = line.item.id;
+        }
+      })
+    );
+    queueRef.current = task.catch(console.error);
   }
 
   return { quantity, setQuantity };
