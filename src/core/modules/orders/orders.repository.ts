@@ -162,15 +162,22 @@ export class OrdersRepository {
     return (data as OrderRow[]).map(toOrder);
   }
 
-  async updateOrderStatus(orderId: string, status: OrderStatus): Promise<Order> {
+  // TASK-08 — قفل تفاؤلي (نفس نمط InventoryRepository.decrementIfAvailable): يطابق الشرط أيضاً
+  // على fromStatus المقروء فعلاً قبل النداء، فيعيد null بدل الطلب لو غيَّر طرف آخر حالة الطلب بين
+  // قراءة orders.service.ts وكتابتها. ضروري لمنع سباق حقيقي: انتقالان متزامنان فعلياً لنفس الطلب
+  // (مثلاً إلغاءان متزامنان) قد يقرآن نفس الحالة القديمة معاً قبل أن يكتب أي منهما، فيمرّان كلاهما
+  // فحص آلة الحالات، ويُنفَّذ أثر الانتقال (استرجاع المخزون عند الإلغاء) مرتين لطلب واحد فعلياً —
+  // هذا القفل يضمن أن استدعاءً واحداً فقط ينجح فعلياً في تنفيذ الكتابة لكل انتقال حقيقي.
+  async updateOrderStatus(orderId: string, fromStatus: OrderStatus, status: OrderStatus): Promise<Order | null> {
     const { data, error } = await supabaseAdmin
       .from('orders')
       .update({ status, updated_at: new Date().toISOString() })
       .eq('id', orderId)
+      .eq('status', fromStatus)
       .select('*')
-      .single();
+      .maybeSingle();
     if (error) throw error;
-    return toOrder(data as OrderRow);
+    return data ? toOrder(data as OrderRow) : null;
   }
 
   async insertStatusHistory(entry: {

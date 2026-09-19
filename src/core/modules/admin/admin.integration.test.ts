@@ -202,7 +202,8 @@ describe('Admin/Merchant login audit trail integration (اليوم 12، ADR-014�
 
 describe('Admin orders integration (Supabase حقيقي، اليوم 11)', () => {
   let productId: string;
-  const orderIdsToClean: string[] = [];
+  const orderIdsToClean: string[] = []; // merchant_suborders.id (TASK-13 — كانت orders.id)
+  const customerOrderIdsToClean: string[] = []; // TASK-13 — جديد
   const userIdsToClean: string[] = [];
   const cartIdsToClean: string[] = [];
 
@@ -233,8 +234,12 @@ describe('Admin orders integration (Supabase حقيقي، اليوم 11)', () =>
   });
 
   afterAll(async () => {
+    // TASK-13 — الترتيب إلزامي: merchant_suborders قبل customer_orders (بلا ON DELETE CASCADE بينهما).
     for (const orderId of orderIdsToClean) {
-      await supabaseAdmin.from('orders').delete().eq('id', orderId);
+      await supabaseAdmin.from('merchant_suborders').delete().eq('id', orderId);
+    }
+    for (const customerOrderId of customerOrderIdsToClean) {
+      await supabaseAdmin.from('customer_orders').delete().eq('id', customerOrderId);
     }
     for (const cartId of cartIdsToClean) {
       await supabaseAdmin.from('carts').delete().eq('id', cartId);
@@ -262,6 +267,7 @@ describe('Admin orders integration (Supabase حقيقي، اليوم 11)', () =>
       deliveryAddress: { line1: 'شارع الإدارة', city: 'القاهرة' },
     });
     orderIdsToClean.push(order.id);
+    customerOrderIdsToClean.push(order.customerOrderId!);
     userIdsToClean.push(order.userId);
 
     const allOrders = await ordersService.getAllOrders();

@@ -1,11 +1,18 @@
 // src/core/modules/orders/orders.service.test.ts
 // اختبارات وحدة — تُموّه فقط طبقة الوصول لقاعدة البيانات (*.repository.ts)؛
 // منطق catalogService (calculatePrice/validateSelection) وcartService الحقيقيان يعملان بلا تمويه
+//
+// TASK-13 — checkout() لم يعد يكتب في orders/order_items (orders.repository.ts القديم، مُستخدَم
+// الآن فقط من getMostOrderedProductIds غير المُختبَرة هنا) بل في customer_orders/merchant_suborders
+// عبر customerOrder.repository.ts الجديد. اختبار "يرفض عند تعدد التجار" (ADR-009 القديم) تحوَّل هنا
+// إلى مجموعة اختبارات "ينجح ويُقسِّم" — بوابة الإغلاق المذكورة صراحة في خطة التنفيذ الرئيسية.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Product } from '../catalog/types';
 import type { Cart, CartItem } from '../cart/types';
 import type { User } from '../../kernel/khalil/types';
+import type { Merchant } from '../merchant/types';
+import type { Order } from './types';
 
 const chicken: Product = {
   id: 'prod-chicken',
@@ -31,7 +38,19 @@ const fish: Product = {
   createdAt: new Date().toISOString(),
 };
 
-const products: Record<string, Product> = { [chicken.id]: chicken, [fish.id]: fish };
+const soap: Product = {
+  id: 'prod-soap',
+  categoryId: 'cat-2',
+  tenantId: 'tenant-c',
+  name: 'منظف اختبار',
+  basePrice: 30,
+  unit: 'piece',
+  options: [],
+  isActive: true,
+  createdAt: new Date().toISOString(),
+};
+
+const products: Record<string, Product> = { [chicken.id]: chicken, [fish.id]: fish, [soap.id]: soap };
 
 vi.mock('../catalog/catalog.repository', () => ({
   catalogRepository: {
@@ -88,36 +107,90 @@ vi.mock('../../kernel/khalil/khalil.repository', () => ({
   },
 }));
 
+// TASK-13 — orders.repository.ts (القديم) لم يعد يُستهلَك من checkout()/transitionStatus/الخ —
+// يبقى مستورَداً فقط لـgetMostOrderedProductIds (ميزة توصية منفصلة، غير مُختبَرة هنا). مموَّه
+// بحد أدنى لمنع أي محاولة اتصال Supabase حقيقي لو استُدعيت الدالة صدفة.
 vi.mock('./orders.repository', () => ({
   ordersRepository: {
-    createOrder: vi.fn(async (input) => ({
-      id: 'order-1',
+    findMostOrderedProductIds: vi.fn(async () => []),
+  },
+}));
+
+const defaultDeliveryAddress = { line1: 'شارع 1', city: 'القاهرة' };
+
+// customer_orders.id ثابت هنا عمداً — كل اختبار Checkout في هذا الملف يبدأ سلة/طلباً جديداً
+// (beforeEach يُصفّر الـmocks)، فلا تعارض بين اختبارات مختلفة رغم ثبات القيمة.
+const customerOrderId = 'customer-order-1';
+
+vi.mock('./customerOrder.repository', () => ({
+  customerOrderRepository: {
+    createCustomerOrder: vi.fn(async (input) => ({
+      id: customerOrderId,
+      userId: input.userId,
+      deliveryAddress: input.deliveryAddress,
+      paymentMethod: input.paymentMethod,
+      subtotalSnapshot: input.subtotalSnapshot,
+      deliveryFeeSnapshot: input.deliveryFeeSnapshot,
+      totalSnapshot: input.totalSnapshot,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })),
+    deleteCustomerOrder: vi.fn(async () => undefined),
+    // معرّف حتمي حسب tenantId — يسهّل تتبّع/تمييز كل suborder في تأكيدات الاختبار (isolation)
+    createMerchantSuborder: vi.fn(async (input) => ({
+      id: `suborder-${input.tenantId}`,
+      customerOrderId: input.customerOrderId,
       userId: input.userId,
       tenantId: input.tenantId,
       status: 'pending',
       paymentMethod: input.paymentMethod,
-      deliveryAddress: input.deliveryAddress,
+      deliveryAddress: defaultDeliveryAddress,
       total: input.total,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     })),
-    createOrderItems: vi.fn(async () => []),
-    deleteOrder: vi.fn(),
+    deleteMerchantSuborder: vi.fn(async () => undefined),
+    createMerchantSuborderItems: vi.fn(async () => []),
     findOrderById: vi.fn(),
     findOrderItems: vi.fn(),
     findOrdersByTenantId: vi.fn(async () => []),
     findAll: vi.fn(async () => []),
-    findAllStatusHistory: vi.fn(async () => []),
     updateOrderStatus: vi.fn(),
     insertStatusHistory: vi.fn(async () => ({})),
     findStatusHistory: vi.fn(async () => []),
+    findAllStatusHistory: vi.fn(async () => []),
+  },
+}));
+
+// merchants.default_settlement_model — كل تاجر NULL افتراضياً هنا (وضع كل التجار الحقيقيين فعلياً
+// بعد TASK-12) لاختبار الافتراض الصريح 'reef_collected' (قرار مؤسس، §7.3). اختبار مخصَّص أدناه
+// يُثبت أن قيمة صريحة (driver_fronted) تُمرَّر كما هي، بلا استبدال.
+const merchantA: Merchant = {
+  id: 'tenant-a',
+  ownerId: 'owner-a',
+  businessName: 'تاجر أ',
+  phone: '01000000001',
+  slug: 'tenant-a',
+  commissionRate: 10,
+  isActive: true,
+  createdAt: new Date().toISOString(),
+  defaultSettlementModel: null,
+};
+const merchantB: Merchant = { ...merchantA, id: 'tenant-b', slug: 'tenant-b', businessName: 'تاجر ب' };
+const merchantC: Merchant = { ...merchantA, id: 'tenant-c', slug: 'tenant-c', businessName: 'تاجر ج' };
+const merchantsById: Record<string, Merchant> = { [merchantA.id]: merchantA, [merchantB.id]: merchantB, [merchantC.id]: merchantC };
+
+vi.mock('../merchant/merchant.service', () => ({
+  merchantService: {
+    getByIds: vi.fn(async (ids: string[]) => ids.map((id) => merchantsById[id]).filter((m): m is Merchant => !!m)),
   },
 }));
 
 const { ordersService } = await import('./orders.service');
 const { cartRepository } = await import('../cart/cart.repository');
-const { ordersRepository } = await import('./orders.repository');
+const { customerOrderRepository } = await import('./customerOrder.repository');
 const { khalilRepository } = await import('../../kernel/khalil/khalil.repository');
+const { merchantService } = await import('../merchant/merchant.service');
 
 function makeItem(overrides: Partial<CartItem> = {}): CartItem {
   return {
@@ -146,7 +219,7 @@ const checkoutInput = {
   identity: { sessionToken: 'session-1' } as const,
   customerName: 'زبون اختبار',
   customerPhone: '01099999999',
-  deliveryAddress: { line1: 'شارع 1', city: 'القاهرة' },
+  deliveryAddress: defaultDeliveryAddress,
 };
 
 beforeEach(() => {
@@ -159,7 +232,7 @@ describe('OrdersService.checkout', () => {
   it('يرفض عند سلة فارغة', async () => {
     mockCartItems([]);
     await expect(ordersService.checkout(checkoutInput)).rejects.toThrow(/فارغة/);
-    expect(ordersRepository.createOrder).not.toHaveBeenCalled();
+    expect(customerOrderRepository.createCustomerOrder).not.toHaveBeenCalled();
   });
 
   it('يرفض عند منتج غير نشط', async () => {
@@ -174,48 +247,49 @@ describe('OrdersService.checkout', () => {
     vi.mocked(inventoryRepository.decrementIfAvailable).mockResolvedValueOnce(false);
     mockCartItems([makeItem()]);
     await expect(ordersService.checkout(checkoutInput)).rejects.toThrow(/غير متوفرة في المخزون/);
-    expect(ordersRepository.createOrder).not.toHaveBeenCalled();
+    expect(customerOrderRepository.createCustomerOrder).not.toHaveBeenCalled();
   });
 
   it('يستعيد (release) كل مخزون خُصم في نفس المحاولة عند فشل خطوة لاحقة (تعويض، بند 3)', async () => {
     const { inventoryRepository } = await import('../inventory/inventory.repository');
     mockCartItems([makeItem({ quantity: 2 })]);
-    // ينجح خصم المخزون، ثم يفشل إنشاء الطلب نفسه (خطأ DB افتراضي) — يجب استرجاع الكمية المخصومة
-    vi.mocked(ordersRepository.createOrder).mockRejectedValueOnce(new Error('فشل DB افتراضي'));
+    // ينجح خصم المخزون، ثم يفشل إنشاء customer_order نفسه (خطأ DB افتراضي) — يجب استرجاع الكمية
+    vi.mocked(customerOrderRepository.createCustomerOrder).mockRejectedValueOnce(new Error('فشل DB افتراضي'));
 
     await expect(ordersService.checkout(checkoutInput)).rejects.toThrow(/فشل DB افتراضي/);
 
     expect(inventoryRepository.decrementIfAvailable).toHaveBeenCalledWith(chicken.id, 2);
     expect(inventoryRepository.restore).toHaveBeenCalledWith(chicken.id, 2);
+    expect(customerOrderRepository.createMerchantSuborder).not.toHaveBeenCalled();
   });
 
-  it('يرفض عند تعدد التجار بين بنود السلة', async () => {
-    mockCartItems([
-      makeItem({ id: 'a', productId: chicken.id, selection: { sizeId: 'small' } }),
-      makeItem({ id: 'b', productId: fish.id, selection: {} }),
-    ]);
-    await expect(ordersService.checkout(checkoutInput)).rejects.toThrow(/أكثر من تاجر/);
-  });
-
-  it('ينجح: يُنشئ الطلب بسعر مجمَّد مطابق للسعر المحسوب حياً، وينشئ مستخدماً جديداً، ويُفرغ السلة', async () => {
+  it('ينجح: يُنشئ الطلب بسعر مجمَّد مطابق للسعر المحسوب حياً، وينشئ مستخدماً جديداً، ويُفرغ السلة (سلة أحادية التاجر — بلا تغيير سلوك)', async () => {
     mockCartItems([makeItem({ quantity: 2, selection: { sizeId: 'small' } })]);
 
     const order = await ordersService.checkout(checkoutInput);
 
     expect(order.total).toBe(200); // (120 - 20) * 2
     expect(order.tenantId).toBe('tenant-a');
+    expect(order.customerOrderId).toBe(customerOrderId);
     expect(khalilRepository.createUser).toHaveBeenCalledWith({
       fullName: 'زبون اختبار',
       phone: '01099999999',
       role: 'customer',
     });
-    expect(ordersRepository.createOrderItems).toHaveBeenCalledWith(
-      'order-1',
+    expect(customerOrderRepository.createCustomerOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ subtotalSnapshot: 200, deliveryFeeSnapshot: 0, totalSnapshot: 200 })
+    );
+    expect(customerOrderRepository.createMerchantSuborder).toHaveBeenCalledTimes(1);
+    expect(customerOrderRepository.createMerchantSuborder).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: 'tenant-a', total: 200, settlementModel: 'reef_collected' })
+    );
+    expect(customerOrderRepository.createMerchantSuborderItems).toHaveBeenCalledWith(
+      'suborder-tenant-a',
       expect.arrayContaining([expect.objectContaining({ unitPriceSnapshot: 100, quantity: 2 })])
     );
     expect(cartRepository.deleteItem).toHaveBeenCalledWith('item-1');
-    expect(ordersRepository.insertStatusHistory).toHaveBeenCalledWith({
-      orderId: 'order-1',
+    expect(customerOrderRepository.insertStatusHistory).toHaveBeenCalledWith({
+      orderId: 'suborder-tenant-a',
       fromStatus: null,
       toStatus: 'pending',
       actorRole: 'system',
@@ -230,16 +304,151 @@ describe('OrdersService.checkout', () => {
 
     expect(khalilRepository.createUser).not.toHaveBeenCalled();
   });
+
+  // ==========================================================================
+  // TASK-13 — بوابة الإغلاق: تحويل ADR-009 (رفض تعدد التجار) إلى تقسيم حقيقي حسب tenant_id
+  // ==========================================================================
+
+  it('ينجح عند سلة بتاجرين: customer_order واحد + merchant_suborder لكل تاجر، ببنود معزولة تماماً (لا تسريب بين التاجرين)', async () => {
+    mockCartItems([
+      makeItem({ id: 'a', productId: chicken.id, quantity: 2, selection: { sizeId: 'small' } }), // tenant-a، 200
+      makeItem({ id: 'b', productId: fish.id, quantity: 3, selection: {} }), // tenant-b، 150
+    ]);
+
+    const order = await ordersService.checkout(checkoutInput);
+
+    // customer_order واحد فقط، بمجموع الكل (350)
+    expect(customerOrderRepository.createCustomerOrder).toHaveBeenCalledTimes(1);
+    expect(customerOrderRepository.createCustomerOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ subtotalSnapshot: 350, totalSnapshot: 350 })
+    );
+
+    // اثنتان merchant_suborder بالضبط، كل واحدة بإجمالي تاجرها فقط
+    expect(customerOrderRepository.createMerchantSuborder).toHaveBeenCalledTimes(2);
+    expect(customerOrderRepository.createMerchantSuborder).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: 'tenant-a', total: 200, customerOrderId })
+    );
+    expect(customerOrderRepository.createMerchantSuborder).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: 'tenant-b', total: 150, customerOrderId })
+    );
+
+    // عزل البنود — اختبار حرج: بند تاجر أ لا يظهر إطلاقاً في استدعاء إنشاء بنود تاجر ب، والعكس
+    expect(customerOrderRepository.createMerchantSuborderItems).toHaveBeenCalledWith(
+      'suborder-tenant-a',
+      [expect.objectContaining({ productId: chicken.id, quantity: 2, unitPriceSnapshot: 100 })]
+    );
+    expect(customerOrderRepository.createMerchantSuborderItems).toHaveBeenCalledWith(
+      'suborder-tenant-b',
+      [expect.objectContaining({ productId: fish.id, quantity: 3, unitPriceSnapshot: 50 })]
+    );
+
+    // الطلب المُعاد (الأساسي) هو أول suborder أُنشئت — تاجر أ (أول بند في السلة)
+    expect(order.tenantId).toBe('tenant-a');
+    expect(order.customerOrderId).toBe(customerOrderId);
+
+    // مخزون كل بند خُصم مرة واحدة فقط، عبر التاجرين معاً
+    const { inventoryRepository } = await import('../inventory/inventory.repository');
+    expect(inventoryRepository.decrementIfAvailable).toHaveBeenCalledWith(chicken.id, 2);
+    expect(inventoryRepository.decrementIfAvailable).toHaveBeenCalledWith(fish.id, 3);
+  });
+
+  it('ينجح عند سلة بثلاثة تجار من فئات مختلفة (لحوم/أسماك/منظفات — سيناريو الإطلاق الحقيقي): ثلاث merchant_suborder معزولة تماماً', async () => {
+    mockCartItems([
+      makeItem({ id: 'a', productId: chicken.id, quantity: 1, selection: { sizeId: 'small' } }), // tenant-a، 100
+      makeItem({ id: 'b', productId: fish.id, quantity: 1, selection: {} }), // tenant-b، 50
+      makeItem({ id: 'c', productId: soap.id, quantity: 2, selection: {} }), // tenant-c، 60
+    ]);
+
+    await ordersService.checkout(checkoutInput);
+
+    expect(customerOrderRepository.createCustomerOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ subtotalSnapshot: 210, totalSnapshot: 210 })
+    );
+    expect(customerOrderRepository.createMerchantSuborder).toHaveBeenCalledTimes(3);
+    for (const [tenantId, total] of [
+      ['tenant-a', 100],
+      ['tenant-b', 50],
+      ['tenant-c', 60],
+    ] as const) {
+      expect(customerOrderRepository.createMerchantSuborder).toHaveBeenCalledWith(expect.objectContaining({ tenantId, total }));
+    }
+
+    // عزل تام لكل تاجر — كل استدعاء إنشاء بنود يحمل بند تاجره فقط
+    expect(customerOrderRepository.createMerchantSuborderItems).toHaveBeenCalledWith(
+      'suborder-tenant-a',
+      [expect.objectContaining({ productId: chicken.id })]
+    );
+    expect(customerOrderRepository.createMerchantSuborderItems).toHaveBeenCalledWith(
+      'suborder-tenant-b',
+      [expect.objectContaining({ productId: fish.id })]
+    );
+    expect(customerOrderRepository.createMerchantSuborderItems).toHaveBeenCalledWith(
+      'suborder-tenant-c',
+      [expect.objectContaining({ productId: soap.id })]
+    );
+  });
+
+  it('يستخدم settlement_model الصريح للتاجر بدل الافتراض لو كان محدَّداً', async () => {
+    merchantsById['tenant-a'] = { ...merchantA, defaultSettlementModel: 'driver_fronted' };
+    mockCartItems([makeItem({ quantity: 1 })]);
+
+    await ordersService.checkout(checkoutInput);
+
+    expect(customerOrderRepository.createMerchantSuborder).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: 'tenant-a', settlementModel: 'driver_fronted' })
+    );
+
+    merchantsById['tenant-a'] = merchantA; // إعادة الحالة لبقية الاختبارات
+  });
+
+  it('يفترض reef_collected لتاجر لم يحدّد default_settlement_model بعد (NULL — قرار مؤسس صريح)', async () => {
+    mockCartItems([makeItem({ quantity: 1 })]); // merchantA.defaultSettlementModel = null
+
+    await ordersService.checkout(checkoutInput);
+
+    expect(customerOrderRepository.createMerchantSuborder).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: 'tenant-a', settlementModel: 'reef_collected' })
+    );
+  });
+
+  it('§3 حالة 4 (فشل ذرّي أثناء الإنشاء): فشل إنشاء بنود suborder الثانية بعد نجاح الأولى ينظّف كل شيء — الـsuborder الناجحة تُحذَف، customer_order يُحذَف، وكل مخزون التاجرين يُسترجَع', async () => {
+    mockCartItems([
+      makeItem({ id: 'a', productId: chicken.id, quantity: 2, selection: { sizeId: 'small' } }), // tenant-a — تنجح
+      makeItem({ id: 'b', productId: fish.id, quantity: 3, selection: {} }), // tenant-b — بنودها تفشل
+    ]);
+    vi.mocked(customerOrderRepository.createMerchantSuborderItems).mockImplementation(async (suborderId) => {
+      if (suborderId === 'suborder-tenant-b') throw new Error('فشل DB افتراضي عند إدراج بنود تاجر ب');
+      return [];
+    });
+
+    await expect(ordersService.checkout(checkoutInput)).rejects.toThrow(/فشل DB افتراضي عند إدراج بنود تاجر ب/);
+
+    // الـsuborder التي فشلت بنودها تُحذَف فوراً من داخل حلقة الإنشاء نفسها
+    expect(customerOrderRepository.deleteMerchantSuborder).toHaveBeenCalledWith('suborder-tenant-b');
+    // الـsuborder الناجحة (تاجر أ) تُحذَف أيضاً ضمن التعويض الشامل — لا يبقى نصف طلب معلَّق
+    expect(customerOrderRepository.deleteMerchantSuborder).toHaveBeenCalledWith('suborder-tenant-a');
+    // customer_order الأب يُحذَف كذلك
+    expect(customerOrderRepository.deleteCustomerOrder).toHaveBeenCalledWith(customerOrderId);
+
+    // مخزون كلا التاجرين يُسترجَع — لا فقط تاجر ب الذي فشل
+    const { inventoryRepository } = await import('../inventory/inventory.repository');
+    expect(inventoryRepository.restore).toHaveBeenCalledWith(chicken.id, 2);
+    expect(inventoryRepository.restore).toHaveBeenCalledWith(fish.id, 3);
+
+    // السلة لا تُفرَغ عند فشل Checkout بالكامل
+    expect(cartRepository.deleteItem).not.toHaveBeenCalled();
+  });
 });
 
-function makeOrder(overrides: Partial<{ status: string }> = {}) {
+function makeOrder(overrides: Partial<Order> = {}): Order {
   return {
     id: 'order-1',
+    customerOrderId,
     userId: 'user-1',
     tenantId: 'tenant-a',
     status: 'pending',
     paymentMethod: 'cash_on_delivery',
-    deliveryAddress: { line1: 'شارع 1', city: 'القاهرة' },
+    deliveryAddress: defaultDeliveryAddress,
     total: 100,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -249,43 +458,57 @@ function makeOrder(overrides: Partial<{ status: string }> = {}) {
 
 describe('OrdersService.transitionStatus', () => {
   it('يرفض إذا كان الطلب غير موجود', async () => {
-    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(null);
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(null);
 
     await expect(
       ordersService.transitionStatus({ orderId: 'missing', toStatus: 'confirmed', actorRole: 'merchant_owner' })
     ).rejects.toThrow(/غير موجود/);
-    expect(ordersRepository.updateOrderStatus).not.toHaveBeenCalled();
+    expect(customerOrderRepository.updateOrderStatus).not.toHaveBeenCalled();
   });
 
   it('يرفض انتقالاً غير مسموح في آلة الحالات (pending → delivered مباشرة)', async () => {
-    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'pending' }) as never);
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'pending' }));
 
     await expect(
       ordersService.transitionStatus({ orderId: 'order-1', toStatus: 'delivered', actorRole: 'merchant_owner', tenantId: 'tenant-a' })
     ).rejects.toThrow(/لا يمكن الانتقال/);
-    expect(ordersRepository.updateOrderStatus).not.toHaveBeenCalled();
+    expect(customerOrderRepository.updateOrderStatus).not.toHaveBeenCalled();
   });
 
   it('يرفض انتقالاً من حالة نهائية (delivered → أي شيء)', async () => {
-    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'delivered' }) as never);
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'delivered' }));
 
     await expect(
       ordersService.transitionStatus({ orderId: 'order-1', toStatus: 'cancelled', actorRole: 'platform_admin' })
     ).rejects.toThrow(/لا يمكن الانتقال/);
   });
 
+  // TASK-13 — merchant_suborder_status_history يفرض CHECK جديد لم يكن موجوداً على
+  // order_status_history القديم: note إلزامي عند to_status='cancelled' (§2.6/§10.1 بند 5 من
+  // PHASE_2_DOMAIN_DESIGN.md). يُفحَص هنا في طبقة التطبيق قبل أي كتابة DB — راجع التعليق المرافق
+  // في orders.service.ts.transitionStatus لشرح لماذا (حالة غير متسقة لو تُرك للقيد وحده).
+  it('TASK-13: يرفض إلغاء طلب بلا سبب (note) صراحةً قبل أي كتابة DB', async () => {
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'pending' }));
+
+    await expect(
+      ordersService.transitionStatus({ orderId: 'order-1', toStatus: 'cancelled', actorRole: 'merchant_owner', tenantId: 'tenant-a' })
+    ).rejects.toThrow(/سبب الإلغاء/);
+    expect(customerOrderRepository.updateOrderStatus).not.toHaveBeenCalled();
+    expect(customerOrderRepository.insertStatusHistory).not.toHaveBeenCalled();
+  });
+
   it('يرفض فاعلاً غير مخوَّل (customer لا يملك حق تأكيد الطلب)', async () => {
-    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'pending' }) as never);
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'pending' }));
 
     await expect(
       ordersService.transitionStatus({ orderId: 'order-1', toStatus: 'confirmed', actorRole: 'customer' })
     ).rejects.toThrow(/غير مخوَّل/);
-    expect(ordersRepository.updateOrderStatus).not.toHaveBeenCalled();
+    expect(customerOrderRepository.updateOrderStatus).not.toHaveBeenCalled();
   });
 
   it('ينجح: pending → confirmed بفاعل تاجر مخوَّل يملك نفس tenantId، ويسجّل قيداً في السجل بالحالتين والفاعل', async () => {
-    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'pending' }) as never);
-    vi.mocked(ordersRepository.updateOrderStatus).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'pending' }));
+    vi.mocked(customerOrderRepository.updateOrderStatus).mockResolvedValue(makeOrder({ status: 'confirmed' }));
 
     const order = await ordersService.transitionStatus({
       orderId: 'order-1',
@@ -297,8 +520,8 @@ describe('OrdersService.transitionStatus', () => {
     });
 
     expect(order.status).toBe('confirmed');
-    expect(ordersRepository.updateOrderStatus).toHaveBeenCalledWith('order-1', 'confirmed');
-    expect(ordersRepository.insertStatusHistory).toHaveBeenCalledWith({
+    expect(customerOrderRepository.updateOrderStatus).toHaveBeenCalledWith('order-1', 'pending', 'confirmed');
+    expect(customerOrderRepository.insertStatusHistory).toHaveBeenCalledWith({
       orderId: 'order-1',
       fromStatus: 'pending',
       toStatus: 'confirmed',
@@ -309,20 +532,88 @@ describe('OrdersService.transitionStatus', () => {
   });
 
   it('ينجح: يمكن الإلغاء من preparing (وليس فقط من pending)', async () => {
-    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'preparing' }) as never);
-    vi.mocked(ordersRepository.updateOrderStatus).mockResolvedValue(makeOrder({ status: 'cancelled' }) as never);
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'preparing' }));
+    vi.mocked(customerOrderRepository.updateOrderStatus).mockResolvedValue(makeOrder({ status: 'cancelled' }));
+    vi.mocked(customerOrderRepository.findOrderItems).mockResolvedValue([]);
 
     const order = await ordersService.transitionStatus({
       orderId: 'order-1',
       toStatus: 'cancelled',
       actorRole: 'platform_admin',
+      note: 'نفاد مخزون',
     });
 
     expect(order.status).toBe('cancelled');
   });
 
+  // TASK-08 — الإصلاح الأساسي: الانتقال إلى cancelled يجب أن يسترجع مخزون كل بند فعلياً عبر
+  // InventoryService.release() الموجودة أصلاً (لا منطق استرجاع جديد)، لا أن يُترك المخزون محجوزاً.
+  it('TASK-08: يسترجع مخزون كل بند من merchant_suborder_items عند الإلغاء (* → cancelled)', async () => {
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }));
+    vi.mocked(customerOrderRepository.updateOrderStatus).mockResolvedValue(makeOrder({ status: 'cancelled' }));
+    vi.mocked(customerOrderRepository.findOrderItems).mockResolvedValue([
+      { id: 'oi-1', orderId: 'order-1', productId: chicken.id, quantity: 2, selection: {}, unitPriceSnapshot: 100, createdAt: new Date().toISOString() },
+      { id: 'oi-2', orderId: 'order-1', productId: fish.id, quantity: 3, selection: {}, unitPriceSnapshot: 50, createdAt: new Date().toISOString() },
+    ]);
+    const { inventoryRepository } = await import('../inventory/inventory.repository');
+
+    const order = await ordersService.transitionStatus({
+      orderId: 'order-1',
+      toStatus: 'cancelled',
+      actorRole: 'merchant_owner',
+      tenantId: 'tenant-a',
+      note: 'نفاد مخزون',
+    });
+
+    expect(order.status).toBe('cancelled');
+    expect(inventoryRepository.restore).toHaveBeenCalledWith(chicken.id, 2);
+    expect(inventoryRepository.restore).toHaveBeenCalledWith(fish.id, 3);
+  });
+
+  // TASK-08، §4 — الانتقال إلى cancelled لا يستدعي أي استرجاع لطلب لم يُلغَ (تحقّق سلبي: لا استرجاع
+  // مخزون غير مبرَّر عند انتقالات أخرى غير الإلغاء).
+  it('TASK-08: لا يستدعي استرجاع المخزون عند انتقال غير الإلغاء', async () => {
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'pending' }));
+    vi.mocked(customerOrderRepository.updateOrderStatus).mockResolvedValue(makeOrder({ status: 'confirmed' }));
+    const { inventoryRepository } = await import('../inventory/inventory.repository');
+
+    await ordersService.transitionStatus({
+      orderId: 'order-1',
+      toStatus: 'confirmed',
+      actorRole: 'merchant_owner',
+      tenantId: 'tenant-a',
+    });
+
+    expect(customerOrderRepository.findOrderItems).not.toHaveBeenCalled();
+    expect(inventoryRepository.restore).not.toHaveBeenCalled();
+  });
+
+  // TASK-08، §4 — التحقق من الحالة الحرجة "استرجاع مضاعف": قفل orders.repository.ts التفاؤلي
+  // (updateOrderStatus يعيد null عند تعارض) يجب أن يمنع تنفيذ الانتقال + الاسترجاع، لا فقط يفشل
+  // بصمت — استدعاء transitionStatus عندما يُغيّر طرف آخر الحالة فعلياً بين القراءة والكتابة (محاكى
+  // هنا بجعل updateOrderStatus يعيد null، وهو ما تعيده هذه الدالة فعلياً عند فشل القفل التفاؤلي حياً).
+  it('TASK-08: يرفض الانتقال ولا يسترجع مخزوناً عند تعارض تزامن (updateOrderStatus يعيد null)', async () => {
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }));
+    vi.mocked(customerOrderRepository.updateOrderStatus).mockResolvedValue(null);
+    const { inventoryRepository } = await import('../inventory/inventory.repository');
+
+    await expect(
+      ordersService.transitionStatus({
+        orderId: 'order-1',
+        toStatus: 'cancelled',
+        actorRole: 'merchant_owner',
+        tenantId: 'tenant-a',
+        note: 'نفاد مخزون',
+      })
+    ).rejects.toThrow(/تعارض تزامن/);
+
+    expect(customerOrderRepository.insertStatusHistory).not.toHaveBeenCalled();
+    expect(customerOrderRepository.findOrderItems).not.toHaveBeenCalled();
+    expect(inventoryRepository.restore).not.toHaveBeenCalled();
+  });
+
   it('يرفض تاجراً يحاول تغيير حالة طلب تاجر آخر (عزل المستأجرين، اليوم 10)', async () => {
-    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'pending' }) as never); // tenant-a
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'pending' })); // tenant-a
 
     await expect(
       ordersService.transitionStatus({
@@ -333,12 +624,12 @@ describe('OrdersService.transitionStatus', () => {
         tenantId: 'tenant-b', // تاجر مختلف
       })
     ).rejects.toThrow(/لا يخص تاجرك/);
-    expect(ordersRepository.updateOrderStatus).not.toHaveBeenCalled();
+    expect(customerOrderRepository.updateOrderStatus).not.toHaveBeenCalled();
   });
 
   it('لا يفرض تطابق tenantId على platform_admin (يرى/يُغيّر كل شيء)', async () => {
-    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'pending' }) as never);
-    vi.mocked(ordersRepository.updateOrderStatus).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'pending' }));
+    vi.mocked(customerOrderRepository.updateOrderStatus).mockResolvedValue(makeOrder({ status: 'confirmed' }));
 
     const order = await ordersService.transitionStatus({
       orderId: 'order-1',
@@ -356,32 +647,32 @@ describe('OrdersService.transitionStatus', () => {
 // حقيقي — منطق التخويل نفسه (assertActorCanAccessOrder) لا يعتمد على قاعدة البيانات إطلاقاً.
 describe('OrdersService.getOrderWithItems (بند 4 — عزل المستأجرين على القراءة)', () => {
   it('يرفض فاعل تاجر لا يخص طلبه (tenant-a مقابل tenant-b)', async () => {
-    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }));
 
     await expect(
       ordersService.getOrderWithItems({ role: 'merchant_owner', tenantId: 'tenant-b' }, 'order-1')
     ).rejects.toThrow(/لا يخص تاجرك/);
-    expect(ordersRepository.findOrderItems).not.toHaveBeenCalled();
+    expect(customerOrderRepository.findOrderItems).not.toHaveBeenCalled();
   });
 
   it('يسمح لفاعل التاجر الصحيح (نفس tenantId الطلب)', async () => {
-    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
-    vi.mocked(ordersRepository.findOrderItems).mockResolvedValue([]);
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }));
+    vi.mocked(customerOrderRepository.findOrderItems).mockResolvedValue([]);
 
     const result = await ordersService.getOrderWithItems({ role: 'merchant_owner', tenantId: 'tenant-a' }, 'order-1');
     expect(result!.order.status).toBe('confirmed');
   });
 
   it('يسمح لـplatform_admin بلا حاجة لمطابقة tenantId إطلاقاً', async () => {
-    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
-    vi.mocked(ordersRepository.findOrderItems).mockResolvedValue([]);
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }));
+    vi.mocked(customerOrderRepository.findOrderItems).mockResolvedValue([]);
 
     const result = await ordersService.getOrderWithItems({ role: 'platform_admin' }, 'order-1');
     expect(result!.order.status).toBe('confirmed');
   });
 
   it('يعيد null لطلب غير موجود قبل أي فحص تخويل', async () => {
-    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(null);
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(null);
     const result = await ordersService.getOrderWithItems({ role: 'merchant_owner', tenantId: 'tenant-b' }, 'missing');
     expect(result).toBeNull();
   });
@@ -389,22 +680,22 @@ describe('OrdersService.getOrderWithItems (بند 4 — عزل المستأجر�
 
 describe('OrdersService.getStatusHistory (بند 4 — عزل المستأجرين على القراءة)', () => {
   it('يرفض فاعل تاجر لا يخص طلبه', async () => {
-    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }));
 
     await expect(
       ordersService.getStatusHistory({ role: 'merchant_owner', tenantId: 'tenant-b' }, 'order-1')
     ).rejects.toThrow(/لا يخص تاجرك/);
-    expect(ordersRepository.findStatusHistory).not.toHaveBeenCalled();
+    expect(customerOrderRepository.findStatusHistory).not.toHaveBeenCalled();
   });
 
   it('يرمي خطأ صريحاً لطلب غير موجود (لا مصفوفة فارغة صامتة)', async () => {
-    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(null);
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(null);
     await expect(ordersService.getStatusHistory({ role: 'platform_admin' }, 'missing')).rejects.toThrow(/غير موجود/);
   });
 
   it('يسمح لفاعل التاجر الصحيح ويعيد السجل', async () => {
-    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
-    vi.mocked(ordersRepository.findStatusHistory).mockResolvedValue([]);
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }));
+    vi.mocked(customerOrderRepository.findStatusHistory).mockResolvedValue([]);
 
     const result = await ordersService.getStatusHistory({ role: 'merchant_owner', tenantId: 'tenant-a' }, 'order-1');
     expect(result).toEqual([]);
@@ -413,17 +704,17 @@ describe('OrdersService.getStatusHistory (بند 4 — عزل المستأجري
 
 describe('OrdersService.getOrderForCustomerView', () => {
   it('يعيد null لطلب غير موجود بلا محاولة جلب بنود', async () => {
-    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(null);
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(null);
 
     const result = await ordersService.getOrderForCustomerView('missing');
 
     expect(result).toBeNull();
-    expect(ordersRepository.findOrderItems).not.toHaveBeenCalled();
+    expect(customerOrderRepository.findOrderItems).not.toHaveBeenCalled();
   });
 
   it('يُثري كل بند باسم المنتج الحقيقي عبر catalogService', async () => {
-    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
-    vi.mocked(ordersRepository.findOrderItems).mockResolvedValue([
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }));
+    vi.mocked(customerOrderRepository.findOrderItems).mockResolvedValue([
       { id: 'oi-1', orderId: 'order-1', productId: chicken.id, quantity: 2, selection: { sizeId: 'small' }, unitPriceSnapshot: 100, createdAt: new Date().toISOString() },
     ]);
 
@@ -435,8 +726,8 @@ describe('OrdersService.getOrderForCustomerView', () => {
   });
 
   it('يعيد productName: null لو حُذف المنتج (لا يفشل الاستعلام)', async () => {
-    vi.mocked(ordersRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }) as never);
-    vi.mocked(ordersRepository.findOrderItems).mockResolvedValue([
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }));
+    vi.mocked(customerOrderRepository.findOrderItems).mockResolvedValue([
       { id: 'oi-1', orderId: 'order-1', productId: 'deleted-product', quantity: 1, selection: {}, unitPriceSnapshot: 50, createdAt: new Date().toISOString() },
     ]);
 
@@ -449,11 +740,11 @@ describe('OrdersService.getOrderForCustomerView', () => {
 describe('OrdersService.getOrdersForTenant', () => {
   it('يعيد طلبات التاجر المطلوب فقط عبر findOrdersByTenantId', async () => {
     const tenantOrders = [makeOrder({ status: 'pending' }), makeOrder({ status: 'confirmed' })];
-    vi.mocked(ordersRepository.findOrdersByTenantId).mockResolvedValue(tenantOrders as never);
+    vi.mocked(customerOrderRepository.findOrdersByTenantId).mockResolvedValue(tenantOrders);
 
     const result = await ordersService.getOrdersForTenant('tenant-a');
 
-    expect(ordersRepository.findOrdersByTenantId).toHaveBeenCalledWith('tenant-a');
+    expect(customerOrderRepository.findOrdersByTenantId).toHaveBeenCalledWith('tenant-a');
     expect(result).toEqual(tenantOrders);
   });
 });
@@ -461,11 +752,11 @@ describe('OrdersService.getOrdersForTenant', () => {
 describe('OrdersService.getAllOrders', () => {
   it('يعيد كل الطلبات بلا أي تصفية تاجر عبر findAll (اليوم 11، لوحة الإدارة)', async () => {
     const allOrders = [makeOrder({ status: 'pending' }), makeOrder({ status: 'delivered' })];
-    vi.mocked(ordersRepository.findAll).mockResolvedValue(allOrders as never);
+    vi.mocked(customerOrderRepository.findAll).mockResolvedValue(allOrders);
 
     const result = await ordersService.getAllOrders();
 
-    expect(ordersRepository.findAll).toHaveBeenCalled();
+    expect(customerOrderRepository.findAll).toHaveBeenCalled();
     expect(result).toEqual(allOrders);
   });
 });
@@ -474,12 +765,27 @@ describe('OrdersService.getRecentStatusHistory', () => {
   it('يعيد سجل التدقيق العام عبر findAllStatusHistory بحد افتراضي 50', async () => {
     await ordersService.getRecentStatusHistory();
 
-    expect(ordersRepository.findAllStatusHistory).toHaveBeenCalledWith(50);
+    expect(customerOrderRepository.findAllStatusHistory).toHaveBeenCalledWith(50);
   });
 
   it('يحترم حداً مخصَّصاً عند تمريره', async () => {
     await ordersService.getRecentStatusHistory(10);
 
-    expect(ordersRepository.findAllStatusHistory).toHaveBeenCalledWith(10);
+    expect(customerOrderRepository.findAllStatusHistory).toHaveBeenCalledWith(10);
+  });
+});
+
+// TASK-13 — merchantService.getByIds مُموَّهة أعلاه؛ تأكيد سلبي أن الدالة الصحيحة استُهلكت
+// (لا استيراد مباشر لـmerchant.repository.ts من orders.service.ts — يخالف dependency-cruiser).
+describe('OrdersService.checkout — استهلاك merchantService', () => {
+  it('يستدعي merchantService.getByIds بمعرّفات التجار المميّزة من السلة فقط', async () => {
+    mockCartItems([
+      makeItem({ id: 'a', productId: chicken.id }),
+      makeItem({ id: 'b', productId: chicken.id, quantity: 1 }), // نفس التاجر مرتين
+    ]);
+
+    await ordersService.checkout(checkoutInput);
+
+    expect(merchantService.getByIds).toHaveBeenCalledWith(['tenant-a']);
   });
 });

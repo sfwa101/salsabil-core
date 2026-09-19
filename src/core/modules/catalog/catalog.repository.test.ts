@@ -18,6 +18,12 @@ function makeQueryBuilder(terminal: { data: unknown; error: unknown }) {
     select: vi.fn(() => builder),
     in: vi.fn(() => builder),
     eq: vi.fn(() => builder),
+    // order() تُستخدَم في findDistricts/findCategoriesForDistrict/findSubcategoriesForCategory
+    // (TASK-18) — ترجع نفس builder (thenable) تماماً كـ eq/select، لا استعلاماً منفصلاً.
+    order: vi.fn(() => builder),
+    // maybeSingle() طرف نهائي حقيقي في supabase-js (يُعيد Promise مباشرة، لا chain إضافي) — يُستخدَم
+    // في findDistrictBySlug/findCatalogCategoryBySlug/findCatalogSubcategoryBySlug (TASK-18).
+    maybeSingle: vi.fn(() => Promise.resolve(terminal)),
     then: (onFulfilled: (value: typeof terminal) => unknown) => Promise.resolve(terminal).then(onFulfilled),
   };
   return builder;
@@ -40,6 +46,30 @@ const productRow = {
 beforeEach(() => {
   vi.clearAllMocks();
 });
+
+const districtRow = {
+  id: 'district-1',
+  slug: 'hy-alrjl',
+  name_ar: 'حي الرجل',
+  sort_order: 1,
+  is_active: true,
+};
+
+const catalogCategoryRow = {
+  id: 'cat-1',
+  district_id: 'district-1',
+  slug: 'anaya-whlaqa',
+  name_ar: 'عناية وحلاقة',
+  sort_order: 1,
+};
+
+const catalogSubcategoryRow = {
+  id: 'sub-1',
+  category_id: 'cat-1',
+  slug: 'shfrat-wmakynat-hlaqa',
+  name_ar: 'شفرات وماكينات حلاقة',
+  sort_order: 1,
+};
 
 describe('CatalogRepository.findProductsByIds', () => {
   it('يعيد مصفوفة فارغة بلا نداء قاعدة بيانات عند مصفوفة معرّفات فارغة', async () => {
@@ -67,5 +97,109 @@ describe('CatalogRepository.findProductsByIds', () => {
     vi.mocked(supabase.from).mockReturnValue(builder as never);
 
     await expect(catalogRepository.findProductsByIds(['prod-1'])).rejects.toThrow('db error');
+  });
+});
+
+// ============================================================================
+// شجرة التصنيف الجديدة (TASK-18) — حي → قسم رئيسي → قسم فرعي. نفس نمط findProductsByIds أعلاه
+// (تمويه عميل supabase مباشرة عبر makeQueryBuilder الموسَّع بـorder/maybeSingle).
+// ============================================================================
+describe('CatalogRepository — شجرة التصنيف الجديدة (TASK-18)', () => {
+  it('findDistricts يستعلم catalog_districts، يفلتر is_active، يرتّب بـsort_order', async () => {
+    const builder = makeQueryBuilder({ data: [districtRow], error: null });
+    vi.mocked(supabase.from).mockReturnValue(builder as never);
+
+    const result = await catalogRepository.findDistricts();
+
+    expect(supabase.from).toHaveBeenCalledWith('catalog_districts');
+    expect(builder.eq).toHaveBeenCalledWith('is_active', true);
+    expect(builder.order).toHaveBeenCalledWith('sort_order');
+    expect(result).toEqual([{ id: 'district-1', slug: 'hy-alrjl', nameAr: 'حي الرجل', sortOrder: 1, isActive: true }]);
+  });
+
+  it('findDistrictBySlug يعيد null إن لم يوجد صف', async () => {
+    const builder = makeQueryBuilder({ data: null, error: null });
+    vi.mocked(supabase.from).mockReturnValue(builder as never);
+
+    const result = await catalogRepository.findDistrictBySlug('missing-slug');
+
+    expect(builder.eq).toHaveBeenCalledWith('slug', 'missing-slug');
+    expect(result).toBeNull();
+  });
+
+  it('findCategoriesForDistrict يفلتر بـdistrict_id ويرتّب بـsort_order', async () => {
+    const builder = makeQueryBuilder({ data: [catalogCategoryRow], error: null });
+    vi.mocked(supabase.from).mockReturnValue(builder as never);
+
+    const result = await catalogRepository.findCategoriesForDistrict('district-1');
+
+    expect(supabase.from).toHaveBeenCalledWith('catalog_categories');
+    expect(builder.eq).toHaveBeenCalledWith('district_id', 'district-1');
+    expect(result).toEqual([{ id: 'cat-1', districtId: 'district-1', slug: 'anaya-whlaqa', nameAr: 'عناية وحلاقة', sortOrder: 1 }]);
+  });
+
+  it('findCatalogCategoryBySlug يفلتر بـdistrict_id وslug معاً', async () => {
+    const builder = makeQueryBuilder({ data: catalogCategoryRow, error: null });
+    vi.mocked(supabase.from).mockReturnValue(builder as never);
+
+    const result = await catalogRepository.findCatalogCategoryBySlug('district-1', 'anaya-whlaqa');
+
+    expect(builder.eq).toHaveBeenCalledWith('district_id', 'district-1');
+    expect(builder.eq).toHaveBeenCalledWith('slug', 'anaya-whlaqa');
+    expect(result?.id).toBe('cat-1');
+  });
+
+  it('findSubcategoriesForCategory يفلتر بـcategory_id ويرتّب بـsort_order', async () => {
+    const builder = makeQueryBuilder({ data: [catalogSubcategoryRow], error: null });
+    vi.mocked(supabase.from).mockReturnValue(builder as never);
+
+    const result = await catalogRepository.findSubcategoriesForCategory('cat-1');
+
+    expect(supabase.from).toHaveBeenCalledWith('catalog_subcategories');
+    expect(builder.eq).toHaveBeenCalledWith('category_id', 'cat-1');
+    expect(result).toEqual([
+      { id: 'sub-1', categoryId: 'cat-1', slug: 'shfrat-wmakynat-hlaqa', nameAr: 'شفرات وماكينات حلاقة', sortOrder: 1 },
+    ]);
+  });
+
+  it('findCatalogSubcategoryBySlug يفلتر بـcategory_id وslug معاً', async () => {
+    const builder = makeQueryBuilder({ data: catalogSubcategoryRow, error: null });
+    vi.mocked(supabase.from).mockReturnValue(builder as never);
+
+    const result = await catalogRepository.findCatalogSubcategoryBySlug('cat-1', 'shfrat-wmakynat-hlaqa');
+
+    expect(builder.eq).toHaveBeenCalledWith('category_id', 'cat-1');
+    expect(builder.eq).toHaveBeenCalledWith('slug', 'shfrat-wmakynat-hlaqa');
+    expect(result?.id).toBe('sub-1');
+  });
+
+  it('findProductsByCatalogCategory يفلتر بـcatalog_category_id وis_active=true', async () => {
+    const builder = makeQueryBuilder({ data: [productRow], error: null });
+    vi.mocked(supabase.from).mockReturnValue(builder as never);
+
+    const result = await catalogRepository.findProductsByCatalogCategory('cat-1');
+
+    expect(supabase.from).toHaveBeenCalledWith('products');
+    expect(builder.eq).toHaveBeenCalledWith('catalog_category_id', 'cat-1');
+    expect(builder.eq).toHaveBeenCalledWith('is_active', true);
+    expect(result).toHaveLength(1);
+  });
+
+  it('findProductsByCatalogSubcategory يفلتر بـcatalog_subcategory_id وis_active=true', async () => {
+    const builder = makeQueryBuilder({ data: [productRow], error: null });
+    vi.mocked(supabase.from).mockReturnValue(builder as never);
+
+    const result = await catalogRepository.findProductsByCatalogSubcategory('sub-1');
+
+    expect(builder.eq).toHaveBeenCalledWith('catalog_subcategory_id', 'sub-1');
+    expect(builder.eq).toHaveBeenCalledWith('is_active', true);
+    expect(result).toHaveLength(1);
+  });
+
+  it('يرمي الخطأ إن أعاده Supabase (findDistricts)', async () => {
+    const builder = makeQueryBuilder({ data: null, error: new Error('db error') });
+    vi.mocked(supabase.from).mockReturnValue(builder as never);
+
+    await expect(catalogRepository.findDistricts()).rejects.toThrow('db error');
   });
 });

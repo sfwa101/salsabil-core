@@ -338,6 +338,62 @@ Owner:
 Engineering
 ```
 
+### INV-INV-003 — إضافة 2026-09-15 (TASK-08)
+```
+Invariant:
+إلغاء طلب موجود فعلياً (انتقال * → cancelled عبر transitionStatus) يسترجع مخزون كل بند من
+order_items بالضبط مرة واحدة — لا يبقى محجوزاً للأبد، ولا يُسترجَع مرتين (استرجاع مضاعف) أو يُفقَد
+أثره (Lost Update) تحت تزامن حقيقي.
+
+Context (الفجوة الأصلية): قبل هذه المهمة، InventoryService.release() كان يُستدعى فقط من مسار
+تعويض فشل Checkout نفسه (ADR-022 بند ج) — لا مسار مكافئ عند إلغاء طلب موجود بالفعل. أي إلغاء حقيقي
+كان يترك مخزونه محجوزاً للأبد بصمت، بلا أي مؤشر خطأ ظاهر.
+
+Control/Implementation:
+- orders.service.ts (transitionStatus): عند toStatus === 'cancelled' بعد نجاح تحديث الحالة فعلياً،
+  يجلب order_items ويستدعي inventoryService.release() لكل بند (يعيد استخدام آلية reserve/release
+  الموجودة أصلاً في مسار Checkout — لا منطق استرجاع جديد).
+- orders.repository.ts (updateOrderStatus): قفل تفاؤلي جديد يطابق أيضاً على fromStatus المقروء قبل
+  النداء (نفس نمط decrementIfAvailable) — يعيد null عند تعارض تزامن حقيقي (انتقالان متزامنان لنفس
+  الطلب)، فيرفض transitionStatus الانتقال صريحاً بدل تنفيذ أثره (الاسترجاع) مرتين.
+- inventory.repository.ts (restore): قفل تفاؤلي جديد (كان غائباً تماماً قبل هذه المهمة — التعليق
+  الأصلي افترض "لا مسار متزامن حقيقي يتنافس عليه"، افتراض كسرَته إضافة مسار الإلغاء كمستدعٍ ثانٍ)،
+  نفس نمط decrementIfAvailable، maxAttempts=8 (أعلى من نظير decrementIfAvailable عمداً — استُبين
+  حياً أن 3 غير كافية تحت تزاحم حقيقي بـ5+ مستدعين متزامنين على الصف نفسه، وإعادة المحاولة هنا رخيصة
+  ولا خطر من رفعها، بخلاف decrementIfAvailable حيث الفشل بعد المحاولات "رفض بيع" آمن أصلاً).
+
+Automated Test:
+src/core/modules/orders/orders.service.test.ts (وحدة، أربعة اختبارات جديدة تحت "TASK-08")؛
+src/core/modules/orders/orders.integration.test.ts (تكامل حي، ثلاثة اختبارات جديدة تحت "TASK-08"):
+1) إلغاء طلب حقيقي يسترجع مخزونه فعلياً (الفجوة الأصلية).
+2) إلغاء نفس الطلب مرتين متزامنتين فعليًا (Promise.allSettled) → استرجاع مرة واحدة فقط، الآخر
+   يُرفَض بخطأ تعارض تزامن صريح.
+3) خمسة استدعاءات restore() متزامنة فعلياً لنفس المنتج (Promise.all مباشر) → لا فقد أثر أي منها.
+
+Guardian:
+Required (DEEP — Inventory Concurrency، AGENTS.md §17)
+
+Evidence:
+- Type: Automated Test (وحدة + تكامل حي، Promise.all/allSettled حقيقي ضد Supabase حقيقي)
+- Source: orders.service.test.ts، orders.integration.test.ts (أسطر مُعلَّمة "TASK-08")
+- Executed: 2026-09-15 (هذه الجلسة) — دورة Regression كاملة لكل حالة حرجة على حدة (بَگ متعمَّد →
+  فشل متوقَّع مُثبَت فعلياً → إرجاع → نجاح)، بما فيها اكتشاف تجريبي أن استدعاءين متزامنين فقط لا
+  يتصادمان بثبات (فجوة توقيت شبكي طبيعية)، بخلاف 5+ استدعاءات (10 استدعاءات بلا قفل أفقدت 9/10
+  تحديثات فعلياً في سكربت تحقق مباشر منفصل، غير مُدرَج في مجموعة الاختبارات).
+- Scope: مُثبَت — إلغاء مفرد، إلغاء مزدوج لنفس الطلب (تعارض حالة)، واسترجاع متزامن حقيقي لنفس المنتج
+  من مصدرين مختلفين (Lost Update). غير مُثبَت — تزامن عبر أكثر من نسخة خادم واحدة (نفس قيد INV-ORD-002
+  الموروث: القفل التفاؤلي هنا على مستوى قاعدة البيانات فعلياً فينجو من تعدد النسخ، بخلاف أي قفل
+  في-الذاكرة، لكن لم يُختبَر عملياً بأكثر من عملية Node واحدة في هذه الجلسة).
+- Result: PASS (كل الحالات الثلاث أعلاه، بعد تصحيح maxAttempts من 3 إلى 8 في restore())
+
+Status:
+ENFORCED — قفلان تفاؤليان مستقلان (orders.status، inventory.quantity_available) يمنعان معاً
+الاسترجاع المضاعف وفقد الأثر، ومُثبَتان بتزامن حي فعلي حقيقي، لا Promise.all اسمي بلا تصادم فعلي.
+
+Owner:
+Engineering
+```
+
 ---
 
 ## رابعاً: Row-Level Security (RLS) وحدود الوصول لقاعدة البيانات
@@ -783,7 +839,7 @@ staging.reefam.com** — "ملاحظة دقة صريحة" في ROADMAP.md تقر
 
 | الحالة | العدد | المعرِّفات |
 |---|---|---|
-| ENFORCED | 9 | INV-ORD-001, INV-ORD-003, INV-INV-001, INV-RLS-001, INV-ARCH-001, INV-SEC-002, INV-AUTHZ-001, INV-DATA-001, INV-AUTHN-001 |
+| ENFORCED | 10 | INV-ORD-001, INV-ORD-003, INV-INV-001, INV-INV-003, INV-RLS-001, INV-ARCH-001, INV-SEC-002, INV-AUTHZ-001, INV-DATA-001, INV-AUTHN-001 |
 | PARTIAL | 4 | INV-TEN-001, INV-ORD-002, INV-SEC-001, INV-RATE-001 |
 | UNKNOWN | 1 | INV-INV-002 |
 | VIOLATED (جزئياً) | 1 | INV-AUDIT-001 |
@@ -795,7 +851,15 @@ staging.reefam.com** — "ملاحظة دقة صريحة" في ROADMAP.md تقر
 > Timing Attack)، بعد الإصلاح جولة ثانية مستقلة كلياً APPROVED. راجع الإدخال الكامل أعلاه وDD-001
 > في docs/DECISIONS.md (RESOLVED).
 
-**15 إدخالاً إجمالاً.** لا ادعاء بأن هذا شامل لكل خاصية في المشروع — هذه أول دفعة مُستخرَجة من نطاق
+> **تحديث 2026-09-15 (TASK-08):** إضافة **INV-INV-003** جديد — إلغاء طلب موجود فعلياً (* → cancelled)
+> كان يترك مخزونه محجوزاً للأبد بصمت (InventoryService.release() لم يكن يُستدعى إلا من مسار تعويض
+> فشل Checkout نفسه). أُصلِح: transitionStatus يسترجع مخزون كل بند عند الإلغاء، بقفلين تفاؤليين
+> مستقلين (orders.status عبر updateOrderStatus، وinventory.quantity_available عبر restore() —
+> الأخير كان بلا أي قفل قبل هذه المهمة) يمنعان استرجاعاً مضاعفاً وفقد أثر تحت تزامن حقيقي معاً،
+> مُثبَتان بتزامن حي فعلي (Promise.all/allSettled ضد Supabase حقيقي، لا تمويهاً). ENFORCED مباشرة —
+> راجع الإدخال الكامل أعلاه.
+
+**16 إدخالاً إجمالاً.** لا ادعاء بأن هذا شامل لكل خاصية في المشروع — هذه أول دفعة مُستخرَجة من نطاق
 القراءة المُصرَّح به لهذه المهمة (orders, inventory, khalil, RLS, architecture boundaries, security
 docs). نطاقات أخرى (Catalog تفصيلياً بخلاف السعر، Bayan، Context Engine/worlds تفصيلياً) لم تُفحَص
 بنفس العمق في هذه الدفعة — لا تُعتبَر "بلا Invariants" لمجرد غيابها هنا، بل غير مفحوصة بعد.

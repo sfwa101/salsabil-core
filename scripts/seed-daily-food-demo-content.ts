@@ -51,7 +51,7 @@ const PRODUCTS: ProductSeed[] = [
     description: 'أرز مصري أبيض فاخر، حبة كاملة، مناسب للطبخ اليومي والمناسبات.',
     basePrice: 35,
     unit: 'kg',
-    imageUrl: 'https://placehold.co/800x800/f5deb3/5a3d1f.png?text=Rice',
+    imageUrl: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=800&q=80',
     stock: 60,
   },
   {
@@ -59,7 +59,7 @@ const PRODUCTS: ProductSeed[] = [
     description: 'سكر أبيض مكرر ناعم، معبأ بإحكام للحفاظ على النقاء.',
     basePrice: 32,
     unit: 'kg',
-    imageUrl: 'https://placehold.co/800x800/ffffff/333333.png?text=Sugar',
+    imageUrl: 'https://images.unsplash.com/photo-1581428982868-e410dd127a90?auto=format&fit=crop&w=800&q=80',
     stock: 60,
   },
   {
@@ -67,7 +67,7 @@ const PRODUCTS: ProductSeed[] = [
     description: 'زيت عباد شمس نقي 100%، مناسب للقلي والطبخ اليومي.',
     basePrice: 65,
     unit: 'liter',
-    imageUrl: 'https://placehold.co/800x800/f4c430/6b4e00.png?text=Oil',
+    imageUrl: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&w=800&q=80',
     stock: 40,
   },
   {
@@ -75,7 +75,7 @@ const PRODUCTS: ProductSeed[] = [
     description: 'بيض بلدي طازج يومياً من مزارع محلية، طبق كامل 30 بيضة.',
     basePrice: 130,
     unit: 'tray',
-    imageUrl: 'https://placehold.co/800x800/fff3d6/8a6d00.png?text=Eggs',
+    imageUrl: 'https://images.unsplash.com/photo-1506976773554-56fc52fa74c4?auto=format&fit=crop&w=800&q=80',
     stock: 25,
   },
   {
@@ -83,7 +83,7 @@ const PRODUCTS: ProductSeed[] = [
     description: 'طماطم بلدي حمراء طازجة، تُقطف يومياً.',
     basePrice: 18,
     unit: 'kg',
-    imageUrl: 'https://placehold.co/800x800/c0392b/ffffff.png?text=Tomatoes',
+    imageUrl: 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=800&q=80',
     stock: 80,
   },
   {
@@ -91,7 +91,7 @@ const PRODUCTS: ProductSeed[] = [
     description: 'بصل أصفر طازج، حبات متوسطة الحجم منتقاة.',
     basePrice: 15,
     unit: 'kg',
-    imageUrl: 'https://placehold.co/800x800/e8c39e/5a3d1f.png?text=Onions',
+    imageUrl: 'https://images.unsplash.com/photo-1618512496248-a07ce83aa8cb?auto=format&fit=crop&w=800&q=80',
     stock: 80,
   },
   {
@@ -99,7 +99,7 @@ const PRODUCTS: ProductSeed[] = [
     description: 'خبز بلدي طازج يومياً، يُخبز صباحاً.',
     basePrice: 10,
     unit: 'pack',
-    imageUrl: 'https://placehold.co/800x800/d9a45f/4a2f11.png?text=Bread',
+    imageUrl: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=800&q=80',
     stock: 100,
   },
   {
@@ -107,7 +107,7 @@ const PRODUCTS: ProductSeed[] = [
     description: 'جبنة بيضاء طرية، مناسبة للفطار والطبخ.',
     basePrice: 55,
     unit: '500g',
-    imageUrl: 'https://placehold.co/800x800/fdfdfd/444444.png?text=Cheese',
+    imageUrl: 'https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=800&q=80',
     stock: 30,
   },
 ];

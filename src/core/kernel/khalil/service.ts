@@ -66,6 +66,16 @@ export class KhalilService {
   }
 
   /**
+   * يحدّث دور مستخدم — مُستهلَكة حالياً من merchantStaffService.addStaff فقط (TASK-14): ترقية
+   * مستخدم موجود (عادة 'customer') إلى 'employee' عند إضافته موظفاً لأول مرة (§6.2 من
+   * specs/orders/PHASE_2_DOMAIN_DESIGN.md — إعادة استخدام قيمة موجودة فعلياً وغير مُستهلَكة، لا
+   * اختراع قيمة جديدة). لا فحص تعارض هنا عمداً — مسؤولية المستدعي (نفس نمط بقية دوال خليل).
+   */
+  async setUserRole(userId: string, role: UserRole): Promise<void> {
+    return khalilRepository.setUserRole(userId, role);
+  }
+
+  /**
    * كل العوالم النشطة من جدول worlds — مُستهلَكة أولاً عبر bayan.service.ts (اليوم 23) لتحديد
    * عالم individuals، ولاحقاً عبر مبدّل العوالم في الواجهة (اليوم 29). تمريرة رقيقة فقط —
    * dependency-cruiser يمنع أي نطاق خارج kernel/khalil/ من استيراد khalilRepository مباشرة.

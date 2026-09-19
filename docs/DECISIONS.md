@@ -1,10 +1,10 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.35
+version: 1.38
 authority: Security & Correctness (قسم DECISION DEBT REGISTRY) + Engineering Decision Log (باقي الملف)
-last_updated: 2026-09-10
-last_verified: 2026-09-10
+last_updated: 2026-09-19
+last_verified: 2026-09-14
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف
 ---
@@ -1432,6 +1432,274 @@ Related Documents: ADR-029 (السياق المباشر، قسم "ليس الآ�
 
 ---
 
+## ADR-031
+```
+Title: توثيق رجعي — الكتالوج الأساسي (MasterCatalogItem) وقائمة مراجعة الاستيراد (Review Queue)
+          لحل تكرار المنتجات عبر التجار؛ تصحيح مرجع "ADR-025" الخاطئ في تعليقات الكود
+Status: ACCEPTED — توثيق رجعي (Retroactive Documentation) لقرار مُنفَّذ فعلياً وحيّ في الكود منذ
+          2026-09-13 (commit `1c62fd9`)، لا قراراً جديداً ولا تغييراً في السلوك. يُغلِق ثغرة حوكمة
+          حقيقية رصدها `docs/audits/2026-09-14-reef-v1-engineering-audit.md` (§10، §17 بند 4): الكود
+          كان يشير لمرجع "ADR-025" الذي هو فعلياً قرار تركيب shadcn/ui (راجع `ADR-025` أعلاه — موضوع
+          مختلف كلياً)، بلا أي سجل ADR حقيقي لهذا القرار المعماري — انتهاك مباشر لـ`AGENTS.md §13`
+          ("No Silent State Change": تغيير Schema/قاعدة عمل يجب الإعلان عنه صراحة) و`AGENTS.md §16`
+          (تحديث التوثيق جزء من Definition of Done).
+Date: 2026-09-14 (تاريخ كتابة هذا التوثيق). القرار المعماري نفسه نُفِّذ فعلياً في 2026-09-13
+          (commit `1c62fd9`، رسالة commit عامة "chore: save state before ui refactoring" لا تكشف
+          طبيعة التغيير الحقيقية — وهذا بالضبط ما جعله يفوت أي مراجعة/توثيق وقت التنفيذ).
+Decision: نموذج ثلاثي الطبقات، مُطابِق لِما هو منفَّذ فعلياً في `catalog.service.ts`/`catalog.repository.ts`/
+          `types.ts` اليوم (لا تغيير على أي منها في هذه المهمة، توثيق بحت):
+          (أ) **`MasterCatalogItem`** (`catalog_master_items`، `scripts/catalog-import-schema.sql`) —
+          عنصر كتالوج مرجعي واحد يملكه `platform_admin` حصراً: الاسم، الوصف، **سعر البيع المعتمَد**
+          (`basePrice`)، الوحدة، الصورة، التصنيف. لا كتابة عليه إلا عبر `supabaseAdmin`
+          (`catalog.repository.ts:180-225`) — نفس نمط "قفل كامل، service_role فقط" المتَّبع لكل
+          جدول حساس آخر في المشروع.
+          (ب) **`products` كنسخة تاجر (Clone)** — كل تاجر يستورد عنصراً من الكتالوج الأساسي يحصل على
+          صف `products` خاص به، مربوط بـ`master_item_id` (عمود جديد، nullable، `products.master_item_id`)،
+          **سعر بيعه مقفول على سعر الكتالوج الأساسي** (`upsertTenantProductFromMaster`،
+          `catalog.service.ts:133-145`) — التاجر لا يملك صلاحية تعديل سعر البيع لصف مُستنسَخ، فقط
+          كميته وتكلفته الخاصة عبر `inventoryService.setStockForImport` (`inventory.service.ts`).
+          تعديل سعر الكتالوج الأساسي (`updateMasterItemPrice`، `catalog.service.ts:112-129`) **يتدفَّق
+          تلقائياً (Cascade)** لكل صف تاجر مرتبط (`cascadeBasePriceToLinkedProducts`،
+          `catalog.repository.ts:229-237`) — "سعر البيع يحدده المالك فقط" مطبَّق فعلياً في الكود، لا
+          مجرد نية معمارية.
+          (ج) **استيراد Excel التاجر ومطابقة تلقائية/قائمة مراجعة** (`importMerchantExcel`،
+          `catalog.service.ts:150-173`) — التاجر يرفع ملف بثلاثة أعمدة فقط (اسم، كمية، تكلفة — **لا
+          سعر بيع إطلاقاً**، `MerchantImportRow`)، `tenantId` يصل من جلسة التاجر (`merchant-session`)
+          لا من أي مدخل عميل (عزل مستأجرين، `INV-TEN-001` بلا تغيير). لكل صف: تطابق **حرفي بعد تطبيع
+          الاسم فقط** (`normalizeProductName`، `text-normalize.ts`) مع أسماء الكتالوج الأساسي — **لا
+          مطابقة تقريبية (fuzzy)** (قرار مؤسس صريح موثَّق في تعليق `text-normalize.ts:3-5`، لتفادي دمج
+          مالي/مخزوني خاطئ صامت، `AGENTS.md §8 Fail Closed`). عند تطابق: يُنشأ/يُحدَّث صف `products`
+          التاجر تلقائياً (`matched++`). عند عدم تطابق: يُضاف صف `catalog_review_queue` (بحماية من
+          التكديس، `findPendingReviewQueueItem`) بانتظار قرار `platform_admin`.
+          (د) **حسم قائمة المراجعة — بيد `platform_admin` حصراً** (`getAdminSession` في
+          `src/app/admin/catalog/review/actions.ts`)، بخيارين لا ثالث لهما:
+          `resolveReviewQueueAsNew` (`catalog.service.ts:181-209`) — يعتبر الصف منتجاً جديداً كلياً،
+          الأدمن يحدد الاسم/التصنيف/سعر البيع/الوحدة بنفسه، فيُنشأ `MasterCatalogItem` جديد وصف
+          `products` تاجر مرتبط به؛ أو `resolveReviewQueueAsMerge` (`catalog.service.ts:213-237`) —
+          يدمج الصف مع عنصر كتالوج أساسي **موجود بالفعل**، فيُنشأ فقط صف `products` تاجر مرتبط بذلك
+          العنصر القائم — هذا الخيار هو الحل المباشر لمشكلة "منتجات متطابقة عبر تجار متعددين". كل
+          الحالات الأربع (إنشاء عنصر أساسي، تعديل سعره، حسم مراجعة كمنتج جديد، حسم مراجعة كدمج) تُسجَّل
+          في `auditService.log` (`entityType: 'catalog_master_item' | 'catalog_review_queue'`).
+Context: المشكلة الحقيقية التي استوجبت هذا الحل: إبلاغ مؤسس مباشر (`docs/ROADMAP.md → "🚨 أولوية
+          عاجلة جديدة"`، 2026-09-08) بأن **70 تاجراً حقيقياً** منتظرون الانضمام (~5000 منتج متوقَّع
+          خلال أسبوع)، منهم **10 تجار (من الـ70) بمنتجات متطابقة أو شديدة التشابه فيما بينهم** — بلا
+          هذا الحل، كل تاجر يُدخِل نفس المنتج (مثال موثَّق: "أرز مصري 5 كجم") كنسخة كاملة مستقلة عبر
+          `tenant_id` (النموذج القديم، ما زال يعمل بلا تغيير لأي صف `master_item_id = null`)، ما يعني
+          تكراراً بصرياً حقيقياً للعميل (نفس المنتج بعشر بطاقات مختلفة) وجهد إدخال بيانات مكرَّراً على
+          كل تاجر. راجع أيضاً `ideas/IDEAS.md → IDEA-004` ("الكتالوج الموحَّد") — سجَّل نفس المشكلة
+          والحاجة صراحة بوصفها `PROPOSED — عاجل` بانتظار "مناقشة الجاهزية" قبل التنفيذ؛ الكود الفعلي
+          (`1c62fd9`) نفَّذ حلاً عملياً لهذه المشكلة تحديداً بعد ذلك بخمسة أيام **دون** إغلاق ذلك
+          الـIDEA أو تسجيل ADR وقتها — هذا الـADR يُغلِق فجوة التوثيق تلك رجعياً، لا يُقرِّر شيئاً
+          جديداً.
+Alternatives: (أ) **الوضع القديم — كل تاجر منتج مستقل بالكامل** (`products.tenant_id` بلا أي مفهوم
+          "منتج مرجعي" مشترك، `docs/DATABASE.md §3` الأصلي) — هذا هو النموذج الذي كان قائماً فعلياً
+          قبل `1c62fd9`، ولا يزال **مدعوماً بالتوافق العكسي** (`master_item_id` عمود nullable، كل صف
+          `products` قديم/تجريبي يبقى صالحاً بلا ربط) — لم يُستبدَل، بل أُضيف مسار جديد اختياري بجانبه.
+          مرفوض كحل وحيد للمستقبل: لا يحل مشكلة الـ10 تجار المتطابقين إطلاقاً، وكان سيُضاعِف مشكلة
+          التكرار البصري مع دخول 70 تاجراً حقيقياً دفعة واحدة.
+          (ب) **نموذج "السوق المفتوح" الكامل** (`merchant_offers` كجدول ربط مستقل يفصل "المنتج
+          المرجعي" عن "عروض التجار" — عدة تجار يعرضون نفس المنتج المرجعي كل بسعره الخاص، العميل يختار
+          البائع) — هذا هو ما وصفه `ideas/IDEAS.md → IDEA-004` فعلياً كسؤال معماري مفتوح، ومرتبط
+          بـ`docs/BUSINESS_RULES.md → BR-017` ("نموذج ظهور البائع": علامة موحَّدة تُخفي هوية البائع
+          مقابل سوق مفتوح يُظهرها). **لم يُبنَ ولا يُقترَح بناؤه الآن** — النموذج الحالي (نسخة واحدة
+          مقفولة السعر لكل تاجر) كافٍ تماماً لموجة الـ70 تاجراً القادمة ولأي قسم يتبع نموذج "العلامة
+          الموحَّدة" (BR-017، خيار أ)؛ نموذج السوق المفتوح الحقيقي يصير مطلوباً فقط لأقسام محدَّدة
+          يختارها المؤسس صراحة لهذا النموذج (مثال مذكور: الأسماك، اللحوم) — وBR-017 نفسه **لا يزال
+          PROPOSED** بلا قرار مؤسس نهائي بعد. هذا حد معروف مسجَّل، لا خطة تنفيذ.
+Consequences: النموذج الحالي **يحل فعلياً وبالكامل** مشكلة "10 من 70 تاجراً بمنتجات متطابقة" لموجة
+          الاستقبال القادمة — دمج عبر `resolveReviewQueueAsMerge` يعني عنصر كتالوج واحد فقط لكل منتج
+          حقيقي متكرر، بصرف النظر عن عدد التجار الذين يبيعونه. **حدود معروفة تبقى بلا حل هنا (لا
+          إخفاءً لها):** (1) لا مطابقة تقريبية (fuzzy) — أي اختلاف حرفي (خطأ إملائي، ترتيب كلمات مختلف)
+          بعد التطبيع يُعامَل كمنتج جديد، تحديداً بقرار مؤسس (Fail Closed أوضح من دمج خاطئ صامت)، لا
+          عيباً غير مقصود؛ (2) لا اختبار وحدة مخصَّص لمنطق الـmaster-item/cascade/مطابقة اليوم — مسجَّل
+          فعلياً كـ`DD-004` في `AGENTS.md §12` DECISION DEBT REGISTRY، ومهمة منفصلة (`TASK-06`) تُغلِقه
+          لاحقاً، خارج نطاق هذا الـADR التوثيقي البحت؛ (3) هذا **ليس** نموذج "سوق مفتوح" — راجع
+          Alternatives (ب) أعلاه، قرار مستقبلي منفصل يعتمد على حسم `BR-017` أولاً، لا خطة معلَنة هنا.
+          **تصحيح مرجعي:** كل تعليق كود كان يشير خطأً لـ"ADR-025" في سياق "CATALOG-IMPORT-WORKFLOW"
+          (17 موضعاً عبر 16 ملفاً — `scripts/catalog-import-schema.sql`،
+          `src/core/modules/catalog/{catalog.service.ts,catalog.repository.ts,types.ts,
+          text-normalize.ts}`، `src/core/modules/inventory/{inventory.service.ts,
+          inventory.repository.ts,types.ts}`، `src/core/modules/audit/types.ts`،
+          `src/app/admin/catalog/actions.ts`، `src/app/admin/catalog/review/actions.ts`،
+          `src/app/merchant/import/actions.ts`، `src/components/{MasterItemForm.tsx,MasterItemRow.tsx,
+          MerchantImportForm.tsx,ReviewQueueRow.tsx}`) صُحِّح ليشير لهذا الـADR-031. مراجع "ADR-025"
+          الأخرى في الكود (`src/app/globals.css`، `src/app/layout.tsx`، `src/components/FeedTabBar.tsx`،
+          `src/config/personal-theme-registry.ts`) **لم تُلمَس** — هي إشارات صحيحة فعلياً لقرار
+          shadcn/ui الحقيقي (`ADR-025` أعلاه)، لا خطأً.
+Related Documents: docs/audits/2026-09-14-reef-v1-engineering-audit.md → §10 (Catalog Architecture)،
+          §17 بند 4، §19 بند 11؛ docs/ROADMAP.md → "🚨 أولوية عاجلة جديدة" (2026-09-08)؛
+          ideas/IDEAS.md → IDEA-004؛ docs/BUSINESS_RULES.md → BR-017؛ AGENTS.md §12 (DECISION DEBT
+          Registry → DD-004)، §13 (No Silent State Change)، §16 (Definition of Done)؛ ADR-025 (الموضوع
+          الحقيقي — shadcn/ui، غير ذي صلة بهذا القرار)؛ scripts/catalog-import-schema.sql؛
+          src/core/modules/catalog/{catalog.service.ts,catalog.repository.ts,types.ts,
+          text-normalize.ts,excel-import.ts}، src/core/modules/inventory/{inventory.service.ts,
+          inventory.repository.ts,types.ts}، src/core/modules/audit/types.ts،
+          src/app/admin/catalog/{actions.ts,page.tsx,review/}، src/app/merchant/import/{actions.ts,page.tsx}،
+          src/components/{MasterItemForm.tsx,MasterItemRow.tsx,MerchantImportForm.tsx,ReviewQueueRow.tsx}
+```
+
+---
+
+## ADR-032
+```
+Title: TASK-08 — إصلاح فجوة حقيقية: استرجاع المخزون لا يحدث عند إلغاء طلب موجود فعلياً
+          (transitionStatus → cancelled)، فقط عند فشل Checkout نفسه؛ قفلان تفاؤليان جديدان
+          (orders.status، inventory.quantity_available) يمنعان استرجاعاً مضاعفاً وفقد أثر تحت تزامن
+Status: ACCEPTED — طُبِّق ومُتحقَّق منه حياً (كود + اختبارات وحدة/تكامل حية، دورة Regression كاملة
+          لكل حالة حرجة: بَگ متعمَّد → فشل مُثبَت فعلياً → إرجاع → نجاح)
+Date: 2026-09-15
+Decision: (أ) **الإصلاح الأساسي** — `transitionStatus` (`orders.service.ts`) عند الانتقال إلى
+          `cancelled`، بعد نجاح تحديث الحالة فعلياً، يجلب `order_items` ويستدعي
+          `inventoryService.release()` لكل بند — إعادة استخدام حرفية لآلية `reserve`/`release`
+          الموجودة أصلاً في مسار تعويض فشل Checkout (`ADR-022` بند ج)، لا منطق استرجاع جديد.
+          (ب) **قفل تفاؤلي جديد على انتقال حالة الطلب** — `updateOrderStatus`
+          (`orders.repository.ts`) أصبح يطابق أيضاً على `fromStatus` المقروء فعلاً قبل النداء (نفس
+          نمط `decrementIfAvailable`)، ويعيد `null` بدل الطلب عند تعارض تزامن حقيقي (انتقالان
+          متزامنان فعليان لنفس الطلب، كلاهما يقرآن نفس الحالة القديمة قبل أن يكتب أي منهما).
+          `transitionStatus` يرفض الانتقال صريحاً عند `null` بدل تنفيذ أثره (الاسترجاع) مرتين.
+          (ج) **قفل تفاؤلي جديد على `InventoryRepository.restore()` نفسها** — كانت بلا أي قفل قبل
+          هذه المهمة (تعليقها الأصلي افترض صراحة "لا مسار متزامن حقيقي يتنافس عليه" لأن المستدعي
+          الوحيد وقتها كان تعويض فشل Checkout لبند واحد معروف؛ إضافة مسار الإلغاء كمستدعٍ ثانٍ كسرت
+          هذا الافتراض فعلياً). أُضيف قفل تفاؤلي (نفس نمط `decrementIfAvailable`) بـ`maxAttempts=8`
+          (أعلى من نظيره في `decrementIfAvailable` = 3، عمداً — راجع Alternatives).
+Context: اكتُشف أثناء مراجعة تصميم Phase 2 (`specs/orders/PHASE_2_DOMAIN_DESIGN.md`) — **ليس جزءاً
+          من Phase 2 نفسه**، بَگ حقيقي في النظام الشغّال اليوم: `InventoryService.release()` مُستدعاة
+          فقط من مسار تعويض فشل Checkout (`orders.service.ts` catch block)، بلا أي استدعاء مكافئ عند
+          `transitionStatus` نحو `cancelled` لطلب موجود بالفعل نجح Checkout الخاص به. الأثر: أي إلغاء
+          حقيقي (تاجر/إدارة) يترك مخزونه محجوزاً للأبد بصمت، بلا أي مؤشر خطأ ظاهر — لا يعود متاحاً
+          للبيع. بحث شامل (`grep`) عن كل مسارات استدعاء `InventoryService`/`InventoryRepository` في
+          المشروع أكَّد أن هذه فعلاً الفجوة الوحيدة (المستدعيان الوحيدان لـ`release`/`restore` قبل
+          هذه المهمة: `catalogService.setStockForImport` — استبدال كامل غير ذي علاقة — ومسار تعويض
+          Checkout المذكور).
+Alternatives: (أ) **قفل في-الذاكرة (single-flight) لمنع إلغاء مزدوج**، بنفس نمط `inFlightCheckouts`
+          (`ADR-022` بند أ) — مرفوض: لا ينجو من تعدد نسخ الخادم (نفس قيد `DD-002` الموروث)، بخلاف
+          قفل تفاؤلي على مستوى قاعدة البيانات نفسها الذي يعمل بصرف النظر عن عدد النسخ. اختير القفل
+          التفاؤلي تحديداً لأنه **يعمم** المستوى الذي تعمل عليه `decrementIfAvailable` أصلاً (`ADR-022`
+          بند ب) على `orders.status`، لا يخفض المستوى.
+          (ب) **الاحتفاظ بـ`maxAttempts=3` في `restore()` (نفس `decrementIfAvailable`)** — مرفوض
+          بدليل حي مباشر: اختبار تزامن حقيقي بـ5 استدعاءات `restore()` متزامنة فعلياً لنفس المنتج فشل
+          فعلياً بعد استنفاد 3 محاولات ("فشل استرجاع المخزون... بعد 3 محاولات تحت تزاحم شديد").
+          خلافاً لـ`decrementIfAvailable` (حيث فشل بعد المحاولات = "رفض بيع"، نتيجة آمنة ومقصودة)،
+          فشل `restore()` بعد المحاولات يعني فقدان استرجاع مخزون مستحق فعلياً — رُفع الحد إلى 8 (إعادة
+          المحاولة رخيصة: قراءة/كتابة صف واحد فقط، لا خطر حقيقي من رفعه).
+          (ج) **الاحتفاظ بشكل `restore()` الحالي بلا قفل تفاؤلي**، معتمداً على أن Checkout compensation
+          هو المستدعي الوحيد الفعلي — مرفوض: هذه المهمة بذاتها تضيف مستدعياً ثانياً حقيقياً
+          (الإلغاء)، فينكسر الافتراض الذي بُني عليه غياب القفل أصلاً؛ عدم الإصلاح كان سيترك Lost
+          Update حقيقياً موثَّقاً حياً (سكربت تحقق منفصل: 10 استدعاءات متزامنة بلا قفل أفقدت 9 من أصل
+          10 تحديثات فعلياً — 101 بدل 110 متوقَّعة).
+Consequences: **INV-INV-003 جديد** أُضيف في `INVARIANTS.md` (ENFORCED مباشرة، Guardian DEEP —
+          Inventory Concurrency). توقيع `OrdersRepository.updateOrderStatus` تغيَّر (معامل
+          `fromStatus` إلزامي جديد، يعيد `Order | null` بدل `Order`) — **تغيير حالة يُعلَن صراحة هنا**
+          (`AGENTS.md §13`؛ يمس كل مستدعٍ لهذه الدالة، مستدعٍ واحد فقط حالياً: `transitionStatus`).
+          توقيع `InventoryRepository.restore` لم يتغيّر خارجياً (بارامتر `maxAttempts` اختياري كان
+          موجوداً بالفعل في `decrementIfAvailable`، أُضيف بنفس الاسم هنا بقيمة افتراضية مختلفة، بلا
+          كسر أي مستدعٍ حالي). **حادثة عرضية أثناء تصميم اختبار Lost Update، مُسجَّلة بلا إخفاء (نفس
+          منهج `ADR-022` مع حادثة تسرُّب صف اختبار مشابهة):** سكربت تحقق مستقل أول (لإثبات وجود سباق
+          Lost Update فعلياً قبل الإصلاح) استخدم أول صف من جدول `products` الحي بدل منتج اختبار
+          مخصَّص، فعدَّل فعلياً `quantity_available` للمنتج المرجعي المشترك "دجاجة كاملة طازجة"
+          (`d2d296a8-b801-462d-9fce-17a5a17070b5`) من قيمته الأصلية (10، موثَّقة كخط أساس متعدد
+          الملفات، `DD-011`) إلى 100 ثم 101 عبر السباق نفسه — اكتُشف فوراً، أُعيد الصف صراحة إلى
+          `quantity_available=10` بنفس `updated_at` الأصلي، ولم يُعتمَد على هذا المنتج المشترك في أي
+          اختبار لاحق (كل اختبارات TASK-08 النهائية تستخدم `productId` مخصَّصاً لوصفها الخاص، يُنظَّف
+          كاملاً في `afterAll`، بنفس نمط `DD-011` القائم).
+Related Documents: ADR-022 (السابقة المباشرة — نفس نمط القفل التفاؤلي، نفس فلسفة التعويض التطبيقي
+          بلا معاملة ذرّية كاملة)، AGENTS.md §13 (No Silent State Change)، §17 (Guardian Matrix →
+          Inventory Concurrency = DEEP)، INVARIANTS.md → INV-INV-001 (نظير مباشر)، INV-INV-003
+          (جديد)، DD-011 (docs/DECISIONS.md، سابقة منتج اختبار مخصَّص لتفادي تعارض بيانات مشتركة)،
+          src/core/modules/orders/{orders.service.ts,orders.repository.ts,orders.service.test.ts,
+          orders.integration.test.ts}، src/core/modules/inventory/{inventory.repository.ts,
+          inventory.service.ts}
+```
+
+---
+
+## ADR-033
+```
+Title: TASK-13 — Checkout متعدد التجار الفعلي: استبدال رفض ADR-009 بتقسيم حقيقي حسب tenant_id،
+          إعادة توجيه كل دوال Orders لجداول TASK-12، إلزامية سبب الإلغاء، وافتراض settlement_model
+Status: ACCEPTED — طُبِّق ومُتحقَّق منه حياً (كود + 226 اختبار وحدة + 57 اختبار تكامل، بما فيها
+          دليل Regression مباشر لكل سيناريو إطلاق: تاجران، ثلاثة تجار من فئات مختلفة، فشل ذرّي أثناء
+          الإنشاء مع تعويض كامل)
+Date: 2026-09-15
+Decision: (أ) `OrdersService.checkout()` (`orders.service.ts`) لم يعد يرفض سلة بأكثر من `tenant_id`
+          واحد (`ADR-009`، مُستبدَل هنا حرفياً) — يجمّع بنود السلة حسب `tenant_id`، وينشئ صفاً واحداً
+          في `customer_orders` + صفاً واحداً في `merchant_suborders` لكل مجموعة تاجر (+
+          `merchant_suborder_items`/`merchant_suborder_status_history` لكل منها)، عبر مستودع جديد
+          `customerOrder.repository.ts` (لا تعديل على `orders.repository.ts` القديم — Create-only،
+          صفر لمس على `orders`/`order_items`/`order_status_history`).
+          (ب) **كل دالة أخرى في `OrdersService`** (`transitionStatus`، `getOrderWithItems`،
+          `getStatusHistory`، `getOrdersForTenant`، `getAllOrders`، `getOrderForCustomerView`،
+          `getRecentStatusHistory`) أُعيد توجيهها لنفس الجداول الجديدة — قرار مؤسس صريح (لا
+          "Write Path فقط" كما اقترح الموجِّه الأصلي؛ الأثر البديل كان يترك بوابتي التاجر/الإدارة
+          عمياوين تماماً عن أي طلب بعد هذه المهمة). `merchant_suborders` بديل Drop-in حرفي لصف
+          `orders` (يطابق §2.2 من `specs/orders/PHASE_2_DOMAIN_DESIGN.md`) — العقد الخارجي
+          (`Order`/`OrderItem`/`OrderStatusHistoryEntry` في `types.ts`) لم يتغيّر شكلاً، فقط أُضيف
+          حقل اختياري جديد `Order.customerOrderId`؛ لا حاجة لمس أي `page.tsx`/Server Action مستهلك
+          (`merchant/orders`، `admin/dashboard`، `/order/[id]`، `checkout/actions.ts`) — توافق خلفي
+          تام للسلة أحادية التاجر (الحالة الشائعة اليوم، ~100% من الطلبات الحالية).
+          (ج) **`merchants.default_settlement_model = NULL`** (وضع كل التجار الحاليين فعلياً بعد
+          `TASK-12`، عمود جديد `nullable`) → `checkout()` يفترض `'reef_collected'` صراحة بدل رفض
+          Checkout أو قيمة عشوائية أخرى — قرار مؤسس مباشر (2026-09-15)، يطابق الوضع التشغيلي الحالي
+          (ريف تجمّع التحصيل يدوياً عبر مكاتبها). `Merchant.defaultSettlementModel` أُضيف اختيارياً
+          إلى `merchant/types.ts`/`merchant.repository.ts` لدعم هذا فقط.
+          (د) **إصلاح فجوة اكتُشفت أثناء إعادة التوجيه، غير موصوفة في `PHASE_2_DOMAIN_DESIGN.md`**:
+          `merchant_suborder_status_history` يفرض `CHECK (to_status <> 'cancelled' OR note IS NOT
+          NULL)` (قيد جديد لم يكن على `order_status_history` القديم، `TASK-12`) — لو تُرك للقيد
+          وحده، `transitionStatus` كان يُحدِّث حالة الـ`suborder` إلى `cancelled` فعلياً (سطر منفصل
+          سابق) ثم يفشل عند إدراج سجل التاريخ بخطأ DB خام، تاركاً الطلب "ملغياً" فعلياً بلا أي سجل
+          يوثّق السبب/الفاعل وبلا استرجاع مخزون (الكود يتوقف عند الاستثناء قبل الوصول لذلك السطر) —
+          حالة غير متسقة تماماً. أُضيف فحص صريح في `transitionStatus` (`toStatus==='cancelled' &&
+          !note` → رفض فوري قبل أي كتابة DB)، يطابق فلسفة "فشل صريح لا نجاح صامت" القائمة أصلاً.
+          (هـ) `delivery_fee_snapshot` = صفر مؤقت دائماً (`TODO` صريح في الكود) — لا خوارزمية حساب
+          فعلية مبنية بعد (خارج نطاق TASK-13 صراحة، `PHASE_2_DOMAIN_DESIGN.md §5/§9`)؛ جدول
+          `delivery_quotes` (من `TASK-12`) يبقى بلا أي صف حتى تُبنى تلك المهمة المستقبلية.
+Context: `specs/orders/PHASE_2_DOMAIN_DESIGN.md` (`APPROVED`، 2026-09-15) صمَّم الجداول العشرة
+          (`TASK-12`، نُفِّذت فعلياً على `salsabil-core` dev — تحقَّق منها المؤسس صراحة عند بدء هذه
+          المهمة) لكنه ترك عمداً "تفصيلاً تنفيذياً لـTASK-13" ثلاث نقاط حاسمة لم تُحسَم إلا هنا: (1)
+          هل تُعاد بقية دوال `OrdersService` لقراءة/كتابة الجداول الجديدة أم تبقى فقط تقرأ القديم؟ —
+          حُسمت بند (ب) أعلاه. (2) ما سلوك `checkout()` لتاجر بلا `default_settlement_model` محدَّد
+          — حُسمت بند (ج). (3) مصير رابط `/order/[id]` — لم يتغيّر: يبقى مفتاحه `merchant_suborder.id`
+          (كان `orders.id`)، تماماً كأي `Order` آخر — لا حاجة لحسم "أزدواجية" لأن التوافق الخلفي
+          الكامل (بند ب) يجعل السؤال غير ذي موضوع للسلة أحادية التاجر؛ يبقى مفتوحاً فقط لعرض تجميع
+          متعدد التجار بصرياً للعميل (`TASK-16`، غير مبني هنا عمداً).
+Alternatives: (أ) الإبقاء على `orders.service.ts` يقرأ فقط من `orders` القديم لكل شيء عدا
+          `checkout()` نفسه (تفسير حرفي لـ"نطاق هذه المهمة الإنشاء لا العرض" في موجّه المهمة) — رُفض
+          صراحة من المؤسس: كان يعني أن بوابتي التاجر/الإدارة (`merchant/orders`, `admin/dashboard`)
+          لا تريان أي طلب جديد إطلاقاً بعد نشر هذه المهمة — انحداراً وظيفياً حقيقياً على عمل التاجر
+          اليومي، لا مجرد نقص عرض بصري مؤجَّل.
+          (ب) رفض Checkout صراحة لأي تاجر بلا `default_settlement_model` محدَّد (بدل الافتراض) —
+          رُفض: كان سيُعطِّل Checkout فعلياً لكل الـ~70 تاجراً الحاليين فوراً عند النشر (كلهم `NULL`
+          اليوم)، بلا أي فائدة تعويضية حقيقية الآن.
+          (ج) الاعتماد على قيد `merchant_suborder_status_history` وحده لفرض إلزامية `note` (بلا فحص
+          تطبيقي) — رُفض: يترك حالة غير متسقة فعلية (حالة `cancelled` بلا سجل ولا استرجاع مخزون) كما
+          وُصف في بند (د) أعلاه، بعكس فلسفة "فشل صريح قبل أي أثر جانبي" المتَّبعة في كل مسارات
+          Checkout/الانتقال الأخرى.
+Consequences: **تغيير حالة يُعلَن صراحة هنا (`AGENTS.md §13`)** — العقد الخارجي لـ`transitionStatus`
+          الآن يرفض أي `toStatus:'cancelled'` بلا `note` (كان مقبولاً بلا `note` سابقاً ضد
+          `order_status_history` القديم؛ أي مستدعٍ حالي — `merchant/orders/actions.ts`،
+          `admin/dashboard/actions.ts` — يمرّر `note` اختيارياً من واجهة موجودة أصلاً، لا يحتاج
+          تعديلاً). `getMostOrderedProductIds` (توصية "غالباً ما يُشترى معه") تبقى الوحيدة المتَّصلة
+          بـ`orders.repository.ts` القديم — ستُصبح تدريجياً مبنية على بيانات مجمَّدة من قبل هذا
+          التحوّل فقط (`order_items` يتوقف عن استقبال صفوف جديدة) — ميزة غير حرجة، لا تصحيح فوري
+          مطلوب، تحتاج إعادة بناء على `merchant_suborder_items` في مهمة منفصلة لاحقة إن استمر
+          استخدامها. جدول `delivery_quotes` يبقى فارغاً بالكامل حتى بناء حساب فعلي لرسوم التوصيل
+          (مهمة مستقبلية منفصلة). واجهة العميل لا تعرض بعد تجميع الطلب متعدد التجار بصرياً (تبقى
+          مهمة `TASK-16` كما خُطِّط أصلاً) — العميل يرى فعلياً نصيب أول تاجر في طلبه فقط عبر
+          `/order/[id]` الحالي لو كانت سلته متعددة التجار (حالة نادرة اليوم، الوضع الافتراضي لا يزال
+          سلة تاجر واحد تعمل بلا أي تغيير ظاهري).
+Related Documents: ADR-009 (القرار المُستبدَل)، ADR-010 (آلة الحالات المُعاد استخدامها حرفياً)،
+          specs/orders/PHASE_2_DOMAIN_DESIGN.md (التصميم المعتمَد الكامل)، AGENTS.md §13 (No Silent
+          State Change)، §17 (Guardian Matrix → Orders State Machine/Financial Logic = DEEP)،
+          scripts/2026-09-15-phase-2-multi-merchant-schema.sql (TASK-12، الجداول العشرة)،
+          src/core/modules/orders/{orders.service.ts,customerOrder.repository.ts,types.ts,
+          orders.service.test.ts,orders.integration.test.ts}،
+          src/core/modules/merchant/{types.ts,merchant.repository.ts}،
+          src/core/e2e/reef-city-journey.integration.test.ts،
+          src/core/modules/admin/admin.integration.test.ts
+```
+
+---
+
 ## سجل التعارضات (CONFLICT LOG)
 
 ### CONFLICT-001
@@ -2306,6 +2574,125 @@ Status: RESOLVED
 Blocking: NO
 Related: src/core/modules/catalog/types.ts، src/config/product-page-blocks-registry.ts،
           src/components/ProductOptions.tsx، ADR-024 (نفس مبدأ "لا بناء استباقي بلا استخدام حقيقي")
+```
+
+### DD-017
+```
+Decision: هل يُضاف Dedup صريح لمعرّفات الإضافات (`selection.addonIds`) داخل
+          `CatalogService.calculatePrice`/`validateSelection` (catalog.service.ts)، أم يُعتمَد التكرار
+          الحالي كسلوك مقصود (يسمح للعميل بكمية مضاعفة من نفس الإضافة)؟
+Reason: اكتُشِف أثناء TASK-06 (اختبارات وحدة جديدة لـcalculatePrice/validateSelection، راجع
+          catalog.service.test.ts) أن `calculatePrice` تجمع `priceModifier` لكل تكرار `addonId` في
+          `selection.addonIds` بلا أي فحص تكرار — مثال: نفس الإضافة مُرسَلة مرتين تُحسَب مرتين (ضعف
+          السعر). `validateSelection` لا ترفض هذا التكرار أيضاً طالما كل id صالح فردياً على حدة. لا
+          واجهة مستخدم حالية تُنتِج IDs إضافات مكررة عمداً (تحقَّق منه أثناء TASK-06) — فلا مسار استغلال
+          حي معروف اليوم.
+Risk: غير واضح إن كان هذا سلوكاً مقصوداً (تكرار الـid = طلب كمية مضاعفة من الإضافة) أو ثغرة مدخلات عميل
+          تحتاج Dedup من جهة الخادم لمنع تلاعب عميل خبيث بإرسال IDs مكررة يدوياً عبر طلب مُعدَّل. الخطر
+          يتصاعد إن أُضيف مستقبلاً أي مسار واجهة (مثل مُحدِّد كمية لكل إضافة) قد يُنتِج IDs مكررة دون
+          قصد المستخدم فعلياً، لا عبر تلاعب متعمَّد فقط.
+Owner: Engineering
+Created: 2026-09-14
+Review by: قبل تفعيل أي مسار واجهة قد يُنتِج IDs إضافات مكررة (مثل مُحدِّد كمية لكل إضافة)، أو قبل توسيع
+          محرك الإضافات لأي حي جديد يعتمد على إضافات متعددة الكمية
+Blocking: NO — لا مسار استغلال حي معروف اليوم، ولا واجهة تُنتِج تكراراً فعلياً
+Status: OPEN
+Related: src/core/modules/catalog/catalog.service.ts (calculatePrice/validateSelection)،
+          src/core/modules/catalog/catalog.service.test.ts (TASK-06)،
+          docs/audits/2026-09-14-reef-v1-engineering-audit.md،
+          specs/orders/REEF_V1_MASTER_EXECUTION_PLAN.md → TASK-06، DD-004 (اختبارات الوحدة التي كشفت هذا)
+```
+
+### DD-018
+```
+Decision: لا قرار معلَّق — توثيق واقعة تكليف مكتملة، نفس نمط DD-007/DD-009 بالضبط (السجل المستقل المطلوب
+          وفق docs/DOCUMENTATION_RULES.md §5.1 شرط 4). بتاريخ 2026-09-15، ضمن مهمة توثيق منفصلة
+          (`TASK-10 (docs)`)، اقتُرحت صياغة بند دستوري جديد (§4 بند 9: "لا مسؤولية مالية أو ملكية فعلية
+          على سلسبيل") كنص جاهز في تقرير المهمة فقط، بانتظار اعتماد المؤسس صراحةً قبل أي تطبيق فعلي على
+          SALSABIL_CONSTITUTION.md — لم يُطبَّق شيء وقتها. لاحقاً، في نفس اليوم، كلَّف المؤسس صراحة
+          ("موافق على البند 9 كما اقترحته، بلا تعديل. نفّذه فعليًا الآن على SALSABIL_CONSTITUTION.md")
+          بتنفيذ الصياغة المقترَحة حرفياً بلا أي تغيير، مع رفع رقم النسخة وتحديث last_verified وسجل
+          الإصدارات.
+Reason: هذا السجل هو الأثر المستقل الذي يثبت أن إضافة §4 بند 9 لـSALSABIL_CONSTITUTION.md (v1.5) جاءت
+          بتفويض حقيقي من المؤسس على صياغة اقترحها الوكيل مسبقاً ولم يُطبِّقها إلا بعد الموافقة الصريحة —
+          لا باجتهاد ذاتي بتطبيق مبدأ دستوري بلا تكليف. نفس المنطق المُطبَّق حرفياً في DD-007 (v1.3)
+          وDD-009 (v1.4) للسوابق المماثلة.
+Risk: بلا هذا السجل، الإضافة لـSALSABIL_CONSTITUTION.md كانت ستعتمد فقط على الملاحظة التنفيذية داخل
+          الملف نفسه كدليل — وهو تحديداً نوع الادعاء غير المستقل الذي يمنعه الشرط الرابع في
+          docs/DOCUMENTATION_RULES.md §5.1 (نفس السبب الذي أنشأ DD-007/DD-009 أصلاً).
+Owner: Founder
+Created: 2026-09-15
+Review by: N/A — سجل توثيقي مكتمل بذاته
+Blocking: NO
+Status: RESOLVED — بمجرد كتابة هذا السجل نفسه، مطابقاً للشرط الرابع في docs/DOCUMENTATION_RULES.md §5.1.
+Related: SALSABIL_CONSTITUTION.md §4 بند 9 (v1.5)، docs/DIWAN_VISION.md → Addendum 8، DD-007/DD-009
+          (السوابق المطابقة)، docs/DOCUMENTATION_RULES.md §5.1
+```
+
+### DD-019
+```
+Decision: هل يُعتمَد تصميم specs/orders/SUPPLY_RESOLUTION_ENGINE_DESIGN.md (كان
+          PHASE_3_SUPPLY_RESOLUTION_DESIGN.md — أُعيدت تسميته ضمن هذا الاعتماد، راجع Status أدناه)
+          — مكتبة منتجات مشتركة موسَّعة فوق ADR-031 القائم، محرك حل توريد جديد (Supply Resolution
+          Engine)، إنفاذ حد أدنى لهامش ريف (قسم + استثناء منتج + افتراضي عالمي)، تدفق مراجعة مزدوج
+          (Full/Lightweight Review) مع مطابقة بالباركود أولاً، وجدول catalog_content_review_queue
+          منفصل — كوثيقة تصميم معتمَدة (لا كنطاق تنفيذ رسمي تلقائي — تنفيذ V1 يبقى Task منفصلة تماماً،
+          بنفس نمط TASK-12 بعد اعتماد PHASE_2_DOMAIN_DESIGN.md)؟
+Reason: DESIGN-TASK-01 (مهمة توثيق/تصميم بحتة، صفر كود/SQL تنفيذي، صفر تعديل على Checkout/Orders/Cart)
+          كُلِّفت بمراجعة مسودة مفاهيمية غير متوفرة فعلياً في المستودع (بحث كامل في الريبو أثبت غيابها؛
+          المؤسس أكَّد صراحة المتابعة بدونها) والتحقق حياً من شكل الكود الفعلي قبل كتابة أي تصميم. التحقق
+          الحي كشف نظاماً كاملاً غير مذكور في موجّه المهمة — `ADR-031` (`catalog_master_items`/
+          `products.master_item_id`/`catalog_review_queue`، حي فعلياً منذ 2026-09-13، commit `1c62fd9`)
+          — غيّر جوهر التصميم من "بناء مكتبة منتجات من الصفر" إلى "توسعة فوق نظام قائم بالفعل". جلسة
+          مراجعة تالية مع المؤسس كشفت تناقضاً داخلياً حقيقياً في §4.2/§4.3 من نسخة التصميم الأولى (مطابقة
+          الباركود وُصفت كأنها تلقائية بالكامل، وفي نفس الوقت كمُفعِّل لمراجعة بشرية — تناقض منطقي)، صُحِّح
+          بفصل "ربط الهوية" (§4.3، تلقائي بالكامل بلا أي بوابة بشرية أياً كان مصدر المطابقة: باركود أو
+          اسم مُطبَّع) عن "مراجعة المحتوى" (§4.2، بوابة بشرية دائمة بلا استثناء لأي محتوى إثراء مقترَح،
+          بصرف النظر عن مسار حسم الهوية) كخطوتين مستقلتين تماماً. هذا التصحيح كشف بدوره فجوة Schema
+          حقيقية (لا جدول يحمل طلب مراجعة محتوى معلَّق) — حُسمت بجدول جديد منفصل تماماً
+          `catalog_content_review_queue` (§4.4/§14)، لا توسعة لـ`catalog_review_queue` القائم، لاختلاف
+          دورتي الحياة جوهرياً (طابور مطابقة استيراد بلا هوية مقابل طابور مراجعة محتوى لهوية محسومة
+          بالفعل).
+Risk: لا خطر تشغيلي فوري — هذا سجل تصميم، لا كود منفَّذ ولا Migration مُطبَّقة على أي بيئة حتى بعد هذا
+          الاعتماد (اعتماد التصميم ≠ إذن تنفيذ، راجع Status أدناه). المخاطر المتبقية بعد اعتماد المؤسس
+          الصريح على القرارات الأربعة (§24.4.1 من الوثيقة): (أ) **مُغلَقة الآن** — علاقة الهامش بجدول
+          العمولات (`SALSABIL_CONSTITUTION.md §19`) محسومة صراحة: منفصلان تماماً، بلا علاقة حسابية؛
+          (ب) **مقبولة صراحة كنتيجة للمسار المعتمَد** — محرك حل التوريد يبقى جاهزاً تصميماً بلا مادة
+          عملية يعمل عليها طالما 7,506 من 7,556 منتجاً (99.3%) بلا `tenant_id` فعلي
+          (`docs/audits/2026-09-19-task-18-catalog-storefront-report.md §5`) — المؤسس اعتمد هذا صراحة
+          كمسار متعمَّد (لا حل مؤقت، لا بيانات وهمية)، لا مخاطرة غير مقصودة؛ (ج) **لا تزال قائمة، غير
+          مُعالَجة في هذا الاعتماد** — `catalog_master_items.category_id` (قديم) مقابل
+          `catalog_category_id` (جديد، مقترَح) — لو لم يُضَف العمود الجديد فعلياً قبل تفعيل إنفاذ
+          الهامش عند التنفيذ، الميزة عديمة الأثر عملياً.
+Owner: Founder
+Created: 2026-09-19
+Review by: قبل أي تكليف Task تنفيذ منفصل يُطبِّق أياً من هذا التصميم على كود/Schema حي (نفس بوابة
+          TASK-12 بعد اعتماد PHASE_2_DOMAIN_DESIGN.md — هذا الاعتماد نفسه لا يُشكِّل ذلك التكليف)
+Blocking: NO — التصميم معتمَد؛ تنفيذه (Task V1) يبقى بانتظار تكليف صريح منفصل تماماً عن هذا الاعتماد،
+          بلا اعتماد تلقائي للتنفيذ بمجرد اعتماد التصميم
+Status: APPROVED — اعتمده المؤسس بتاريخ 2026-09-19، بعد حسم أربعة من الأسئلة المفتوحة الخمسة المسجَّلة
+          أصلاً في §24.4 من الوثيقة (البند الخامس، `open_marketplace_v5`، يبقى مؤجَّلاً صراحة حتى حسم
+          `BR-017` — لا منسياً). **القرارات الأربعة المعتمَدة حرفياً:** (1) الحد الأدنى لهامش ريف
+          **منفصل تماماً** عن جدول العمولات (`CONSTITUTION §19`) — بلا علاقة حسابية بينهما، كل منهما
+          يخدم غرضه الأصلي بمعزل عن الآخر؛ (2) القيمة الافتراضية العالمية للهامش الأدنى = **5% من
+          `base_price`**، `Configuration` قابلة للتعديل من لوحة إدارة مستقبلية (لا `Invariant` مبرمجة
+          بصلابة، مطابق لـ`SALSABIL_CONSTITUTION.md §4` بند 7) — النظام لم يعد `Fail Open`؛ (3) مصير
+          الـ7,506 منتج بلا تاجر — **تُعتمَد التوصية الأصلية في §20 حرفياً**: تبقى في المكتبة المشتركة
+          بلا عروض توريد فعلية، غير قابلة للشراء حتى يضيف تاجر حقيقي عرض توريد حقيقياً عليها، بلا حل
+          مؤقت أو بيانات وهمية؛ (4) إعادة تسمية الملف — **منفَّذة فعلياً**: `specs/orders/
+          PHASE_3_SUPPLY_RESOLUTION_DESIGN.md` → `specs/orders/SUPPLY_RESOLUTION_ENGINE_DESIGN.md`
+          (`git mv`، تاريخ الملف محفوظ)، كل إشارة داخلية لـ"Phase 3" صُحِّحت. **⚠️ هذا الاعتماد للتصميم
+          كتوثيق فقط — لا يُشكِّل إذناً ببدء أي تنفيذ**؛ أي Task تنفيذ V1 يحتاج برومبت منفصل صريح لاحقاً.
+Related: specs/orders/SUPPLY_RESOLUTION_ENGINE_DESIGN.md (الوثيقة كاملة، معتمَدة الآن — خصوصاً §0 ملخص
+          التحقق الحي، §1.1/§1.2 تعارض `ADR-031`، §3.2/§3.3 التصميم النهائي للهامش بعد قرارات المؤسس،
+          §4.2/§4.3 تصحيح فصل مراجعة المحتوى عن مطابقة الهوية، §4.4/§14 `catalog_content_review_queue`،
+          §24.4.1/§24.4.2 القرارات الأربعة والبند المتبقي مفتوحاً)، `ADR-031` (النظام القائم الذي
+          يُبنى هذا التصميم فوقه دون تعديله)، `PHASE_2_DOMAIN_DESIGN.md` (النمط/الصرامة المرجعية
+          المُتَّبعة)، `docs/audits/2026-09-19-task-18-catalog-storefront-report.md`،
+          `docs/audits/2026-09-19-launch-readiness-report.md`، `docs/BUSINESS_RULES.md` → `BR-017`،
+          `SALSABIL_CONSTITUTION.md §19`، `DD-002` (يبقى قيداً منفصلاً تماماً، غير مرتبط بهذا التصميم)،
+          `DD-004` (نفس فئة فجوة غياب اختبار وحدة لمنطق master-item/مطابقة، تمتد لهذا التصميم إن نُفِّذ
+          لاحقاً)
 ```
 
 ---

@@ -1,5 +1,5 @@
 'use client';
-// صف عنصر كتالوج أساسي — تعديل سعر البيع فقط (المالك وحده يقرره، CATALOG-IMPORT-WORKFLOW، ADR-025).
+// صف عنصر كتالوج أساسي — تعديل سعر البيع فقط (المالك وحده يقرره، CATALOG-IMPORT-WORKFLOW، ADR-031).
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';

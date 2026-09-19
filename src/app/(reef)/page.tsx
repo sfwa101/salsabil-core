@@ -1,11 +1,16 @@
 import { Suspense } from 'react';
 import { catalogService } from '@/core/modules/catalog/catalog.service';
+import type { Category, District } from '@/core/modules/catalog/types';
+import type { CartSummary } from '@/core/modules/cart/types';
 import { StoryBar } from '@/components/StoryBar';
-import { FeedTabBar } from '@/components/FeedTabBar';
-import { ScrollHideBar } from '@/components/ScrollHideBar';
 import { Feed } from '@/components/Feed';
+import { DesktopCategorySidebar } from '@/components/storefront/DesktopCategorySidebar';
+import { DesktopCartSidebar } from '@/components/storefront/DesktopCartSidebar';
+import { CartLoadErrorPanel } from '@/components/storefront/CartLoadErrorPanel';
 import { loadFeedPageAction } from './feed-actions';
+import { getCartSummaryAction } from '@/app/(reef)/cart/actions';
 import { FEED_TAB_KEYS, getPostTypesForTab, type FeedTabKey } from '@/config/content-type-registry';
+import { MobileStorefront } from '@/components/storefront/MobileStorefront';
 
 function parseFeedTab(tab: string | undefined): FeedTabKey {
   return FEED_TAB_KEYS.includes(tab as FeedTabKey) ? (tab as FeedTabKey) : 'all';
@@ -16,44 +21,100 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const feedTab = parseFeedTab(tab);
   const postTypes = getPostTypesForTab(feedTab);
 
-  const [categories, firstPage] = await Promise.all([
-    catalogService.listCategories(),
-    loadFeedPageAction({ postTypes, offset: 0 }),
+  // TASK-18: مصدران منفصلان عمداً — districts (كتالوج catalog_districts الحقيقي، تصفح الأحياء عبر
+  // StoryBar/DesktopCategorySidebar) وcategories (جدول categories القديم، يبقى فقط لتصنيف المنشورات
+  // نفسها داخل MobileStorefront — راجع تعليق الملف هناك).
+  let districts: District[] = [];
+  let categories: Category[] = [];
+  let firstPage: any = { posts: [], hasMore: false, products: [] };
+  let cartSummary: CartSummary | null = null;
+  let cartLoadFailed = false;
+
+  // فشل جلب السلة يُعالَج بمعزل عن فشل الكتالوج/الخلاصة (Promise.allSettled لا try/catch مشترك) —
+  // بدون هذا الفصل لا سبيل للتمييز بين "السلة فارغة فعلياً" و"فشل جلبها" (كلاهما كانا يسقطان معاً في
+  // نفس catch واحد، فتُعرَض كأنها فارغة دائماً). راجع TASK-03.
+  const [catalogFeedResult, cartResult] = await Promise.allSettled([
+    Promise.all([catalogService.getDistricts(), catalogService.listCategories(), loadFeedPageAction({ postTypes, offset: 0 })]),
+    getCartSummaryAction(),
   ]);
-  const activeCategories = categories.filter((c) => c.isActive);
+
+  if (catalogFeedResult.status === 'fulfilled') {
+    districts = catalogFeedResult.value[0] || [];
+    categories = catalogFeedResult.value[1] || [];
+    firstPage = catalogFeedResult.value[2] || { posts: [], hasMore: false, products: [] };
+  } else {
+    console.error('Failed to load storefront data:', catalogFeedResult.reason);
+  }
+
+  if (cartResult.status === 'fulfilled') {
+    cartSummary = cartResult.value || null;
+  } else {
+    console.error('Failed to load cart summary:', cartResult.reason);
+    cartLoadFailed = true;
+  }
 
   return (
-    <>
-      {/* FULL-VISUAL-PARITY-AUDIT-AND-FIX (بند 1ج): StoryBar لم يعد داخل أي ScrollHideBar — تدفق
-          محتوى عادي (Scrollable)، يختفي مع التمرير للأسفل مثل أي محتوى، ويحتاج المستخدم للتمرير
-          لأعلى ليصل إليه مجدداً (قرار مؤسس صريح، لا يشارك حركة الهيدر/التبويبات). */}
-      <div className="border-b border-border bg-card px-4 py-3">
-        <div className="mx-auto max-w-2xl md:max-w-4xl xl:max-w-6xl">
-          <StoryBar categories={activeCategories} />
+    <div className="bg-background min-h-screen w-full max-w-full overflow-x-hidden">
+      <div className="mx-auto max-w-[1340px] w-full lg:max-w-full lg:h-[calc(100vh-3.5rem)] lg:overflow-hidden flex flex-col lg:flex-row justify-between lg:gap-4 p-0 lg:px-4 lg:py-0">
+        
+        {/* Right Sidebar (Desktop only) */}
+        <div className="hidden lg:block w-64 shrink-0 h-full overflow-y-auto lg:py-4">
+          <DesktopCategorySidebar districts={districts} />
         </div>
+
+        {/* Center Column (Feed - Desktop Only) */}
+        <main className="hidden lg:flex flex-1 min-w-0 h-full overflow-y-auto px-2 py-4 flex-col gap-6">
+          {/* Story Bar */}
+          <div className="bg-card rounded-2xl shadow-[var(--sb-shadow-soft)] p-4 border border-border/50">
+            <StoryBar districts={districts} />
+          </div>
+
+          {/* Section Title */}
+          <h2 className="text-xl font-bold text-foreground px-2">
+            طازج اليوم
+          </h2>
+
+          <Feed
+            initialPosts={firstPage?.posts || []}
+            initialHasMore={firstPage?.hasMore || false}
+            initialProducts={firstPage?.products || []}
+            postTypes={postTypes}
+          />
+        </main>
+
+        {/* Mobile View (Isolated) */}
+        <div className="block lg:hidden w-full">
+          <MobileStorefront
+            feedTab={feedTab}
+            districts={districts}
+            categories={categories}
+            products={firstPage?.products || []}
+            posts={firstPage?.posts || []}
+            hasMorePosts={firstPage?.hasMore || false}
+            cartLines={cartSummary?.lines || []}
+          />
+        </div>
+
+        {/* Left Sidebar (Desktop only) */}
+        <div className="hidden lg:block h-full">
+          {cartLoadFailed ? (
+            <CartLoadErrorPanel />
+          ) : (
+            <DesktopCartSidebar
+              items={cartSummary?.lines?.map((line: any) => ({
+                id: line.product.id,
+                itemId: line.item.id,
+                name: line.product.name,
+                price: line.unitPrice,
+                quantity: line.item.quantity,
+                imageUrl: line.product.imageUrl || undefined
+              })) || []}
+              total={cartSummary?.total || 0}
+            />
+          )}
+        </div>
+
       </div>
-
-      {/* FeedTabBar وحده: mode="reposition" — لا يختفي أبداً، يلتصق top:0 حين يكون Header مخفياً
-          بالتمرير للأسفل، ويرتد أسفل Header (--header-height المنشورة من Header.tsx) حين يظهر
-          بالتمرير للأعلى. راجع تعليق ScrollHideBar.tsx للتفصيل الكامل. */}
-      <ScrollHideBar mode="reposition" topOffset="var(--header-height, 0px)">
-        <Suspense fallback={null}>
-          <FeedTabBar />
-        </Suspense>
-      </ScrollHideBar>
-
-      {/* اليوم 27 (BAYAN-HOME-FEED-001) — الخلاصة الفعلية تستبدل قائمة الأقسام (CategoryCard) التي
-          كانت هنا سابقاً؛ تصفّح الأحياء أصبح عبر StoryBar أعلاه. اليوم 31: مقياس العرض الموحَّد
-          (max-w-2xl/md:max-w-4xl/xl:max-w-6xl) — يطابق Header/FeedTabBar تماماً حتى لا يبدو أي منها
-          أضيق/أوسع من الآخر عند md/xl. */}
-      <main className="mx-auto max-w-2xl md:max-w-4xl xl:max-w-6xl">
-        <Feed
-          initialPosts={firstPage.posts}
-          initialHasMore={firstPage.hasMore}
-          initialProducts={firstPage.products}
-          postTypes={postTypes}
-        />
-      </main>
-    </>
+    </div>
   );
 }

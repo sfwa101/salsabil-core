@@ -1,5 +1,5 @@
 'use client';
-// رفع ملف Excel لاستيراد الكمية/التكلفة الخاصة بالتاجر (CATALOG-IMPORT-WORKFLOW، ADR-025).
+// رفع ملف Excel لاستيراد الكمية/التكلفة الخاصة بالتاجر (CATALOG-IMPORT-WORKFLOW، ADR-031).
 
 import { useState } from 'react';
 import { importCatalogExcelAction } from '@/app/merchant/import/actions';

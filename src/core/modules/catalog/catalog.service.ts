@@ -6,7 +6,10 @@ import { inventoryService } from '../inventory/inventory.service';
 import { auditService } from '../audit/audit.service';
 import { normalizeProductName } from './text-normalize';
 import type {
+  CatalogCategory,
+  CatalogSubcategory,
   Category,
+  District,
   MasterCatalogItem,
   MerchantImportResult,
   MerchantImportRow,
@@ -39,6 +42,42 @@ export class CatalogService {
 
   async getProductsByIds(ids: string[]): Promise<Product[]> {
     return catalogRepository.findProductsByIds(ids);
+  }
+
+  // ==========================================================================
+  // شجرة التصنيف الجديدة (TASK-17 بيانات، TASK-18 واجهة) — حي → قسم رئيسي → قسم فرعي
+  // ==========================================================================
+
+  async getDistricts(): Promise<District[]> {
+    return catalogRepository.findDistricts();
+  }
+
+  async getDistrictBySlug(slug: string): Promise<District | null> {
+    return catalogRepository.findDistrictBySlug(slug);
+  }
+
+  async getCategoriesForDistrict(districtId: string): Promise<CatalogCategory[]> {
+    return catalogRepository.findCategoriesForDistrict(districtId);
+  }
+
+  async getCategoryBySlugInDistrict(districtId: string, slug: string): Promise<CatalogCategory | null> {
+    return catalogRepository.findCatalogCategoryBySlug(districtId, slug);
+  }
+
+  async getSubcategoriesForCategory(categoryId: string): Promise<CatalogSubcategory[]> {
+    return catalogRepository.findSubcategoriesForCategory(categoryId);
+  }
+
+  async getSubcategoryBySlugInCategory(categoryId: string, slug: string): Promise<CatalogSubcategory | null> {
+    return catalogRepository.findCatalogSubcategoryBySlug(categoryId, slug);
+  }
+
+  async listProductsByCatalogCategory(categoryId: string): Promise<Product[]> {
+    return catalogRepository.findProductsByCatalogCategory(categoryId);
+  }
+
+  async listProductsByCatalogSubcategory(subcategoryId: string): Promise<Product[]> {
+    return catalogRepository.findProductsByCatalogSubcategory(subcategoryId);
   }
 
   /**
@@ -84,7 +123,7 @@ export class CatalogService {
   }
 
   // ==========================================================================
-  // سير عمل الكتالوج المبسَّط للإطلاق (CATALOG-IMPORT-WORKFLOW) — راجع docs/DECISIONS.md → ADR-025
+  // سير عمل الكتالوج المبسَّط للإطلاق (CATALOG-IMPORT-WORKFLOW) — راجع docs/DECISIONS.md → ADR-031
   // ==========================================================================
 
   async listMasterItems(): Promise<MasterCatalogItem[]> {

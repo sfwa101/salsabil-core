@@ -8,6 +8,7 @@ import { supabaseAdmin } from '../../kernel/database/supabase-admin-client';
 import { catalogRepository } from '../catalog/catalog.repository';
 import { cartService } from '../cart/cart.service';
 import { ordersService } from './orders.service';
+import { inventoryRepository } from '../inventory/inventory.repository';
 
 describe('Orders/Checkout integration (Supabase حقيقي)', () => {
   let productId: string;
@@ -16,7 +17,8 @@ describe('Orders/Checkout integration (Supabase حقيقي)', () => {
   // اليوم 21 (ADR-019): مصفوفات لا متغيرات مفردة — هذا الوصف يحتوي الآن أكثر من اختبار ينشئ
   // طلباً/مستخدماً، ومتغير مفرد يُعاد تعيينه في كل اختبار كان سيُسرِّب بيانات الاختبار الأول
   // بصمت (afterAll يعمل مرة واحدة فقط بعد كل الاختبارات، لا بعد كل واحد على حدة).
-  const orderIdsToClean: string[] = [];
+  const orderIdsToClean: string[] = []; // merchant_suborders.id (TASK-13 — كانت orders.id)
+  const customerOrderIdsToClean: string[] = []; // TASK-13 — جديد: customer_orders.id الأب
   const userIdsToClean: string[] = [];
   const cartIdsToClean: string[] = [];
 
@@ -50,8 +52,14 @@ describe('Orders/Checkout integration (Supabase حقيقي)', () => {
   });
 
   afterAll(async () => {
+    // TASK-13 — الترتيب إلزامي: merchant_suborders قبل customer_orders (بلا ON DELETE CASCADE
+    // بينهما، specs/orders/PHASE_2_DOMAIN_DESIGN.md §2.2). merchant_suborder_items/
+    // merchant_suborder_status_history تُحذفان تلقائياً (cascade) عند حذف الـsuborder.
     for (const orderId of orderIdsToClean) {
-      await supabaseAdmin.from('orders').delete().eq('id', orderId); // order_items تُحذف تلقائياً (cascade)
+      await supabaseAdmin.from('merchant_suborders').delete().eq('id', orderId);
+    }
+    for (const customerOrderId of customerOrderIdsToClean) {
+      await supabaseAdmin.from('customer_orders').delete().eq('id', customerOrderId);
     }
     for (const cartId of cartIdsToClean) {
       await supabaseAdmin.from('carts').delete().eq('id', cartId);
@@ -80,6 +88,7 @@ describe('Orders/Checkout integration (Supabase حقيقي)', () => {
       deliveryAddress: { line1: 'شارع الاختبار', city: 'القاهرة' },
     });
     orderIdsToClean.push(order.id);
+    customerOrderIdsToClean.push(order.customerOrderId!);
     userIdsToClean.push(order.userId);
 
     expect(order.total).toBe(100);
@@ -111,6 +120,7 @@ describe('Orders/Checkout integration (Supabase حقيقي)', () => {
       deliveryAddress: { line1: 'شارع اختبار الشخصية', city: 'القاهرة' },
     });
     orderIdsToClean.push(order.id);
+    customerOrderIdsToClean.push(order.customerOrderId!);
     userIdsToClean.push(order.userId);
 
     const { data: world, error: worldError } = await supabaseAdmin.from('worlds').select('id').eq('slug', 'individuals').single();
@@ -140,6 +150,7 @@ describe('Orders/Checkout integration (Supabase حقيقي)', () => {
       deliveryAddress: { line1: 'شارع اختبار الشخصية', city: 'القاهرة' },
     });
     orderIdsToClean.push(secondOrder.id);
+    customerOrderIdsToClean.push(secondOrder.customerOrderId!);
     expect(secondOrder.userId).toBe(order.userId); // نفس المستخدم، لا مستخدم مكرَّر
 
     const { data: personasAfterSecond, error: countError } = await supabaseAdmin
@@ -201,6 +212,7 @@ describe('Orders/Checkout integration (Supabase حقيقي)', () => {
       deliveryAddress: { line1: 'شارع تمهيدي', city: 'القاهرة' },
     });
     orderIdsToClean.push(setupOrder.id);
+    customerOrderIdsToClean.push(setupOrder.customerOrderId!);
     userIdsToClean.push(setupOrder.userId);
 
     // الاختبار الفعلي: نفس العميل (موجود مسبقاً الآن)، سلة جديدة، طلبان متزامنان فعليان عليها
@@ -219,7 +231,9 @@ describe('Orders/Checkout integration (Supabase حقيقي)', () => {
 
     const [orderA, orderB] = await Promise.all([checkoutOnce(), checkoutOnce()]);
     orderIdsToClean.push(orderA.id);
+    customerOrderIdsToClean.push(orderA.customerOrderId!);
     if (orderB.id !== orderA.id) orderIdsToClean.push(orderB.id); // تنظيف دفاعي لو فشل الإصلاح
+    if (orderB.customerOrderId !== orderA.customerOrderId) customerOrderIdsToClean.push(orderB.customerOrderId!);
 
     expect(orderB.id).toBe(orderA.id); // نفس الطلب بالضبط — لا تكرار
   });
@@ -259,6 +273,7 @@ describe('Orders/Checkout integration (Supabase حقيقي)', () => {
     for (const result of [resultA, resultB]) {
       if (result.status === 'fulfilled') {
         orderIdsToClean.push(result.value.id);
+        customerOrderIdsToClean.push(result.value.customerOrderId!);
         userIdsToClean.push(result.value.userId);
       }
     }
@@ -279,7 +294,8 @@ describe('Orders/Checkout integration (Supabase حقيقي)', () => {
 describe('Orders lifecycle integration (Supabase حقيقي، اليوم 9)', () => {
   let productId: string;
   let tenantId: string;
-  const orderIdsToClean: string[] = [];
+  const orderIdsToClean: string[] = []; // merchant_suborders.id (TASK-13)
+  const customerOrderIdsToClean: string[] = []; // TASK-13 — جديد
   const userIdsToClean: string[] = [];
   const cartIdsToClean: string[] = [];
 
@@ -309,8 +325,12 @@ describe('Orders lifecycle integration (Supabase حقيقي، اليوم 9)', ()
   });
 
   afterAll(async () => {
+    // TASK-13 — الترتيب إلزامي: merchant_suborders قبل customer_orders (بلا ON DELETE CASCADE بينهما).
     for (const orderId of orderIdsToClean) {
-      await supabaseAdmin.from('orders').delete().eq('id', orderId); // order_status_history تُحذف تلقائياً (cascade)
+      await supabaseAdmin.from('merchant_suborders').delete().eq('id', orderId);
+    }
+    for (const customerOrderId of customerOrderIdsToClean) {
+      await supabaseAdmin.from('customer_orders').delete().eq('id', customerOrderId);
     }
     for (const cartId of cartIdsToClean) {
       await supabaseAdmin.from('carts').delete().eq('id', cartId);
@@ -336,6 +356,7 @@ describe('Orders lifecycle integration (Supabase حقيقي، اليوم 9)', ()
       deliveryAddress: { line1: 'شارع دورة الحياة', city: 'القاهرة' },
     });
     orderIdsToClean.push(order.id);
+    customerOrderIdsToClean.push(order.customerOrderId!);
     userIdsToClean.push(order.userId);
     return order;
   }
@@ -410,7 +431,7 @@ describe('Orders lifecycle integration (Supabase حقيقي، اليوم 9)', ()
     await ordersService.transitionStatus({ orderId: order.id, toStatus: 'confirmed', actorRole: 'merchant_owner', tenantId });
     await ordersService.transitionStatus({ orderId: order.id, toStatus: 'preparing', actorRole: 'merchant_owner', tenantId });
 
-    const cancelled = await ordersService.transitionStatus({ orderId: order.id, toStatus: 'cancelled', actorRole: 'merchant_owner', tenantId });
+    const cancelled = await ordersService.transitionStatus({ orderId: order.id, toStatus: 'cancelled', actorRole: 'merchant_owner', tenantId, note: 'اختبار تكامل' });
     expect(cancelled.status).toBe('cancelled');
 
     await expect(
@@ -433,5 +454,247 @@ describe('Orders lifecycle integration (Supabase حقيقي، اليوم 9)', ()
 
     expect(orders.some((o) => o.id === order.id)).toBe(true);
     expect(orders.every((o) => o.tenantId === tenantId)).toBe(true);
+  });
+
+  async function readInventory(): Promise<number> {
+    const { data, error } = await supabaseAdmin.from('inventory').select('quantity_available').eq('product_id', productId).single();
+    if (error) throw error;
+    return data.quantity_available as number;
+  }
+
+  // TASK-08 — الإصلاح الأساسي حياً: إلغاء طلب حقيقي موجود فعلياً (بعد نجاح Checkout، لا فشله)
+  // كان يترك مخزونه محجوزاً للأبد قبل هذا الإصلاح (release() لم يكن يُستدعى إلا من مسار تعويض
+  // فشل Checkout نفسه). الآن transitionStatus(* → cancelled) يسترجعه فعلياً عبر
+  // InventoryService.release() ضد قاعدة بيانات حقيقية، لا تمويهاً.
+  it('TASK-08: إلغاء طلب حقيقي يسترجع مخزونه فعلياً في قاعدة البيانات (الفجوة الأصلية)', async () => {
+    const before = await readInventory();
+    const order = await createTestOrder(); // يخصم 1 فعلياً
+
+    const afterCheckout = await readInventory();
+    expect(afterCheckout).toBe(before - 1);
+
+    await ordersService.transitionStatus({ orderId: order.id, toStatus: 'cancelled', actorRole: 'merchant_owner', tenantId, note: 'اختبار تكامل' });
+
+    const afterCancel = await readInventory();
+    expect(afterCancel).toBe(before); // استُرجعت الكمية بالضبط — لا محجوزة للأبد
+  });
+
+  // TASK-08، §4 — الحالة الحرجة الأولى: إلغاء نفس الطلب مرتين متزامنتين فعليًا (Promise.all، لا
+  // تسلسلاً) يجب أن يسترجع المخزون مرة واحدة بالضبط، لا مرتين. القفل التفاؤلي في
+  // orders.repository.ts (updateOrderStatus) يضمن أن استدعاءً واحداً فقط ينجح فعلياً في تنفيذ
+  // الانتقال وأثره (الاسترجاع)؛ الآخر يُرفَض صريحاً بخطأ تعارض تزامن واضح.
+  it(
+    'TASK-08 §4: إلغاء نفس الطلب مرتين متزامنتين فعليًا يسترجع المخزون مرة واحدة فقط (لا استرجاع مضاعف)',
+    async () => {
+      const before = await readInventory();
+      const order = await createTestOrder(); // يخصم 1
+
+      const cancelOnce = () =>
+        ordersService.transitionStatus({ orderId: order.id, toStatus: 'cancelled', actorRole: 'merchant_owner', tenantId, note: 'اختبار تكامل' });
+
+      const [resultA, resultB] = await Promise.allSettled([cancelOnce(), cancelOnce()]);
+      const outcomes = [resultA, resultB];
+      const succeeded = outcomes.filter((r) => r.status === 'fulfilled');
+      const failed = outcomes.filter((r) => r.status === 'rejected');
+
+      expect(succeeded).toHaveLength(1); // واحد فقط نفَّذ الانتقال فعلياً
+      expect(failed).toHaveLength(1);
+      // TASK-13 — updateOrderStatus الجديد (customerOrder.repository.ts) يُنفِّذ استعلاماً إضافياً
+      // (إعادة الجلب لبناء Order الكامل مع deliveryAddress، §... أعلاه) بعد نجاح التحديث — هذا
+      // يوسِّع نافذة السباق الفعلية ضد Supabase حقيقياً، فقد يخسر الطرف الآخر إما عند القفل
+      // التفاؤلي نفسه (لو قرأ حالته الأولية قبل نجاح الفائز: "تعارض تزامن") أو عند فحص آلة الحالات
+      // (لو قرأ حالته الأولية بعد نجاح الفائز فعلياً: "لا يمكن الانتقال ... 'cancelled' → 'cancelled'")
+      // — كلا المسارين رفض صريح صحيح لنفس الضمانة (لا تنفيذ مضاعف لأثر الإلغاء)، يثبته التحقق
+      // الحاسم أدناه (استرجاع واحد فقط بالضبط)، لا نص الرسالة بالذات.
+      expect((failed[0] as PromiseRejectedResult).reason.message).toMatch(/تعارض تزامن|لا يمكن الانتقال/);
+
+      const after = await readInventory();
+      expect(after).toBe(before); // استُرجعت مرة واحدة بالضبط (خُصمت 1 عند الإنشاء، استُرجعت 1 عند الإلغاء) — لا استرجاع مضاعف
+    },
+    20000
+  );
+
+  // TASK-08، §4 — الحالة الحرجة الثانية: عدة استرجاعات حقيقية متزامنة لنفس المنتج (مثلاً عدة طلبات
+  // مختلفة تحوي المنتج نفسه تُلغى في نفس اللحظة تقريباً). يختبر مباشرة القفل التفاؤلي الجديد في
+  // InventoryRepository.restore() نفسه — عبر استدعائه مباشرة عدة مرات متزامنة فعليًا (Promise.all
+  // بلا خطوات وسيطة)، لا عبر مسار transitionStatus الكامل: الخطوات الوسيطة في ذلك المسار (بحث
+  // الطلب، القفل التفاؤلي لحالته، سجل التاريخ) تُدخِل تأخيراً شبكياً كافياً لتفريق توقيت
+  // الاستدعاءات فعلياً فيُخفي السباق أحياناً مع عدد قليل من الاستدعاءات (تحقَّق منه أثناء كتابة
+  // هذا الاختبار: استدعاءان متزامنان فقط عبر restore() مباشرة لم يُظهرا Lost Update بثبات). سكربت
+  // منفصل مباشر ضد Supabase حقيقي أظهر أن 10 استدعاءات متزامنة بلا قفل تُفقِد 9 من أصل 10 تحديثات
+  // فعلياً (101 بدل 110 متوقَّعة) — سباق حقيقي شديد الوضوح. 5 استدعاءات هنا كافية لإثباته بثبات
+  // معقول بلا إبطاء الاختبار كثيراً.
+  it(
+    'TASK-08 §4: خمسة استرجاعات متزامنة فعلياً لنفس المنتج (InventoryRepository.restore) تنجح كلها بلا فقد أثر (Lost Update)',
+    async () => {
+      const before = await readInventory();
+      const concurrentRestores = 5;
+
+      await Promise.all(Array.from({ length: concurrentRestores }, () => inventoryRepository.restore(productId, 1)));
+
+      const after = await readInventory();
+      expect(after).toBe(before + concurrentRestores); // كل الاسترجاعات طُبِّقت فعلياً — لا فقد أثر أي منها
+    },
+    20000
+  );
+});
+
+// TASK-13 — بوابة الإغلاق حياً: يثبت ضد Supabase حقيقي (لا Mocks) أن سلة بتاجرين حقيقيين مختلفين
+// تُنتج فعلياً customer_order واحد + merchant_suborder لكل تاجر في قاعدة البيانات، ببنود معزولة
+// تماماً — مطابق لاختبارات الوحدة المموَّهة في orders.service.test.ts، لكن دليلاً حياً إضافياً على
+// مستوى الصفوف الفعلية (specs/orders/PHASE_2_DOMAIN_DESIGN.md §2).
+describe('Multi-merchant Checkout integration (TASK-13، Supabase حقيقي)', () => {
+  let merchantAId: string;
+  let merchantBId: string;
+  let productAId: string;
+  let productBId: string;
+  const customerOrderIdsToClean: string[] = [];
+  const suborderIdsToClean: string[] = [];
+  const userIdsToClean: string[] = [];
+  const cartIdsToClean: string[] = [];
+
+  beforeAll(async () => {
+    const { data: category, error: categoryError } = await supabaseAdmin.from('categories').select('id').limit(1).single();
+    if (categoryError) throw categoryError;
+
+    for (const [ref, name] of [
+      ['A', 'تاجر أ — TASK-13 تكامل'],
+      ['B', 'تاجر ب — TASK-13 تكامل'],
+    ] as const) {
+      const { data: ownerRow, error: ownerError } = await supabaseAdmin
+        .from('users')
+        .insert({ full_name: `مالك ${name}`, phone: `010${ref === 'A' ? '3' : '4'}${Math.floor(1000000 + Math.random() * 8999999)}`, role: 'merchant_owner' })
+        .select('id')
+        .single();
+      if (ownerError) throw ownerError;
+
+      const { data: merchantRow, error: merchantError } = await supabaseAdmin
+        .from('merchants')
+        .insert({
+          owner_id: ownerRow.id,
+          business_name: name,
+          phone: `010${ref === 'A' ? '3' : '4'}${Math.floor(1000000 + Math.random() * 8999999)}`,
+          slug: `task13-merchant-${ref.toLowerCase()}-${randomUUID().slice(0, 8)}`,
+          commission_rate: 10,
+          is_active: true,
+        })
+        .select('id')
+        .single();
+      if (merchantError) throw merchantError;
+
+      const { data: productRow, error: productError } = await supabaseAdmin
+        .from('products')
+        .insert({
+          category_id: category.id,
+          tenant_id: merchantRow.id,
+          name: `منتج TASK-13 تكامل ${ref} — ${randomUUID().slice(0, 8)}`,
+          base_price: ref === 'A' ? 80 : 45,
+          unit: 'piece',
+          options: [],
+          is_active: true,
+        })
+        .select('id')
+        .single();
+      if (productError) throw productError;
+      await supabaseAdmin.from('inventory').insert({ product_id: productRow.id, quantity_available: 10 });
+
+      if (ref === 'A') {
+        merchantAId = merchantRow.id as string;
+        productAId = productRow.id as string;
+      } else {
+        merchantBId = merchantRow.id as string;
+        productBId = productRow.id as string;
+      }
+    }
+  });
+
+  afterAll(async () => {
+    for (const id of suborderIdsToClean) {
+      await supabaseAdmin.from('merchant_suborders').delete().eq('id', id);
+    }
+    for (const id of customerOrderIdsToClean) {
+      await supabaseAdmin.from('customer_orders').delete().eq('id', id);
+    }
+    for (const cartId of cartIdsToClean) {
+      await supabaseAdmin.from('carts').delete().eq('id', cartId);
+    }
+    for (const userId of userIdsToClean) {
+      await supabaseAdmin.from('user_personas').delete().eq('user_id', userId);
+      await supabaseAdmin.from('users').delete().eq('id', userId);
+    }
+    for (const productId of [productAId, productBId]) {
+      await supabaseAdmin.from('inventory').delete().eq('product_id', productId);
+      await supabaseAdmin.from('products').delete().eq('id', productId);
+    }
+    for (const merchantId of [merchantAId, merchantBId]) {
+      await supabaseAdmin.from('merchants').delete().eq('id', merchantId);
+    }
+  });
+
+  it('سلة بتاجرين حقيقيين مختلفين → customer_order واحد + اثنتان merchant_suborder، ببنود معزولة تماماً في قاعدة البيانات الحقيقية', async () => {
+    const sessionToken = randomUUID();
+    const cart = await cartService.getOrCreateCart({ sessionToken });
+    cartIdsToClean.push(cart.id);
+    await cartService.addItem(cart.id, { productId: productAId, quantity: 2 }); // تاجر أ — 160
+    await cartService.addItem(cart.id, { productId: productBId, quantity: 1 }); // تاجر ب — 45
+
+    const order = await ordersService.checkout({
+      identity: { sessionToken },
+      customerName: 'زبون تكامل TASK-13',
+      customerPhone: `0113${Math.floor(1000000 + Math.random() * 8999999)}`,
+      deliveryAddress: { line1: 'شارع تكامل TASK-13', city: 'القاهرة' },
+    });
+    userIdsToClean.push(order.userId);
+    customerOrderIdsToClean.push(order.customerOrderId!);
+
+    // صف customer_orders واحد فعلياً، بمجموع الكل (205)
+    const { data: customerOrderRow, error: customerOrderError } = await supabaseAdmin
+      .from('customer_orders')
+      .select('*')
+      .eq('id', order.customerOrderId!)
+      .single();
+    if (customerOrderError) throw customerOrderError;
+    expect(customerOrderRow.subtotal_snapshot).toBe(205);
+    expect(customerOrderRow.total_snapshot).toBe(205);
+
+    // اثنتان merchant_suborders بالضبط، كل واحدة بإجمالي تاجرها فقط
+    const { data: suborderRows, error: suborderError } = await supabaseAdmin
+      .from('merchant_suborders')
+      .select('*')
+      .eq('customer_order_id', order.customerOrderId!);
+    if (suborderError) throw suborderError;
+    for (const row of suborderRows!) suborderIdsToClean.push(row.id as string);
+    expect(suborderRows).toHaveLength(2);
+
+    const suborderA = suborderRows!.find((r) => r.tenant_id === merchantAId)!;
+    const suborderB = suborderRows!.find((r) => r.tenant_id === merchantBId)!;
+    expect(suborderA.total).toBe(160);
+    expect(suborderB.total).toBe(45);
+
+    // عزل تام على مستوى الصفوف الفعلية: بنود تاجر أ لا تظهر إطلاقاً تحت suborder تاجر ب، والعكس
+    const { data: itemsA, error: itemsAError } = await supabaseAdmin
+      .from('merchant_suborder_items')
+      .select('*')
+      .eq('merchant_suborder_id', suborderA.id);
+    if (itemsAError) throw itemsAError;
+    expect(itemsA).toHaveLength(1);
+    expect(itemsA![0].product_id).toBe(productAId);
+
+    const { data: itemsB, error: itemsBError } = await supabaseAdmin
+      .from('merchant_suborder_items')
+      .select('*')
+      .eq('merchant_suborder_id', suborderB.id);
+    if (itemsBError) throw itemsBError;
+    expect(itemsB).toHaveLength(1);
+    expect(itemsB![0].product_id).toBe(productBId);
+
+    // كل suborder تحمل قيد سجل ابتدائي 'pending' خاصاً بها
+    const historyA = await ordersService.getStatusHistory({ role: 'merchant_owner', tenantId: merchantAId }, suborderA.id as string);
+    expect(historyA).toHaveLength(1);
+    expect(historyA[0]).toMatchObject({ fromStatus: null, toStatus: 'pending', actorRole: 'system' });
+
+    // السلة أُفرغت بعد نجاح Checkout رغم تعدد التجار
+    const cartAfter = await cartService.getSummary(cart.id);
+    expect(cartAfter.lines).toHaveLength(0);
   });
 });

@@ -1,5 +1,5 @@
 'use server';
-// حسم صفوف قائمة مراجعة الاستيراد (CATALOG-IMPORT-WORKFLOW، ADR-025) — platform_admin حصراً.
+// حسم صفوف قائمة مراجعة الاستيراد (CATALOG-IMPORT-WORKFLOW، ADR-031) — platform_admin حصراً.
 // كل دالة تتحقق أولاً من جلسة الإدارة، نفس نمط src/app/admin/catalog/actions.ts.
 
 import { revalidatePath } from 'next/cache';

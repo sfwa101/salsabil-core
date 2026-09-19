@@ -51,7 +51,8 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
 
   // حالة الرحلة المشتركة عبر السيناريوهات
   let visitorCartId: string | undefined;
-  let orderId: string | undefined;
+  let orderId: string | undefined; // merchant_suborders.id (TASK-13 — كان orders.id)
+  let customerOrderId: string | undefined; // TASK-13 — جديد: customer_orders.id الأب
   let customerUserId: string | undefined;
   let merchantALoginUserId: string;
   let merchantBLoginUserId: string;
@@ -152,8 +153,13 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
   });
 
   afterAll(async () => {
+    // TASK-13 — الترتيب إلزامي: merchant_suborders قبل customer_orders (بلا ON DELETE CASCADE
+    // بينهما). merchant_suborder_items/merchant_suborder_status_history تُحذفان تلقائياً (cascade).
     if (orderId) {
-      await supabaseAdmin.from('orders').delete().eq('id', orderId); // order_items وorder_status_history تُحذفان تلقائياً (cascade)
+      await supabaseAdmin.from('merchant_suborders').delete().eq('id', orderId);
+    }
+    if (customerOrderId) {
+      await supabaseAdmin.from('customer_orders').delete().eq('id', customerOrderId);
     }
     if (visitorCartId) {
       await supabaseAdmin.from('carts').delete().eq('id', visitorCartId);
@@ -185,7 +191,7 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
     }
   });
 
-  it('السيناريو 1 — زائر يتصفح الكتالوج العام (anon)، وRLS تمنعه تماماً من رؤية جداول مقفولة (carts/orders/merchants)', async () => {
+  it('السيناريو 1 — زائر يتصفح الكتالوج العام (anon)، وRLS تمنعه تماماً من رؤية جداول مقفولة (carts/orders/merchants/customer_orders/merchant_suborders)', async () => {
     const { data: productRead, error: productError } = await supabase.from('products').select('*').eq('id', productId).maybeSingle();
     expect(productError).toBeNull();
     expect(productRead).not.toBeNull();
@@ -193,6 +199,17 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
     const { data: ordersRead, error: ordersError } = await supabase.from('orders').select('*');
     expect(ordersError).toBeNull();
     expect(ordersRead ?? []).toHaveLength(0);
+
+    // TASK-13 — الجداول الفعلية التي يكتب فيها Checkout الآن (customer_orders/merchant_suborders)
+    // يجب أن تكونا مقفولتين بنفس صرامة orders القديم — لا policy على أي منهما (النمط 2، §2 من
+    // specs/orders/PHASE_2_DOMAIN_DESIGN.md).
+    const { data: customerOrdersRead, error: customerOrdersError } = await supabase.from('customer_orders').select('*');
+    expect(customerOrdersError).toBeNull();
+    expect(customerOrdersRead ?? []).toHaveLength(0);
+
+    const { data: subordersRead, error: subordersError } = await supabase.from('merchant_suborders').select('*');
+    expect(subordersError).toBeNull();
+    expect(subordersRead ?? []).toHaveLength(0);
 
     const { data: cartsRead, error: cartsError } = await supabase.from('carts').select('*');
     expect(cartsError).toBeNull();
@@ -236,6 +253,7 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
       deliveryAddress: { line1: 'شارع الرحلة الكاملة', city: 'القاهرة' },
     });
     orderId = order.id;
+    customerOrderId = order.customerOrderId;
     customerUserId = order.userId;
 
     expect(order.total).toBe(TEST_PRODUCT_BASE_PRICE);
@@ -317,12 +335,13 @@ describe('رحلة ريف المدينة الكاملة (E2E-DAY13-001، Supabas
       expect(ordersForB.some((o) => o.id === orderId)).toBe(false);
 
       // (ج) RLS الحقيقية: حتى بتجاوز طبقة الخدمة كلياً عبر عميل anon مباشرة، لا قراءة ولا كتابة ممكنة
-      const { data: anonRead, error: anonReadError } = await supabase.from('orders').select('*').eq('id', orderId);
+      // TASK-13 — الصف الفعلي الحي الآن merchant_suborders (orderId يحمل معرّفه)، لا orders القديم.
+      const { data: anonRead, error: anonReadError } = await supabase.from('merchant_suborders').select('*').eq('id', orderId);
       expect(anonReadError).toBeNull();
       expect(anonRead ?? []).toHaveLength(0);
 
       const { data: anonUpdate, error: anonUpdateError } = await supabase
-        .from('orders')
+        .from('merchant_suborders')
         .update({ status: 'cancelled' })
         .eq('id', orderId)
         .select();

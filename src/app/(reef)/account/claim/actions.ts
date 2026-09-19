@@ -25,8 +25,13 @@ export async function startClaimAction(phone: string): Promise<StartClaimResult>
   }
 
   const result = await customerService.startClaim(parsedPhone.data);
+
+  // يُحتسَب هذا الاستدعاء ضمن send-rate-limit بصرف النظر عن النتيجة — إرسال OTP الناجح تكلفة مالية
+  // حقيقية (WhatsApp/SMS Misr)، لا محاولة دخول مجانية (راجع تعليق OTP_SEND_RATE_LIMIT أعلاه وADR-030)؛
+  // احتسابه فقط عند الفشل كان يسمح بإرسال غير محدود لرقم معروف بامتلاكه حساباً قابلاً للادّعاء.
+  recordFailedAttempt(rateLimitKey, OTP_SEND_RATE_LIMIT);
+
   if ('error' in result) {
-    recordFailedAttempt(rateLimitKey, OTP_SEND_RATE_LIMIT);
     return { error: result.error };
   }
 

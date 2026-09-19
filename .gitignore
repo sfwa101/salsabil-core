@@ -10,3 +10,4 @@ scripts/*.png
 
 .vercel
 .env*
+next-env.d.ts

@@ -77,6 +77,12 @@ export const ORDER_TRANSITION_ACTORS: Record<OrderStatus, readonly OrderActorRol
   cancelled: MERCHANT_OR_ADMIN,
 };
 
+// TASK-13 (specs/orders/PHASE_2_DOMAIN_DESIGN.md) — منذ هذه المهمة، كل قيمة `Order` مصدرها صف
+// `merchant_suborders` (بديل Drop-in لصف `orders` القديم حرفياً، §2.2 من الوثيقة)، لا جدول `orders`
+// القديم (يتوقف عن استقبال أي صف جديد، §8 بند 4). `id` هنا = merchant_suborder.id، لا customer_order.id
+// — التاجر/الإدارة يتعاملان مع نصيبهما (suborder) فقط، بنفس دلالة "الطلب" القديمة تماماً. لكل عميل
+// طلب واحد (`customer_order`) قد يحمل أكثر من `Order` هنا (واحد لكل تاجر) — `customerOrderId` يصل
+// بينها. `deliveryAddress` يُقرأ من `customer_orders` (مُشترَك بين كل Order تابعة لنفس customer_order).
 export interface Order {
   id: string;
   userId: string;
@@ -87,6 +93,9 @@ export interface Order {
   total: number;
   createdAt: string;
   updatedAt: string;
+  // اختياري (لا `string` إلزامي) لتفادي كسر أي بناء كائن Order حرفي قديم في الاختبارات لا يعرف
+  // عن customer_orders بعد — فعلياً موجود دائماً في أي Order صادر من customerOrder.repository.ts.
+  customerOrderId?: string;
 }
 
 export interface OrderStatusHistoryEntry {

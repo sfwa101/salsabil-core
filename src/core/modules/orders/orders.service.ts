@@ -1,15 +1,29 @@
 // src/core/modules/orders/orders.service.ts
 // تحويل سلة إلى طلب + دورة حياة الطلب الكاملة (اليوم 9) — يستدعي CatalogService/InventoryService/
 // CartService/KhalilService حياً، لا يُعيد كتابة أي من منطقها (docs/ARCHITECTURE.md §3، §7)
-
+//
+// TASK-13 (specs/orders/PHASE_2_DOMAIN_DESIGN.md) — تحوّل معماري مُعلَن صراحة (AGENTS.md §13، لا
+// تغيير صامت): checkout() لم يعد يرفض سلة متعددة التجار (ADR-009) — يجمّع بنودها حسب tenant_id،
+// وينشئ customer_order واحد + merchant_suborder واحدة أو أكثر (جداول TASK-12، عبر
+// customerOrder.repository.ts). كل دالة قراءة/انتقال حالة أخرى هنا (transitionStatus،
+// getOrderWithItems، getStatusHistory، getOrdersForTenant، getAllOrders، getOrderForCustomerView،
+// getRecentStatusHistory) أُعيد توجيهها معها لنفس الجداول الجديدة — merchant_suborders "بديل
+// Drop-in" لصف orders القديم (§2.2 من الوثيقة)، فالعقد الخارجي (Order/OrderItem/
+// OrderStatusHistoryEntry من ./types) لم يتغيّر، فقط مصدر البيانات. orders.repository.ts القديم
+// (جدول orders/order_items/order_status_history) يبقى بلا أي تعديل ولا حذف بيانات — يتوقف فقط عن
+// استقبال أي صف جديد من هذه اللحظة (قرار معتمَد صراحة، §8 بند 4 من الوثيقة)، ويبقى مستهلَكاً حصرياً
+// من getMostOrderedProductIds أدناه (ميزة توصية غير حرجة، تبقى مبنية على بيانات ما قبل هذا التحوّل
+// فقط من الآن فصاعداً — Remaining Finding مذكور في تقرير TASK-13).
 import { cartService } from '../cart/cart.service';
 import type { Cart } from '../cart/types';
 import { catalogService } from '../catalog/catalog.service';
 import { inventoryService } from '../inventory/inventory.service';
 import { khalilService } from '../../kernel/khalil/service';
+import { merchantService } from '../merchant/merchant.service';
 import { auditService } from '../audit/audit.service';
 import { cashOnDeliveryProvider } from '../payments/cash-on-delivery.provider';
 import { ordersRepository } from './orders.repository';
+import { customerOrderRepository, type CustomerOrder, type SettlementModel } from './customerOrder.repository';
 import {
   ORDER_TRANSITIONS,
   ORDER_TRANSITION_ACTORS,
@@ -81,20 +95,33 @@ export class OrdersService {
       }
     }
 
-    const tenantIds = new Set(summary.lines.map((line) => line.product.tenantId));
-    if (tenantIds.size > 1) {
-      throw new Error('طلبات من أكثر من تاجر واحد غير مدعومة بعد');
-    }
-    const tenantId = summary.lines[0].product.tenantId;
-    if (!tenantId) {
-      throw new Error(`المنتج "${summary.lines[0].product.name}" غير مرتبط بتاجر — لا يمكن إتمام الطلب`);
+    // TASK-13 — تجميع بنود السلة حسب tenant_id بدل رفض أي سلة بأكثر من تاجر واحد (ADR-009،
+    // مُستبدَل حرفياً الآن وفق specs/orders/PHASE_2_DOMAIN_DESIGN.md §8 بند 3): كل مجموعة تُصبح
+    // merchant_suborder مستقلة تحت customer_order واحد مشترك. سلة أحادية التاجر (الحالة الشائعة
+    // اليوم) تُنتج مجموعة واحدة فقط بالضبط — تعمل تماماً كما قبل هذه المهمة، بلا أي تغيير ظاهري.
+    const groupsByTenant = new Map<string, typeof summary.lines>();
+    for (const line of summary.lines) {
+      const tenantId = line.product.tenantId;
+      if (!tenantId) {
+        throw new Error(`المنتج "${line.product.name}" غير مرتبط بتاجر — لا يمكن إتمام الطلب`);
+      }
+      const group = groupsByTenant.get(tenantId);
+      if (group) group.push(line);
+      else groupsByTenant.set(tenantId, [line]);
     }
 
     // CRITICAL-FIXES-FROM-AUDIT-001، بند 2 — نقطة الاستهلاك الفعلية للمخزون: خصم ذرّي شرطي واحد
     // لكل بند (لا فحص isAvailable ثم قرار منفصل، ذلك بالضبط ما كان يسمح بسباق TOCTOU/بيع مضاعف).
     // reservations تتبّع ما نجح خصمه فعلياً في هذه المحاولة بالذات — ضرورية للتعويض أدناه (بند 3)
-    // لو فشلت خطوة لاحقة (دفع/إنشاء طلب/بنود) بعد خصم ناجح لبعض البنود.
+    // لو فشلت خطوة لاحقة (دفع/إنشاء طلب/بنود) بعد خصم ناجح لبعض البنود. عبر كل التجار معاً — خصم
+    // مخزون بند لا علاقة له بحدود تاجره.
     const reservations: Array<{ productId: string; quantity: number }> = [];
+    // TASK-13 — createdSuborderIds لا تضم إلا merchant_suborders التي اكتملت بالكامل (صف + بنود +
+    // أول قيد سجل) — أي فشل جزئي لسبورداردر بعينها يُنظِّف نفسه فوراً (أدناه) قبل أن يصل لهذه
+    // القائمة، فلا تكرار حذف. customerOrder يبقى undefined حتى ينجح إنشاؤه فعلياً.
+    const createdSuborderIds: string[] = [];
+    let customerOrder: CustomerOrder | undefined;
+
     try {
       for (const line of summary.lines) {
         const reserved = await inventoryService.reserve(line.product.id, line.item.quantity);
@@ -111,49 +138,93 @@ export class OrdersService {
         throw new Error('فشلت عملية الدفع');
       }
 
-      const order = await ordersRepository.createOrder({
+      // TODO(مهمة مستقبلية منفصلة، خارج نطاق TASK-13 صراحة — راجع
+      // specs/orders/PHASE_2_DOMAIN_DESIGN.md §5/§9): لا خوارزمية حساب فعلية لرسوم التوصيل بعد.
+      // صفر مؤقت بدل قيمة مخترَعة — delivery_quotes تبقى بلا أي صف حتى تُبنى تلك المهمة.
+      const deliveryFeeSnapshot = 0;
+
+      customerOrder = await customerOrderRepository.createCustomerOrder({
         userId: user.id,
-        tenantId,
-        paymentMethod: cashOnDeliveryProvider.method,
         deliveryAddress: input.deliveryAddress,
-        total: summary.total,
+        paymentMethod: cashOnDeliveryProvider.method,
+        subtotalSnapshot: summary.total,
+        deliveryFeeSnapshot,
+        totalSnapshot: summary.total + deliveryFeeSnapshot,
       });
 
-      try {
-        await ordersRepository.createOrderItems(
-          order.id,
-          summary.lines.map((line) => ({
-            productId: line.product.id,
-            quantity: line.item.quantity,
-            selection: line.item.selection,
-            unitPriceSnapshot: line.unitPrice,
-          }))
-        );
-      } catch (e) {
-        await ordersRepository.deleteOrder(order.id);
-        throw e;
+      // TASK-13 — settlement_model يُجمَّد من merchants.default_settlement_model وقت إنشاء كل
+      // suborder (§7.3 من الوثيقة). قرار مؤسس صريح (2026-09-15): أي تاجر لم يحدّده بعد (NULL —
+      // وهو وضع كل التجار الحاليين فعلياً بعد TASK-12) يُفترَض له 'reef_collected' افتراضياً
+      // (يطابق الوضع التشغيلي الحالي: ريف تجمّع التحصيل)، لا رفض Checkout ولا قيمة عشوائية أخرى.
+      // دفعة واحدة (getByIds) بدل استعلام لكل تاجر — نفس نمط findByIds المُعاد استخدامه أصلاً.
+      const merchants = await merchantService.getByIds([...groupsByTenant.keys()]);
+      const settlementModelByTenant = new Map(merchants.map((m) => [m.id, m.defaultSettlementModel]));
+
+      let primaryOrder: Order | undefined;
+      for (const [tenantId, lines] of groupsByTenant) {
+        const suborderTotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
+        const settlementModel: SettlementModel = settlementModelByTenant.get(tenantId) ?? 'reef_collected';
+
+        const suborderOrder = await customerOrderRepository.createMerchantSuborder({
+          customerOrderId: customerOrder.id,
+          userId: user.id,
+          tenantId,
+          settlementModel,
+          paymentMethod: cashOnDeliveryProvider.method,
+          total: suborderTotal,
+        });
+
+        try {
+          await customerOrderRepository.createMerchantSuborderItems(
+            suborderOrder.id,
+            lines.map((line) => ({
+              productId: line.product.id,
+              quantity: line.item.quantity,
+              selection: line.item.selection,
+              unitPriceSnapshot: line.unitPrice,
+            }))
+          );
+
+          // أول قيد في سجل تدقيق هذه الـsuborder — نفس فلسفة order_status_history الأصلية
+          // (CONSTITUTION §4 بند 5): الحالة الابتدائية 'pending' بلا حالة سابقة، فاعلها النظام.
+          await customerOrderRepository.insertStatusHistory({
+            orderId: suborderOrder.id,
+            fromStatus: null,
+            toStatus: 'pending',
+            actorRole: 'system',
+          });
+
+          createdSuborderIds.push(suborderOrder.id);
+        } catch (e) {
+          // فشل جزئي داخل مجموعة تاجر واحدة بعينها (مثال: فشل إدراج البنود) — يُنظَّف هذا الـ
+          // suborder نفسه فوراً (cascade يُسقِط items/history)، فلا يدخل createdSuborderIds أصلاً
+          // (لا حذف مزدوج لاحقاً)، ثم يُرمى الخطأ ليعالجه التعويض الشامل أدناه (حذف بقية
+          // الـsuborders الناجحة + customer_order + استرجاع كل المخزون المحجوز في هذه المحاولة).
+          await customerOrderRepository.deleteMerchantSuborder(suborderOrder.id);
+          throw e;
+        }
+
+        if (!primaryOrder) primaryOrder = suborderOrder;
       }
 
       await cartService.clearCart(cart.id);
 
-      // أول قيد في سجل التدقيق — الحالة الابتدائية 'pending' بلا حالة سابقة، فاعلها النظام
-      // نفسه لا مستخدماً بشرياً (CONSTITUTION §4 بند 5: كل تحوّل يُسجَّل من فعله ومتى ولماذا)
-      await ordersRepository.insertStatusHistory({
-        orderId: order.id,
-        fromStatus: null,
-        toStatus: 'pending',
-        actorRole: 'system',
-      });
-
-      return order;
+      return primaryOrder!;
     } catch (e) {
-      // CRITICAL-FIXES-FROM-AUDIT-001، بند 3 — حدود المعاملة (Transaction Boundaries): لا معاملة
-      // DB ذرّية حقيقية تربط خصم المخزون بإنشاء الطلب (نفس القيد الموثَّق أصلاً في ADR-009 بين
-      // orders وorder_items — لا حاجة لبناء معاملات موزعة كاملة لأجل هذا، تعويض تطبيقي صريح كافٍ
-      // عند هذا الحجم). لو نجح خصم مخزون بند واحد أو أكثر ثم فشلت أي خطوة لاحقة (بند آخر غير
-      // متوفر، فشل دفع COD نظري، فشل إنشاء الطلب نفسه) — يُعاد كل ما خُصم في هذه المحاولة بالذات
-      // فوراً، قبل رمي الخطأ الأصلي للمتصل.
-      //
+      // CRITICAL-FIXES-FROM-AUDIT-001 (بند 3، مُوسَّعة لتعدد التجار في TASK-13) — لا معاملة DB
+      // ذرّية حقيقية تربط customer_order/merchant_suborders معاً عبر تجار متعددين (نفس القيد
+      // الموثَّق أصلاً في ADR-009 بين orders وorder_items). تعويض تطبيقي صريح: أي
+      // merchant_suborders اكتملت بالفعل في هذه المحاولة تُحذَف أولاً (customer_order_id بلا ON
+      // DELETE CASCADE من customer_orders — هذا الترتيب إلزامي، وإلا يفشل حذف customer_order بقيد
+      // FK)، ثم customer_order نفسه إن كان قد أُنشئ، قبل استرجاع كل مخزون خُصم في هذه المحاولة
+      // بالذات (نفس آلية InventoryService.release الموجودة أصلاً، بلا تعديل).
+      for (const suborderId of createdSuborderIds) {
+        await customerOrderRepository.deleteMerchantSuborder(suborderId).catch(() => {});
+      }
+      if (customerOrder) {
+        await customerOrderRepository.deleteCustomerOrder(customerOrder.id).catch(() => {});
+      }
+
       // GUARDIAN-FINDINGS-REMEDIATION-001، بند 4 — فشل الاسترجاع نفسه (شبكة، إلخ) **لا يُستبدَل
       // به الخطأ الأصلي بعد الآن** (تصحيح: النسخة السابقة كانت تترك Promise.all يرمي فيستبدل خطأ
       // العميل الحقيقي — "غير متوفر" مثلاً — برسالة داخلية غامضة عن فشل الاسترجاع، أسوأ تجربة لا
@@ -193,10 +264,10 @@ export class OrdersService {
   // نفس شكل tenantId/role في TransitionOrderStatusInput — بحيث يفشل أي استدعاء مستقبلي بلا سياق
   // فاعل وقت الترجمة (compile error)، لا وقت التشغيل فقط. راجع assertActorCanAccessOrder أدناه.
   async getOrderWithItems(actor: OrderActorContext, orderId: string): Promise<OrderWithItems | null> {
-    const order = await ordersRepository.findOrderById(orderId);
+    const order = await customerOrderRepository.findOrderById(orderId);
     if (!order) return null;
     this.assertActorCanAccessOrder(order, actor);
-    const items = await ordersRepository.findOrderItems(orderId);
+    const items = await customerOrderRepository.findOrderItems(orderId);
     return { order, items };
   }
 
@@ -208,10 +279,10 @@ export class OrdersService {
   // توصيل حقيقية. لتقليل الأثر لو تسرَّب رابط لطرف غير مقصود: هذه الدالة (ومستهلكها الوحيد،
   // الصفحة) لا تُعيد عنوان التوصيل ولا هاتف/اسم العميل — الحالة والعناصر والإجمالي فقط.
   async getOrderForCustomerView(orderId: string): Promise<OrderCustomerView | null> {
-    const order = await ordersRepository.findOrderById(orderId);
+    const order = await customerOrderRepository.findOrderById(orderId);
     if (!order) return null;
 
-    const items = await ordersRepository.findOrderItems(orderId);
+    const items = await customerOrderRepository.findOrderItems(orderId);
     const itemsWithProductNames = await Promise.all(
       items.map(async (item) => {
         const product = await catalogService.getProductById(item.productId);
@@ -227,12 +298,12 @@ export class OrdersService {
   // سابقاً لأن لا فحص كان موجوداً أصلاً. طلب غير موجود يرمي خطأً صريحاً (لا مصفوفة فارغة صامتة) —
   // نفس فلسفة "فشل صريح لا نجاح صامت" المتَّبعة في transitionStatus المجاورة تماماً.
   async getStatusHistory(actor: OrderActorContext, orderId: string): Promise<OrderStatusHistoryEntry[]> {
-    const order = await ordersRepository.findOrderById(orderId);
+    const order = await customerOrderRepository.findOrderById(orderId);
     if (!order) {
       throw new Error('الطلب غير موجود');
     }
     this.assertActorCanAccessOrder(order, actor);
-    return ordersRepository.findStatusHistory(orderId);
+    return customerOrderRepository.findStatusHistory(orderId);
   }
 
   // مشترك بين transitionStatus وgetOrderWithItems وgetStatusHistory — نفس منطق عزل المستأجرين
@@ -246,13 +317,13 @@ export class OrdersService {
   // طلبات تاجر واحد فقط — للوحة التاجر (اليوم 10). tenantId يجب أن يأتي من الجلسة، أبداً من
   // مدخل يتحكم به العميل (CONSTITUTION §4 بند 3) — هذا الالتزام مسؤولية المستدعي (Server Action).
   async getOrdersForTenant(tenantId: string): Promise<Order[]> {
-    return ordersRepository.findOrdersByTenantId(tenantId);
+    return customerOrderRepository.findOrdersByTenantId(tenantId);
   }
 
   // كل الطلبات من كل التجار — للوحة الإدارة فقط (اليوم 11). لا تحقق صلاحية هنا — مسؤولية
   // المستدعي (Server Action) التأكد أن الفاعل platform_admin قبل الوصول لهذه الدالة.
   async getAllOrders(): Promise<Order[]> {
-    return ordersRepository.findAll();
+    return customerOrderRepository.findAll();
   }
 
   // "غالباً ما يُشترى معه" في السلة — راجع findMostOrderedProductIds في orders.repository.ts.
@@ -265,13 +336,20 @@ export class OrdersService {
   // سجل تدقيق خاص بالطلبات فقط — للوحة الإدارة (اليوم 11). يعرض order_status_history تحديداً،
   // منفصل عمداً عن audit_log العام (اليوم 12، ADR-014) الذي يغطي ما هو خارج نطاق الطلب.
   async getRecentStatusHistory(limit: number = 50): Promise<OrderStatusHistoryEntry[]> {
-    return ordersRepository.findAllStatusHistory(limit);
+    return customerOrderRepository.findAllStatusHistory(limit);
   }
 
   // ينفّذ انتقال حالة واحداً وفق آلة الحالات في types.ts (ORDER_TRANSITIONS)، ويرفض أي انتقال
   // غير مسموح أو فاعل غير مخوَّل بدل تنفيذه صامتاً — نفس منطق الرفض الصريح في checkout()
+  //
+  // TASK-08 — إصلاح فجوة حقيقية: الانتقال * → cancelled كان يترك مخزون الطلب محجوزاً للأبد (كان
+  // release() يُستدعى فقط من مسار تعويض فشل Checkout نفسه، لا هنا). الآن يُسترجَع مخزون كل بند من
+  // order_items عبر نفس آلية InventoryService.release() المُختبَرة أصلاً في ذلك المسار — لا منطق
+  // استرجاع جديد. طول الدالة تجاوز حد الـ50 سطراً (Complexity Budget، AGENTS.md §4) — تبرير: نفس
+  // فلسفة performCheckout أعلاه، تسلسل خطوات انتقال واحد منطقياً (فحص → تحديث ذرّي → سجل → أثر
+  // جانبي عند الإلغاء)، تقسيمها لدوال فرعية يُشتِّت القراءة بلا فائدة حقيقية.
   async transitionStatus(input: TransitionOrderStatusInput): Promise<Order> {
-    const order = await ordersRepository.findOrderById(input.orderId);
+    const order = await customerOrderRepository.findOrderById(input.orderId);
     if (!order) {
       throw new Error('الطلب غير موجود');
     }
@@ -293,9 +371,26 @@ export class OrdersService {
       throw new Error(`الدور "${input.actorRole}" غير مخوَّل لتغيير الحالة إلى "${input.toStatus}"`);
     }
 
-    const updatedOrder = await ordersRepository.updateOrderStatus(input.orderId, input.toStatus);
+    // TASK-13 — merchant_suborder_status_history يفرض CHECK جديد (غير موجود على order_status_history
+    // القديم): note إلزامي عند to_status='cancelled' (قرار مؤسس صريح،
+    // specs/orders/PHASE_2_DOMAIN_DESIGN.md §2.6/§10.1 بند 5). يُفحَص هنا صراحةً قبل أي كتابة DB —
+    // لا يُترَك لقيد قاعدة البيانات وحده، لأن updateOrderStatus (السطر أدناه) ينجح ويُغيّر حالة
+    // الـsuborder فعلياً *قبل* insertStatusHistory؛ لو فشل السجل لاحقاً بسبب note مفقود، يبقى الطلب
+    // "ملغياً" فعلياً بلا أي قيد سجل يوثّق السبب/الفاعل ولا استرجاع مخزون (الكود يتوقف عند الخطأ قبل
+    // الوصول لذلك السطر) — حالة غير متسقة تماماً. الفشل الصريح هنا يمنعها من الأساس.
+    if (input.toStatus === 'cancelled' && !input.note) {
+      throw new Error('سبب الإلغاء (note) إلزامي عند إلغاء طلب');
+    }
 
-    await ordersRepository.insertStatusHistory({
+    // TASK-08 — قفل تفاؤلي (orders.repository.ts): يطابق أيضاً على order.status المقروء أعلاه بالذات.
+    // null يعني طرف آخر غيَّر حالة هذا الطلب فعلياً بين قراءتنا وكتابتنا (سباق حقيقي، مثلاً إلغاءان
+    // متزامنان لنفس الطلب) — رفض صريح بدل تنفيذ أثر الانتقال (استرجاع المخزون) مرتين لطلب واحد.
+    const updatedOrder = await customerOrderRepository.updateOrderStatus(input.orderId, order.status, input.toStatus);
+    if (!updatedOrder) {
+      throw new Error('تعارض تزامن: تغيّرت حالة هذا الطلب من طرف آخر أثناء هذا الانتقال بالذات — أعد المحاولة');
+    }
+
+    await customerOrderRepository.insertStatusHistory({
       orderId: input.orderId,
       fromStatus: order.status,
       toStatus: input.toStatus,
@@ -303,6 +398,38 @@ export class OrdersService {
       actorId: input.actorId,
       note: input.note,
     });
+
+    if (input.toStatus === 'cancelled') {
+      const items = await customerOrderRepository.findOrderItems(input.orderId);
+      const failures: string[] = [];
+      await Promise.all(
+        items.map(async (item) => {
+          try {
+            await inventoryService.release(item.productId, item.quantity);
+          } catch (releaseError) {
+            failures.push(item.productId);
+            await auditService
+              .log({
+                actorRole: 'system',
+                action: 'inventory.release_failed',
+                entityType: 'inventory',
+                entityId: item.productId,
+                metadata: {
+                  quantity: item.quantity,
+                  orderId: input.orderId,
+                  reason: releaseError instanceof Error ? releaseError.message : String(releaseError),
+                },
+              })
+              .catch(() => {});
+          }
+        })
+      );
+      if (failures.length > 0) {
+        throw new Error(
+          `الطلب أُلغي بنجاح لكن فشل استرجاع مخزون المنتجات: ${failures.join(', ')} — راجع سجل التدقيق`
+        );
+      }
+    }
 
     return updatedOrder;
   }

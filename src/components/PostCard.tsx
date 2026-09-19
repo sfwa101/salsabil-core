@@ -26,6 +26,7 @@
 
 import { useRef, useState } from 'react';
 import Image from 'next/image';
+import { BadgeCheck, Heart, Share2, Plus, ChevronLeft } from 'lucide-react';
 import type { PostMedia, PostType, PostWithDetails } from '@/core/modules/bayan/types';
 import type { Product } from '@/core/modules/catalog/types';
 import { HorizontalShelf } from './HorizontalShelf';
@@ -34,6 +35,9 @@ import { BottomSheet } from './BottomSheet';
 import { ProductSheetContent } from './ProductSheetContent';
 import { RecipeSheetContent } from './RecipeSheetContent';
 import { PostSheetContent } from './PostSheetContent';
+import { useOptimisticCartLine } from './useOptimisticCartLine';
+import { useCartToast } from './useCartToast';
+import { QuantityStepper } from './QuantityStepper';
 
 interface PostCardProps {
   post: PostWithDetails;
@@ -51,12 +55,25 @@ const PRODUCT_CENTRIC_TYPES: PostType[] = ['product_highlight', 'offer'];
 export function PostCard({ post, products }: PostCardProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [sheet, setSheet] = useState<SheetState>(null);
-  // بند 6 — راجع تعليق CategoryProductGrid.tsx: نفس سبب رفع اسم المنتج عبر onProductLoaded (جلب غير
-  // متزامن داخل ProductSheetContent.tsx). يُصفَّر في كل نقطة تفتح منتجاً (3 نقاط أدناه).
   const [productSheetName, setProductSheetName] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const isProductCentric = PRODUCT_CENTRIC_TYPES.includes(post.postType);
+
+  // TASK-04 — ربط زر "أضف إلى السلة" (قسم 3، Hero Product Details) بنفس آلية السلة الحقيقية
+  // المستخدَمة في ProductCard.tsx حرفياً (useOptimisticCartLine → addToCartAction/updateCartItemAction)،
+  // لا مساراً موازياً. لا cartLine مُمرَّرة هنا (Feed.tsx لا يجلبها لهذا المكوّن اليوم، خارج نطاق
+  // TASK-04) — نفس نمط استدعاء ProductCard الآخر في هذا الملف بالضبط (رف "منتجات هذا المنشور" أسفله،
+  // بلا cartLine أيضاً)، فيبدأ العدّاد من صفر عند كل mount ثم يتزامن مع الخادم بعد أول إضافة ناجحة.
+  const heroProduct = products[0];
+  const heroHasSizeOptions = heroProduct?.options.some((o) => o.type === 'size') ?? false;
+  const { showToast, toastNode: cartToastNode } = useCartToast();
+  const { quantity: heroQuantity, setQuantity: setHeroQuantity } = useOptimisticCartLine(
+    heroProduct?.id ?? '',
+    heroProduct?.basePrice ?? 0,
+    undefined,
+    showToast
+  );
 
   function handleScroll() {
     const el = scrollRef.current;
@@ -84,12 +101,32 @@ export function PostCard({ post, products }: PostCardProps) {
 
   return (
     <article className="flex flex-col gap-3">
+      {/* 1. Mobile Publisher Header (lg:hidden) */}
+      <div className="flex items-center justify-between px-2 lg:hidden mb-1">
+        <div className="flex items-center gap-2">
+          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-primary flex items-center justify-center">
+            <span className="text-primary-foreground font-bold text-lg leading-none">ر</span>
+          </div>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-1">
+              <span className="font-bold text-foreground text-[13px]">ريف المدينة</span>
+              <BadgeCheck className="text-primary" size={14} />
+            </div>
+            <span className="text-[11px] text-muted-foreground">الخضار والفواكه · طازج اليوم</span>
+          </div>
+        </div>
+        <button className="flex items-center text-[11px] font-bold text-primary bg-primary/10 px-3 py-1.5 rounded-full">
+          القسم <ChevronLeft size={12} className="mr-0.5" />
+        </button>
+      </div>
+
+      {/* 2. Hero Image */}
       {post.media.length > 0 && (
         <div className="relative">
           <div
             ref={scrollRef}
             onScroll={handleScroll}
-            className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth rounded-2xl"
+            className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth rounded-2xl mx-1"
           >
             {post.media.map((m) => (
               <button
@@ -98,10 +135,21 @@ export function PostCard({ post, products }: PostCardProps) {
                 onClick={() => handleMediaClick(m)}
                 className="relative aspect-square w-full shrink-0 snap-center"
               >
-                <Image src={m.imageUrl} alt="" fill loading="lazy" sizes="100vw" className="object-cover" />
+                <Image src={m.imageUrl} alt="" fill loading="lazy" sizes="100vw" className="object-contain" />
               </button>
             ))}
           </div>
+
+          {/* Action Buttons Overlay - Mobile Only */}
+          <div className="absolute top-3 left-4 flex flex-col gap-2 lg:hidden">
+            <button className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-foreground shadow-sm backdrop-blur-sm hover:bg-white">
+              <Heart size={18} />
+            </button>
+            <button className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-foreground shadow-sm backdrop-blur-sm hover:bg-white">
+              <Share2 size={18} />
+            </button>
+          </div>
+
           {post.media.length > 1 && (
             <div className="absolute inset-x-0 bottom-2 flex justify-center gap-1.5">
               {post.media.map((_, i) => (
@@ -117,7 +165,39 @@ export function PostCard({ post, products }: PostCardProps) {
         </div>
       )}
 
-      {post.caption && <p className="px-1 text-sm text-foreground">{post.caption}</p>}
+      {/* 3. Hero Product Details - Mobile Only */}
+      {products.length > 0 && (
+        <div className="flex flex-col gap-1 px-3 lg:hidden">
+          <h3 className="text-lg font-bold text-foreground">{products[0].name}</h3>
+          {post.caption && <p className="text-sm text-muted-foreground line-clamp-2">{post.caption}</p>}
+          <div className="mt-2 flex items-center justify-between">
+            <div className="flex items-baseline gap-1">
+              <span className="text-2xl font-extrabold leading-none text-foreground">{products[0].basePrice}</span>
+              <span className="text-sm font-medium text-muted-foreground">جنيه</span>
+            </div>
+            {!heroHasSizeOptions &&
+              (heroQuantity > 0 ? (
+                <QuantityStepper
+                  variant="pill"
+                  quantity={heroQuantity}
+                  onDecrement={() => setHeroQuantity(heroQuantity - 1)}
+                  onIncrement={() => setHeroQuantity(heroQuantity + 1)}
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setHeroQuantity(1)}
+                  className="flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-sm font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+                >
+                  <Plus size={16} strokeWidth={3} /> أضف إلى السلة
+                </button>
+              ))}
+          </div>
+        </div>
+      )}
+
+      {/* 4. Desktop Caption */}
+      {post.caption && <p className="hidden px-2 text-sm text-foreground lg:block">{post.caption}</p>}
 
       {products.length > 0 && (
         <HorizontalShelf title="منتجات هذا المنشور">
@@ -146,6 +226,7 @@ export function PostCard({ post, products }: PostCardProps) {
           <PostSheetContent post={post} products={products} onSelectProduct={openProductSheet} />
         )}
       </BottomSheet>
+      {cartToastNode}
     </article>
   );
 }

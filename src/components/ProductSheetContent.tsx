@@ -7,8 +7,11 @@
 // COMPLETE-VISUAL-STENCIL-IMPORT-FULL-BATCH-NO-STOPS (بند 4) — كانت هوية الحي البصرية
 // (neighborhood-identity-registry.ts) مطبَّقة فقط على product/[id]/page.tsx (الصفحة الكاملة)، لا
 // هذا الشيت — نفس المنتج يبدو بهوية حي مختلفة (مموَّهة هنا، مميَّزة هناك) بحسب مسار الوصول فقط، لا
-// بحسب المنتج نفسه. يجلب الآن التصنيفات (getCategoriesAction، نفس نمط getProductByIdAction) لحل
-// نفس accentColor المستخدَم في الصفحة الكاملة حرفياً — لا قيمة جديدة، لا حساب مختلف.
+// بحسب المنتج نفسه. يجلب الآن الأحياء (getDistrictsAction، نفس نمط getProductByIdAction) لحل نفس
+// accentColor المستخدَم في الصفحة الكاملة حرفياً — لا قيمة جديدة، لا حساب مختلف.
+// TASK-18: كانت التصنيفات (getCategoriesAction) من جدول categories القديم — product.categoryId
+// فارغ لكل المنتجات المستورَدة TASK-17، فالبادج/الهوية كانا يختفيان صامتين لكل الكتالوج الحقيقي.
+// الآن product.districtId عبر catalogService.getDistricts().
 //
 // PRODUCT-BOTTOM-SHEET-AND-NEIGHBORHOODS-BATCH (بند 6، إصلاح مُحدَّد بعد تقرير المرحلة 1) — كان هذا
 // الملف يعرض فقط بلوكات location='options' (عبر <ProductOptions> وحدها) — لا صورة، لا اسم/وصف، رغم
@@ -23,11 +26,11 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { ImageOff } from 'lucide-react';
-import { getCategoriesAction, getProductByIdAction } from '@/app/(reef)/feed-actions';
+import { getDistrictsAction, getProductByIdAction } from '@/app/(reef)/feed-actions';
 import { ProductOptions } from './ProductOptions';
 import { getNeighborhoodIdentity } from '@/config/neighborhood-identity-registry';
 import { getVisibleProductPageBlockIds, type ProductPageBlockId } from '@/config/product-page-blocks-registry';
-import type { Category, Product } from '@/core/modules/catalog/types';
+import type { District, Product } from '@/core/modules/catalog/types';
 
 export function ProductSheetContent({
   productId,
@@ -37,15 +40,15 @@ export function ProductSheetContent({
   onProductLoaded?: (product: Product) => void;
 }) {
   const [product, setProduct] = useState<Product | null | undefined>(undefined); // undefined = جارٍ التحميل
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [districts, setDistricts] = useState<District[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     setProduct(undefined);
-    Promise.all([getProductByIdAction(productId), getCategoriesAction()]).then(([productResult, categoriesResult]) => {
+    Promise.all([getProductByIdAction(productId), getDistrictsAction()]).then(([productResult, districtsResult]) => {
       if (cancelled) return;
       setProduct(productResult);
-      setCategories(categoriesResult);
+      setDistricts(districtsResult);
       if (productResult) onProductLoaded?.(productResult);
     });
     return () => {
@@ -63,8 +66,8 @@ export function ProductSheetContent({
     return <p className="py-6 text-center text-muted-foreground">هذا المنتج لم يعد متاحاً</p>;
   }
 
-  const category = categories.find((c) => c.id === product.categoryId) ?? null;
-  const identity = category ? getNeighborhoodIdentity('reef', category.slug) : null;
+  const district = districts.find((d) => d.id === product.districtId) ?? null;
+  const identity = district ? getNeighborhoodIdentity('reef', district.slug) : null;
 
   function renderPageBlock(product: Product, blockId: ProductPageBlockId) {
     switch (blockId) {
@@ -84,12 +87,12 @@ export function ProductSheetContent({
                 <ImageOff size={32} />
               </div>
             )}
-            {category && (
+            {district && (
               <span
                 className="sb-glass absolute right-3 top-3 rounded-full px-2.5 py-1 text-xs font-semibold text-foreground"
                 style={identity ? { color: identity.accentColor } : undefined}
               >
-                {category.name}
+                {district.nameAr}
               </span>
             )}
           </div>

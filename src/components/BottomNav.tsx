@@ -56,7 +56,7 @@ export function BottomNav() {
   }
 
   return (
-    <>
+    <div className="lg:hidden">
       <ScrollHideBar edge="bottom">
         {/* هذا nav حاوية هامش من الحواف فقط (بلا تصميم بصري) — البار الفعلي العائم هو الـdiv الداخلي.
             نفس بنية TabBar.tsx المرجعي (fixed+padding خارجي، pill مُمركَز داخلي). */}
@@ -136,6 +136,6 @@ export function BottomNav() {
           </div>,
           document.body
         )}
-    </>
+    </div>
   );
 }
