@@ -2695,6 +2695,39 @@ Related: specs/orders/SUPPLY_RESOLUTION_ENGINE_DESIGN.md (الوثيقة كام�
           لاحقاً)
 ```
 
+### DD-020 (يُعدِّل DD-019)
+```
+Decision: يُلغى تصنيف DD-019 لغياب Product Library / Merchant Offers / Supply Resolution Engine
+          كـ"مؤجَّل بانتظار تكليف صريح منفصل". اعتباراً من 2026-09-19، هذا التنفيذ جزء أساسي إلزامي
+          من نطاق Phase 1 نفسه — لا مرحلة لاحقة — بتكليف مؤسس مباشر صريح.
+Reason: المؤسس لديه فعلياً عشرات التجار الحقيقيين (70 تاجراً مسجَّلين، docs/ROADMAP.md) بانتظار
+          الدخول، منهم 10 بكتالوجات متطابقة تقريباً (docs/audits/REEF_PHASE_1_PRODUCT_COMPLETENESS_
+          AUDIT.md §29 بند 3). نموذج "تاجر واحد لكل منتج" المبسّط (BR-002 الحالي، عبر category_id
+          واحد لكل منتج) لا يسمح لأكثر من تاجر ببيع نفس الصنف، مما يجعل الإطلاق الحقيقي بعدد التجار
+          الفعلي غير ممكن دون مكتبة منتجات مشتركة + عروض تاجر منفصلة + محرك حل توريد يختار من يُلبّي
+          الطلب عند تعدد الموردين لنفس الصنف. هذا تصحيح لفرضية DD-019/SALSABIL_CONSTITUTION.md v1.5
+          §8 القديمة، لا اجتهاد ذاتي من التنفيذ — تكليف مؤسس مباشر مسجَّل في مقدمة مهمة تدقيق اكتمال
+          المنتج 2026-09-19 (راجع REEF_PHASE_1_PRODUCT_COMPLETENESS_AUDIT.md، حقل
+          supersedes_for_this_scope في مقدمته).
+Risk: تنفيذ Supply Resolution Engine V1 عمل معماري كبير (تصميمه موثَّق فعلاً بـ1008 سطر في
+          specs/orders/SUPPLY_RESOLUTION_ENGINE_DESIGN.md لكن صفر كود تنفيذي، §18 من تقرير التدقيق).
+          99.3% من الكتالوج الحالي (7,506 من 7,556 منتج) بلا tenant_id فعلي — أي بلا مادة عملية
+          يعمل عليها المحرك حتى لو بُني اليوم؛ الخطة الموصى بها (§31 بند 4) تبدأ بمطابقة يدوية/شبه
+          يدوية بسيطة قبل أي أتمتة، لتفادي بناء محرك معقد على بيانات غير جاهزة.
+Owner: Founder
+Created: 2026-09-19
+Review by: عند بدء تنفيذ V1 الفعلي لـSupply Resolution Engine (Task منفصلة تماماً، بنفس نمط TASK-12
+          بعد اعتماد تصميم PHASE_2_DOMAIN_DESIGN.md سابقاً)
+Blocking: YES — يمنع اعتبار Phase 1 مكتملاً دون Product Library/Merchant Offers/Supply Resolution
+          تفاعلية (لا FK صامت فقط)، بحسب تصنيف §29 بنود 1-4 في تقرير التدقيق
+Status: OPEN — القرار الاستراتيجي معتمَد الآن بهذا السجل؛ التنفيذ الفعلي لم يبدأ بعد (ينتظر §31 بند 5
+          من ترتيب التنفيذ المقترَح)
+Related: DD-019 (السجل الأصلي المُعدَّل هنا)، ADR-031 (catalog_master_items القائم)،
+          specs/orders/SUPPLY_RESOLUTION_ENGINE_DESIGN.md،
+          docs/audits/REEF_PHASE_1_PRODUCT_COMPLETENESS_AUDIT.md (§2, §9, §10, §18, §29 بنود 1-4،
+          §31 بند 5)، docs/ROADMAP.md (سطور 112-147)
+```
+
 ---
 
 ### مراجَع ولم يُحوَّل إلى Decision Debt (مع التبرير)
@@ -2709,3 +2742,36 @@ Related: specs/orders/SUPPLY_RESOLUTION_ENGINE_DESIGN.md (الوثيقة كام�
   إلى `ENFORCED` يتطلب فقط تشغيل فحص حي بسيط لاحقاً، لا قراراً معمارياً. يبقى موثَّقاً في `INVARIANTS.md` فقط.
 - **CONFLICT-002 (رقم إصدار قديم في السطر الختامي للدستور):** خطأ توثيقي تجميلي بلا أثر وظيفي، مسجَّل
   ومُعرَّف مسبقاً بوضوح — لا يستوفي "خطراً معمارياً/أمنياً/تشغيلياً حقيقياً". يبقى `CONFLICT-002` كما هو.
+- **عمود `inventory.cost_price` غير موجود فعلياً (لا على dev ولا على staging)، رغم أن الكود يفترضه —
+  ✅ RESOLVED (FIX-COST-PRICE-01 + FIX-ADR031-SCHEMA-01، 2026-09-19):**
+  اكتُشف أثناء PILOT-SEED-01 (2026-09-19) — `inventoryRepository.upsertForImport`/
+  `inventoryService.setStockForImport` (`src/core/modules/inventory/inventory.repository.ts`) يكتبان
+  `cost_price` صراحة، لكن `scripts/schema-setup.sql` (تعريف `inventory` الأصلي) لا يملك هذا العمود
+  إطلاقاً — أي استدعاء حقيقي لهذا المسار يفشل فوراً بـ`PGRST204`. يعني عملياً أن ميزة استيراد Excel
+  للتاجر (`catalogService.importMerchantExcel`، ADR-031) ستفشل اليوم لو استُخدمت فعلياً على أي من
+  البيئتين — لم يُختبَر حياً من قبل بما يبدو.
+  **⚠️ التحقق الحي وقت الإصلاح كشف أن الفجوة الحقيقية كانت أوسع بكثير من عمود واحد:** بعد تطبيق
+  `scripts/2026-09-19-fix-inventory-cost-price.sql` (ALTER إضافي/idempotent)، اختبار تكامل حي فعلي
+  لـ`importMerchantExcel` فشل فوراً بخطأ مختلف تماماً — `PGRST205: Could not find the table
+  'public.catalog_master_items'`. تحقيق كامل (project ref مطابق حرفياً لـdev المعروف، استمرارية
+  بيانات كاملة بلا فجوة عبر 01/06/13/18/19 سبتمبر — 7,556 منتج، تاجرو PILOT-SEED-01 العشرة بطوابعهم
+  الزمنية، إلخ) استبعد أي تصفير للمشروع، وحسم أن **`catalog_master_items`/`catalog_review_queue`/
+  `products.master_item_id` — أي بنية ADR-031 بالكامل تقريباً — لم تُنفَّذ فعلياً على dev/staging قط**،
+  رغم أن `ADR-031` أعلاه يوثّقها صراحة كـ"حية منذ 2026-09-13 (commit `1c62fd9`)". الكود اعتمد على
+  `scripts/catalog-import-schema.sql` كأنه نُفِّذ بالكامل، لكن لم يُلصَق فعلياً في Supabase SQL Editor
+  في حينه — فجوة تنفيذ توثيقية صرفة، لا تصفير ولا مشروع خاطئ.
+  **الإصلاح النهائي (منفَّذ ومُتحقَّق منه حياً على dev وstaging معاً):**
+  (أ) `scripts/2026-09-19-fix-inventory-cost-price.sql` — `inventory.cost_price`.
+  (ب) `scripts/2026-09-19-fix-adr031-missing-schema.sql` — الثلاثة عناصر الناقصة من ADR-031
+  (`catalog_master_items`، `catalog_review_queue`، `products.master_item_id` + فهرسه الفريد الجزئي)،
+  حرفياً من `scripts/catalog-import-schema.sql` الأصلي لكن مطويّة بشكل idempotent مستقل.
+  (ج) اختبار تكامل حي فعلي (تاجر E2E حقيقي + عنصر كتالوج أساسي تجريبي مزروع ومُنظَّف ذاتياً) أثبت
+  نجاح `importMerchantExcel` كاملاً بعد التطبيقين معاً: `matched=1`، `inventory.quantity_available`/
+  `cost_price` مضبوطان بالضبط كما أُدخِلا.
+  **درس مستفاد صريح (لا يُطوى، يُعاد التأكيد عليه هنا لأنه سبب هذه الفجوة بالكامل):** لا يجوز وصف أي
+  DDL/Schema في التوثيق (ADR أو غيره) بأنه "منفَّذ"/"حي" لمجرد أن الكود المعتمِد عليه كُتب ومُدمِج ويعمل
+  منطقياً — الكود يمكن أن يُدمَج ويُختبَر وحدوياً (Mocks) بلا أي تنفيذ DDL فعلي مطابق على أي قاعدة
+  حقيقية، والفجوة تبقى غير مرئية حتى أول استخدام حي فعلي (هنا: 6 أيام كاملة بلا اكتشاف). "حي/منفَّذ" في
+  التوثيق يجب أن يعني حصراً: تحقُّق مباشر ضد القاعدة الفعلية (`information_schema`/استعلام حقيقي)، لا
+  استنتاجاً من وجود الكود أو تاريخ الـcommit فقط — نفس منهجية `AGENTS.md` في كل تحقق حي آخر بهذا
+  الملف، مُطبَّقة هنا بأثر رجعي كتصحيح على `ADR-031` نفسه.
