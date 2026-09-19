@@ -12,7 +12,7 @@ import { bayanService } from '@/core/modules/bayan/bayan.service';
 import { catalogService } from '@/core/modules/catalog/catalog.service';
 import { khalilService } from '@/core/kernel/khalil/service';
 import type { PostType, RecipeLink } from '@/core/modules/bayan/types';
-import type { Category, Product } from '@/core/modules/catalog/types';
+import type { District, Product } from '@/core/modules/catalog/types';
 import type { World } from '@/core/kernel/khalil/types';
 
 export interface FeedPageResult {
@@ -41,9 +41,10 @@ export async function getProductsByIdsAction(ids: string[]): Promise<Product[]> 
 // COMPLETE-VISUAL-STENCIL-IMPORT-FULL-BATCH-NO-STOPS (بند 4) — يغذّي ProductSheetContent.tsx
 // (Product Bottom Sheet داخل الخلاصة) لحل هوية الحي البصرية (neighborhood-identity-registry.ts)
 // لنفس المنتج — كانت مطبَّقة فقط على صفحة المنتج الكاملة (product/[id]/page.tsx)، لا الشيت. تمريرة
-// رقيقة لـcatalogService.listCategories() الموجودة أصلاً (نفس نمط getProductByIdAction أعلاه).
-export async function getCategoriesAction(): Promise<Category[]> {
-  return catalogService.listCategories();
+// رقيقة لـcatalogService.getDistricts() (TASK-18 — كانت listCategories()/جدول categories القديم،
+// product.categoryId فارغ لكل المنتجات المستورَدة TASK-17؛ الحي الحقيقي عبر product.districtId).
+export async function getDistrictsAction(): Promise<District[]> {
+  return catalogService.getDistricts();
 }
 
 // تمريرة رقيقة لـ bayanService.scaleRecipeQuantities (قياس خطي بسيط، اليوم 23) — تُستدعى من العميل

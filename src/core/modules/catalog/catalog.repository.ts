@@ -7,7 +7,17 @@
 
 import { supabase } from '../../kernel/database/supabase-client';
 import { supabaseAdmin } from '../../kernel/database/supabase-admin-client';
-import type { Category, MasterCatalogItem, Product, ProductOption, ReviewQueueItem, ReviewQueueStatus } from './types';
+import type {
+  CatalogCategory,
+  CatalogSubcategory,
+  Category,
+  District,
+  MasterCatalogItem,
+  Product,
+  ProductOption,
+  ReviewQueueItem,
+  ReviewQueueStatus,
+} from './types';
 
 interface CategoryRow {
   id: string;
@@ -20,7 +30,7 @@ interface CategoryRow {
 
 interface ProductRow {
   id: string;
-  category_id: string;
+  category_id: string | null;
   tenant_id: string | null;
   name: string;
   description: string | null;
@@ -30,6 +40,35 @@ interface ProductRow {
   options: ProductOption[];
   is_active: boolean;
   created_at: string;
+  district_id: string | null;
+  catalog_category_id: string | null;
+  catalog_subcategory_id: string | null;
+}
+
+// شجرة التصنيف الجديدة (TASK-17 بيانات، TASK-18 واجهة) — راجع types.ts لسبب اختلاف التسمية عن
+// Category/CategoryRow القديمين.
+interface DistrictRow {
+  id: string;
+  slug: string;
+  name_ar: string;
+  sort_order: number;
+  is_active: boolean;
+}
+
+interface CatalogCategoryRow {
+  id: string;
+  district_id: string;
+  slug: string;
+  name_ar: string;
+  sort_order: number;
+}
+
+interface CatalogSubcategoryRow {
+  id: string;
+  category_id: string;
+  slug: string;
+  name_ar: string;
+  sort_order: number;
 }
 
 function toCategory(row: CategoryRow): Category {
@@ -56,6 +95,39 @@ function toProduct(row: ProductRow): Product {
     options: row.options ?? [],
     isActive: row.is_active,
     createdAt: row.created_at,
+    districtId: row.district_id,
+    catalogCategoryId: row.catalog_category_id,
+    catalogSubcategoryId: row.catalog_subcategory_id,
+  };
+}
+
+function toDistrict(row: DistrictRow): District {
+  return {
+    id: row.id,
+    slug: row.slug,
+    nameAr: row.name_ar,
+    sortOrder: row.sort_order,
+    isActive: row.is_active,
+  };
+}
+
+function toCatalogCategory(row: CatalogCategoryRow): CatalogCategory {
+  return {
+    id: row.id,
+    districtId: row.district_id,
+    slug: row.slug,
+    nameAr: row.name_ar,
+    sortOrder: row.sort_order,
+  };
+}
+
+function toCatalogSubcategory(row: CatalogSubcategoryRow): CatalogSubcategory {
+  return {
+    id: row.id,
+    categoryId: row.category_id,
+    slug: row.slug,
+    nameAr: row.name_ar,
+    sortOrder: row.sort_order,
   };
 }
 
@@ -171,6 +243,96 @@ export class CatalogRepository {
     const { data, error } = await supabase.from('products').select('*').eq('name', name).maybeSingle();
     if (error) throw error;
     return data ? toProduct(data as ProductRow) : null;
+  }
+
+  // ==========================================================================
+  // شجرة التصنيف الجديدة (TASK-17 بيانات، TASK-18 واجهة) — حي → قسم رئيسي → قسم فرعي. قراءة عامة
+  // (anon) بنفس نمط findCategories/findProductsByCategory أعلاه — راجع scripts/
+  // 03-catalog-taxonomy-rls.sql لسياسة RLS المطلوبة (غير مُطبَّقة بعد على dev وقت كتابة هذا الكود،
+  // TASK-18 تحقّق حي).
+  // ==========================================================================
+
+  async findDistricts(): Promise<District[]> {
+    const { data, error } = await supabase
+      .from('catalog_districts')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order');
+    if (error) throw error;
+    return (data as DistrictRow[]).map(toDistrict);
+  }
+
+  async findDistrictBySlug(slug: string): Promise<District | null> {
+    const { data, error } = await supabase
+      .from('catalog_districts')
+      .select('*')
+      .eq('slug', slug)
+      .eq('is_active', true)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toDistrict(data as DistrictRow) : null;
+  }
+
+  async findCategoriesForDistrict(districtId: string): Promise<CatalogCategory[]> {
+    const { data, error } = await supabase
+      .from('catalog_categories')
+      .select('*')
+      .eq('district_id', districtId)
+      .order('sort_order');
+    if (error) throw error;
+    return (data as CatalogCategoryRow[]).map(toCatalogCategory);
+  }
+
+  async findCatalogCategoryBySlug(districtId: string, slug: string): Promise<CatalogCategory | null> {
+    const { data, error } = await supabase
+      .from('catalog_categories')
+      .select('*')
+      .eq('district_id', districtId)
+      .eq('slug', slug)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toCatalogCategory(data as CatalogCategoryRow) : null;
+  }
+
+  async findSubcategoriesForCategory(categoryId: string): Promise<CatalogSubcategory[]> {
+    const { data, error } = await supabase
+      .from('catalog_subcategories')
+      .select('*')
+      .eq('category_id', categoryId)
+      .order('sort_order');
+    if (error) throw error;
+    return (data as CatalogSubcategoryRow[]).map(toCatalogSubcategory);
+  }
+
+  async findCatalogSubcategoryBySlug(categoryId: string, slug: string): Promise<CatalogSubcategory | null> {
+    const { data, error } = await supabase
+      .from('catalog_subcategories')
+      .select('*')
+      .eq('category_id', categoryId)
+      .eq('slug', slug)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toCatalogSubcategory(data as CatalogSubcategoryRow) : null;
+  }
+
+  async findProductsByCatalogCategory(categoryId: string): Promise<Product[]> {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('catalog_category_id', categoryId)
+      .eq('is_active', true);
+    if (error) throw error;
+    return (data as ProductRow[]).map(toProduct);
+  }
+
+  async findProductsByCatalogSubcategory(subcategoryId: string): Promise<Product[]> {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('catalog_subcategory_id', subcategoryId)
+      .eq('is_active', true);
+    if (error) throw error;
+    return (data as ProductRow[]).map(toProduct);
   }
 
   // ==========================================================================

@@ -80,6 +80,7 @@ async function render(feedTab: string, product: Product, post: PostWithDetails) 
     root.render(
       <MobileStorefront
         feedTab={feedTab}
+        districts={[]}
         categories={[]}
         products={[product]}
         posts={[post]}

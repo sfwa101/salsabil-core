@@ -31,7 +31,10 @@ vi.mock('@/components/storefront/CartLoadErrorPanel', () => ({
   CartLoadErrorPanel: () => <div data-testid="cart-load-error-panel">تعذّر تحميل السلة</div>,
 }));
 vi.mock('@/core/modules/catalog/catalog.service', () => ({
-  catalogService: { listCategories: vi.fn().mockResolvedValue([]) },
+  catalogService: {
+    listCategories: vi.fn().mockResolvedValue([]),
+    getDistricts: vi.fn().mockResolvedValue([]),
+  },
 }));
 vi.mock('./feed-actions', () => ({
   loadFeedPageAction: vi.fn().mockResolvedValue({ posts: [], hasMore: false, products: [] }),

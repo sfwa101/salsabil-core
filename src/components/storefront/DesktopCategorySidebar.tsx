@@ -1,12 +1,14 @@
 'use client';
+// TASK-18: كانت Category[] من جدول categories القديم — الآن District[] من catalog_districts
+// (catalogService.getDistricts()، 19 حياً حقيقياً مستورَداً TASK-17).
 import { useState } from 'react';
 import Link from 'next/link';
 import { BottomSheet } from '@/components/BottomSheet';
 import { ChevronDown, Store, Leaf, Grape, Beef, Milk, Pill } from 'lucide-react';
-import type { Category } from '@/core/modules/catalog/types';
+import type { District } from '@/core/modules/catalog/types';
 
 interface DesktopCategorySidebarProps {
-  categories?: Category[];
+  districts?: District[];
   customerAddress?: string;
 }
 
@@ -16,7 +18,7 @@ function getCategoryIcon(index: number) {
   return <Icon size={20} className="text-muted-foreground group-hover:text-primary transition-colors" />;
 }
 
-export function DesktopCategorySidebar({ categories = [], customerAddress }: DesktopCategorySidebarProps) {
+export function DesktopCategorySidebar({ districts = [], customerAddress }: DesktopCategorySidebarProps) {
 
   return (
     <aside className="sticky top-16 h-[calc(100vh-4.5rem)] flex flex-col overflow-hidden bg-card rounded-2xl border border-border shadow-[var(--sb-shadow-soft)] hidden lg:flex">
@@ -30,24 +32,24 @@ export function DesktopCategorySidebar({ categories = [], customerAddress }: Des
         </div>
       </button>
 
-      {/* Category List */}
+      {/* District List */}
       <div className="flex-1 overflow-y-auto py-2 flex flex-col">
-        {categories.length === 0 ? (
+        {districts.length === 0 ? (
           <div className="p-4 text-center text-muted-foreground text-sm">
             جاري التحميل...
           </div>
         ) : (
-          categories.map((cat, index) => (
-            <Link 
-              key={cat.id} 
-              href={`/${cat.slug}`}
+          districts.map((district, index) => (
+            <Link
+              key={district.id}
+              href={`/${district.slug}`}
               className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors group"
             >
               <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center group-hover:bg-primary/10 transition-colors">
                 {getCategoryIcon(index)}
               </div>
               <span className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
-                {cat.name}
+                {district.nameAr}
               </span>
             </Link>
           ))

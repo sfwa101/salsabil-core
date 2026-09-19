@@ -1,8 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { ChevronLeft } from 'lucide-react';
-import type { Product, Category } from '@/core/modules/catalog/types';
+import type { Product, Category, District } from '@/core/modules/catalog/types';
 import type { CartLineSummary } from '@/core/modules/cart/types';
 import type { PostWithDetails } from '@/core/modules/bayan/types';
 import { StoryBar } from '@/components/StoryBar';
@@ -12,6 +10,11 @@ import { HorizontalShelf } from '@/components/HorizontalShelf';
 
 interface MobileStorefrontProps {
   feedTab: string;
+  // TASK-18: كانا نفس القائمة (Category[] من categories القديم) — الآن مصدران مختلفان عمداً.
+  // districts: تصفح الأحياء الحقيقي (StoryBar) عبر catalog_districts. categories: تصنيف المنشورات
+  // نفسها (badge/رابط "عرض الكل" أسفل كل منشور) — مفهوم محتوى منفصل، ما زال على categories القديمة
+  // عمداً (راجع تقرير TASK-18 النهائي لسبب عدم لمسه).
+  districts: District[];
   categories: Category[];
   products: Product[];
   posts: PostWithDetails[];
@@ -21,6 +24,7 @@ interface MobileStorefrontProps {
 
 export function MobileStorefront({
   feedTab,
+  districts,
   categories,
   products,
   posts,
@@ -37,7 +41,7 @@ export function MobileStorefront({
     <div className="w-full space-y-4 py-4 bg-background min-h-screen">
       {/* 1. Story Bar */}
       <div className="bg-card rounded-[24px] shadow-sm p-3 mx-2.5 sm:mx-4 border border-border/50">
-        <StoryBar categories={categories} />
+        <StoryBar districts={districts} />
       </div>
 
       {/* 2. Feed Interleaving Engine */}
@@ -61,12 +65,11 @@ export function MobileStorefront({
                     <h2 className="text-lg font-extrabold text-gray-900">
                       {postCategory?.name || 'أحدث المنتجات'}
                     </h2>
-                    {postCategory && (
-                      <Link href={`/${postCategory.slug}`} className="text-[13px] font-medium text-gray-500 flex items-center hover:text-emerald-600 transition-colors">
-                        عرض الكل
-                        <ChevronLeft size={14} className="ml-0.5" />
-                      </Link>
-                    )}
+                    {/* TASK-18: كان الرابط يؤدي لـ /${postCategory.slug} (مسار قسم المنشور القديم،
+                        categories). ذلك المسار حُذف مع نقل تصفح الكتالوج للأحياء الجديدة
+                        (/[district])، ولا صفحة مكافئة لأقسام المنشورات القديمة اليوم — رابط "عرض
+                        الكل" أُزيل لتفادي 404 حي بدل اختراع وجهة غير موجودة؛ العنوان النصي بقي كما
+                        هو (تصنيف المنشور، خارج نطاق هذا التاسك). */}
                   </div>
                   <div className="w-full">
                     <HorizontalShelf emptyMessage="لا توجد منتجات">

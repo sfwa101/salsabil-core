@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { catalogService } from '@/core/modules/catalog/catalog.service';
-import type { Category } from '@/core/modules/catalog/types';
+import type { Category, District } from '@/core/modules/catalog/types';
 import type { CartSummary } from '@/core/modules/cart/types';
 import { StoryBar } from '@/components/StoryBar';
 import { Feed } from '@/components/Feed';
@@ -21,6 +21,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const feedTab = parseFeedTab(tab);
   const postTypes = getPostTypesForTab(feedTab);
 
+  // TASK-18: مصدران منفصلان عمداً — districts (كتالوج catalog_districts الحقيقي، تصفح الأحياء عبر
+  // StoryBar/DesktopCategorySidebar) وcategories (جدول categories القديم، يبقى فقط لتصنيف المنشورات
+  // نفسها داخل MobileStorefront — راجع تعليق الملف هناك).
+  let districts: District[] = [];
   let categories: Category[] = [];
   let firstPage: any = { posts: [], hasMore: false, products: [] };
   let cartSummary: CartSummary | null = null;
@@ -30,13 +34,14 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   // بدون هذا الفصل لا سبيل للتمييز بين "السلة فارغة فعلياً" و"فشل جلبها" (كلاهما كانا يسقطان معاً في
   // نفس catch واحد، فتُعرَض كأنها فارغة دائماً). راجع TASK-03.
   const [catalogFeedResult, cartResult] = await Promise.allSettled([
-    Promise.all([catalogService.listCategories(), loadFeedPageAction({ postTypes, offset: 0 })]),
+    Promise.all([catalogService.getDistricts(), catalogService.listCategories(), loadFeedPageAction({ postTypes, offset: 0 })]),
     getCartSummaryAction(),
   ]);
 
   if (catalogFeedResult.status === 'fulfilled') {
-    categories = catalogFeedResult.value[0] || [];
-    firstPage = catalogFeedResult.value[1] || { posts: [], hasMore: false, products: [] };
+    districts = catalogFeedResult.value[0] || [];
+    categories = catalogFeedResult.value[1] || [];
+    firstPage = catalogFeedResult.value[2] || { posts: [], hasMore: false, products: [] };
   } else {
     console.error('Failed to load storefront data:', catalogFeedResult.reason);
   }
@@ -48,22 +53,20 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     cartLoadFailed = true;
   }
 
-  const activeCategories = categories.filter((c) => c.isActive);
-
   return (
     <div className="bg-background min-h-screen w-full max-w-full overflow-x-hidden">
       <div className="mx-auto max-w-[1340px] w-full lg:max-w-full lg:h-[calc(100vh-3.5rem)] lg:overflow-hidden flex flex-col lg:flex-row justify-between lg:gap-4 p-0 lg:px-4 lg:py-0">
         
         {/* Right Sidebar (Desktop only) */}
         <div className="hidden lg:block w-64 shrink-0 h-full overflow-y-auto lg:py-4">
-          <DesktopCategorySidebar categories={activeCategories} />
+          <DesktopCategorySidebar districts={districts} />
         </div>
 
         {/* Center Column (Feed - Desktop Only) */}
         <main className="hidden lg:flex flex-1 min-w-0 h-full overflow-y-auto px-2 py-4 flex-col gap-6">
           {/* Story Bar */}
           <div className="bg-card rounded-2xl shadow-[var(--sb-shadow-soft)] p-4 border border-border/50">
-            <StoryBar categories={activeCategories || []} />
+            <StoryBar districts={districts} />
           </div>
 
           {/* Section Title */}
@@ -83,7 +86,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         <div className="block lg:hidden w-full">
           <MobileStorefront
             feedTab={feedTab}
-            categories={activeCategories || []}
+            districts={districts}
+            categories={categories}
             products={firstPage?.products || []}
             posts={firstPage?.posts || []}
             hasMorePosts={firstPage?.hasMore || false}

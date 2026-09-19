@@ -14,6 +14,14 @@ vi.mock('./catalog.repository', () => ({
     findMasterItemById: vi.fn(),
     updateMasterItemBasePrice: vi.fn(),
     cascadeBasePriceToLinkedProducts: vi.fn(),
+    findDistricts: vi.fn(),
+    findDistrictBySlug: vi.fn(),
+    findCategoriesForDistrict: vi.fn(),
+    findCatalogCategoryBySlug: vi.fn(),
+    findSubcategoriesForCategory: vi.fn(),
+    findCatalogSubcategoryBySlug: vi.fn(),
+    findProductsByCatalogCategory: vi.fn(),
+    findProductsByCatalogSubcategory: vi.fn(),
   },
 }));
 
@@ -241,5 +249,81 @@ describe('CatalogService.updateMasterItemPrice — Master-Item Price Cascade (AD
         metadata: expect.objectContaining({ before: 10, after: 15, linkedProductsUpdated: 4 }),
       })
     );
+  });
+});
+
+// ============================================================================
+// شجرة التصنيف الجديدة (TASK-18) — تفويض بسيط لـcatalogRepository، نفس نمط getProductsByIds
+// أعلى الملف. لا منطق حساب هنا (calculatePrice/validateSelection بلا لمس، راجع تعليق أعلى الملف).
+// ============================================================================
+describe('CatalogService — شجرة التصنيف الجديدة (TASK-18، تفويض لـ catalogRepository)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('getDistricts يفوّض لـ findDistricts', async () => {
+    const districts = [{ id: 'd-1', slug: 'hy-alrjl', nameAr: 'حي الرجل', sortOrder: 1, isActive: true }];
+    vi.mocked(catalogRepository.findDistricts).mockResolvedValue(districts);
+
+    const result = await catalogService.getDistricts();
+
+    expect(catalogRepository.findDistricts).toHaveBeenCalled();
+    expect(result).toBe(districts);
+  });
+
+  it('getDistrictBySlug يفوّض لـ findDistrictBySlug بنفس الـslug', async () => {
+    vi.mocked(catalogRepository.findDistrictBySlug).mockResolvedValue(null);
+
+    await catalogService.getDistrictBySlug('hy-alrjl');
+
+    expect(catalogRepository.findDistrictBySlug).toHaveBeenCalledWith('hy-alrjl');
+  });
+
+  it('getCategoriesForDistrict يفوّض لـ findCategoriesForDistrict بنفس districtId', async () => {
+    vi.mocked(catalogRepository.findCategoriesForDistrict).mockResolvedValue([]);
+
+    await catalogService.getCategoriesForDistrict('d-1');
+
+    expect(catalogRepository.findCategoriesForDistrict).toHaveBeenCalledWith('d-1');
+  });
+
+  it('getCategoryBySlugInDistrict يفوّض لـ findCatalogCategoryBySlug بنفس districtId/slug', async () => {
+    vi.mocked(catalogRepository.findCatalogCategoryBySlug).mockResolvedValue(null);
+
+    await catalogService.getCategoryBySlugInDistrict('d-1', 'anaya-whlaqa');
+
+    expect(catalogRepository.findCatalogCategoryBySlug).toHaveBeenCalledWith('d-1', 'anaya-whlaqa');
+  });
+
+  it('getSubcategoriesForCategory يفوّض لـ findSubcategoriesForCategory بنفس categoryId', async () => {
+    vi.mocked(catalogRepository.findSubcategoriesForCategory).mockResolvedValue([]);
+
+    await catalogService.getSubcategoriesForCategory('cat-1');
+
+    expect(catalogRepository.findSubcategoriesForCategory).toHaveBeenCalledWith('cat-1');
+  });
+
+  it('getSubcategoryBySlugInCategory يفوّض لـ findCatalogSubcategoryBySlug بنفس categoryId/slug', async () => {
+    vi.mocked(catalogRepository.findCatalogSubcategoryBySlug).mockResolvedValue(null);
+
+    await catalogService.getSubcategoryBySlugInCategory('cat-1', 'shfrat-wmakynat-hlaqa');
+
+    expect(catalogRepository.findCatalogSubcategoryBySlug).toHaveBeenCalledWith('cat-1', 'shfrat-wmakynat-hlaqa');
+  });
+
+  it('listProductsByCatalogCategory يفوّض لـ findProductsByCatalogCategory بنفس categoryId', async () => {
+    vi.mocked(catalogRepository.findProductsByCatalogCategory).mockResolvedValue([]);
+
+    await catalogService.listProductsByCatalogCategory('cat-1');
+
+    expect(catalogRepository.findProductsByCatalogCategory).toHaveBeenCalledWith('cat-1');
+  });
+
+  it('listProductsByCatalogSubcategory يفوّض لـ findProductsByCatalogSubcategory بنفس subcategoryId', async () => {
+    vi.mocked(catalogRepository.findProductsByCatalogSubcategory).mockResolvedValue([]);
+
+    await catalogService.listProductsByCatalogSubcategory('sub-1');
+
+    expect(catalogRepository.findProductsByCatalogSubcategory).toHaveBeenCalledWith('sub-1');
   });
 });

@@ -38,7 +38,9 @@ export interface Category {
 
 export interface Product {
   id: string;
-  categoryId: string;
+  categoryId: string | null; // مرتبط بجدول `categories` القديم فقط — null لكل المنتجات المستورَدة
+  // عبر TASK-17 (تصنيفها الحقيقي عبر districtId/catalogCategoryId/catalogSubcategoryId أدناه، راجع
+  // docs/DECISIONS.md → ADR رجعي لِـTASK-18)
   tenantId: string | null; // معرّف التاجر المالك للمنتج — عزل المستأجرين (§5, §26)
   name: string;
   description?: string;
@@ -48,6 +50,43 @@ export interface Product {
   options: ProductOption[];
   isActive: boolean;
   createdAt: string;
+  // اختيارية عمداً (لا مطلوبة) — bayan.repository.ts/cart.repository.ts يبنيان صفوف Product مبسَّطة
+  // خاصة بهما من JOIN مختلف (خارج نطاق TASK-18، لا لمس لمنطق بيان/السلة). فقط الصفوف القادمة فعلياً
+  // من catalog.repository.ts (toProduct) تملؤها دائماً — راجع districtId عند أي استهلاك افتراضي null.
+  districtId?: string | null;
+  catalogCategoryId?: string | null;
+  catalogSubcategoryId?: string | null;
+}
+
+// ============================================================================
+// شجرة التصنيف الجديدة (TASK-17 بيانات، TASK-18 واجهة) — حي → قسم رئيسي → قسم فرعي.
+// أسماء مختلفة عمداً عن Category القديمة (نفس منطق تسمية الجداول catalog_districts/
+// catalog_categories/catalog_subcategories في scripts/01-districts-architecture-migration.sql —
+// تفادي تصادم اسم مع الجدول/النوع القديم الحي فعلياً في مسارات إدارية أخرى).
+// ============================================================================
+
+export interface District {
+  id: string;
+  slug: string;
+  nameAr: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface CatalogCategory {
+  id: string;
+  districtId: string;
+  slug: string;
+  nameAr: string;
+  sortOrder: number;
+}
+
+export interface CatalogSubcategory {
+  id: string;
+  categoryId: string;
+  slug: string;
+  nameAr: string;
+  sortOrder: number;
 }
 
 // اختيار العميل عند إضافة المنتج للسلة
