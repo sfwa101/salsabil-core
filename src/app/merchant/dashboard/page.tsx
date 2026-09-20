@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { getMerchantSession } from '@/core/modules/merchant/merchant-session';
 import { ordersService } from '@/core/modules/orders/orders.service';
 import { ORDER_STATUS_LABELS_AR } from '@/core/modules/orders/types';
+import { roundToCents } from '@/core/kernel/money';
 import { logoutMerchantAction } from '../orders/actions';
 
 const ACTIONABLE_STATUSES = ['pending', 'confirmed', 'preparing'] as const;
@@ -28,7 +29,9 @@ export default async function MerchantDashboardPage() {
   const actionableOrders = orders.filter((o) => ACTIONABLE_STATUSES.includes(o.status as (typeof ACTIONABLE_STATUSES)[number])).length;
   // إجمالي تقريبي — كل الطلبات غير الملغاة (لا فرق بين "مُسلَّم فعلياً محصَّل" و"قيد المعالجة" اليوم،
   // لا حقل دفع منفصل في النموذج الحالي، COD فقط). يُعرَض صراحة كـ"تقريبي" لا رقماً محاسبياً نهائياً.
-  const approximateRevenue = orders.filter((o) => o.status !== 'cancelled').reduce((sum, o) => sum + o.total, 0);
+  // تقريب لخانتين عشريتين إلزامي — جمع أعداد عشرية خام في JS عبر عدّة طلبات يُعرِّض لنفس خطأ IEEE 754
+  // المكتشَف حياً في §31 بند 2/بند 6 (orders.service.ts/MerchantOrderDetails.tsx). راجع core/kernel/money.ts.
+  const approximateRevenue = roundToCents(orders.filter((o) => o.status !== 'cancelled').reduce((sum, o) => sum + o.total, 0));
 
   const statusCounts = orders.reduce<Record<string, number>>((acc, o) => {
     acc[o.status] = (acc[o.status] ?? 0) + 1;

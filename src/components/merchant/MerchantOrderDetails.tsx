@@ -3,6 +3,8 @@
 // التوصيل + سطور المنتجات، كانت غائبة تماماً عن واجهة التاجر رغم وجودها في DB. عرض بحت (Server
 // Component، بلا تفاعل) يُركَّب فوق OrderRow.tsx المشترك مع لوحة الإدارة — لا تعديل على ذلك المكوّن.
 
+import { roundToCents } from '@/core/kernel/money';
+
 interface OrderLineItem {
   productName: string;
   quantity: number;
@@ -34,14 +36,20 @@ export function MerchantOrderDetails({ customerName, customerPhone, addressLine1
         {addressNotes ? ` — ${addressNotes}` : ''}
       </p>
       <div className="mt-1 flex flex-col gap-1 border-t border-border pt-2">
-        {items.map((item, i) => (
-          <div key={i} className="flex justify-between text-foreground">
-            <span>
-              {item.productName} × {item.quantity}
-            </span>
-            <span className="text-muted-foreground">{item.unitPriceSnapshot * item.quantity} جنيه</span>
-          </div>
-        ))}
+        {items.map((item, i) => {
+          // اكتُشف حياً أثناء تحقق §31 بند 6 (نفس خلل IEEE 754 المُصلَح سابقاً في orders.service.ts
+          // §31 بند 2): unitPriceSnapshot × quantity كضرب عشري خام في JS ينتج أرقاماً مثل
+          // 99.94999999999999 بدل 99.95 (مثال حقيقي: 19.99 × 5). راجع core/kernel/money.ts.
+          const lineTotal = roundToCents(item.unitPriceSnapshot * item.quantity);
+          return (
+            <div key={i} className="flex justify-between text-foreground">
+              <span>
+                {item.productName} × {item.quantity}
+              </span>
+              <span className="text-muted-foreground">{lineTotal} جنيه</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

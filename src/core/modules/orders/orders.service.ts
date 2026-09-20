@@ -19,6 +19,7 @@ import type { Cart } from '../cart/types';
 import { catalogService } from '../catalog/catalog.service';
 import { inventoryService } from '../inventory/inventory.service';
 import { khalilService } from '../../kernel/khalil/service';
+import { roundToCents } from '../../kernel/money';
 import { merchantService } from '../merchant/merchant.service';
 import { auditService } from '../audit/audit.service';
 import { cashOnDeliveryProvider } from '../payments/cash-on-delivery.provider';
@@ -326,8 +327,7 @@ export class OrdersService {
     const customerOrder = requestedOrder.customerOrderId
       ? await customerOrderRepository.findCustomerOrderById(requestedOrder.customerOrderId)
       : null;
-    const grandTotal =
-      customerOrder?.totalSnapshot ?? Math.round(suborders.reduce((sum, s) => sum + s.order.total, 0) * 100) / 100;
+    const grandTotal = customerOrder?.totalSnapshot ?? roundToCents(suborders.reduce((sum, s) => sum + s.order.total, 0));
 
     return { suborders, grandTotal };
   }
