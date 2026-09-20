@@ -86,6 +86,7 @@ async function render(feedTab: string, product: Product, post: PostWithDetails) 
         posts={[post]}
         cartLines={[]}
         hasMorePosts={false}
+        realCatalogProducts={[]}
       />
     );
   });

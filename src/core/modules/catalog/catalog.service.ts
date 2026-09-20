@@ -3,6 +3,7 @@
 
 import { catalogRepository } from './catalog.repository';
 import { inventoryService } from '../inventory/inventory.service';
+import { merchantService } from '../merchant/merchant.service';
 import { auditService } from '../audit/audit.service';
 import { normalizeProductName } from './text-normalize';
 import type {
@@ -34,6 +35,23 @@ export class CatalogService {
 
   async listAllProducts(): Promise<Product[]> {
     return catalogRepository.findAllProducts();
+  }
+
+  // §31 بند 3 — رف "منتجات حقيقية" على الرئيسية، مستقل عن مسار بيان/المنشورات. يستبعد صراحة تاجر
+  // العرض التجريبي poultry-test (موجود فعلياً بـtenant_id حقيقي و41 منتجاً is_active=true وقت كتابة
+  // هذا الكود — كان سيتسرَّب لهذا الرف بلا استبعاد صريح رغم أنه ليس تاجراً حقيقياً). FETCH_BUFFER
+  // يجلب أكثر من limit لتعويض ما يُستبعَد؛ لو استُبعِد أكثر من المخزون الاحتياطي (نادر جداً بحجم
+  // الكتالوج الحالي)، النتيجة تكون ببساطة أقل من limit المطلوب — لا خطأ، عرض أقل عناصر فقط.
+  async listPurchasableProducts(limit: number): Promise<Product[]> {
+    const DEMO_MERCHANT_SLUG = 'poultry-test';
+    const FETCH_BUFFER_MULTIPLIER = 4;
+    const [products, merchants] = await Promise.all([
+      catalogRepository.findPurchasableProducts(limit * FETCH_BUFFER_MULTIPLIER),
+      merchantService.listAll(),
+    ]);
+    const demoMerchant = merchants.find((m) => m.slug === DEMO_MERCHANT_SLUG);
+    const filtered = demoMerchant ? products.filter((p) => p.tenantId !== demoMerchant.id) : products;
+    return filtered.slice(0, limit);
   }
 
   async getProductById(id: string): Promise<Product | null> {

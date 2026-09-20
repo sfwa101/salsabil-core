@@ -22,6 +22,7 @@ vi.mock('./catalog.repository', () => ({
     findCatalogSubcategoryBySlug: vi.fn(),
     findProductsByCatalogCategory: vi.fn(),
     findProductsByCatalogSubcategory: vi.fn(),
+    findPurchasableProducts: vi.fn(),
   },
 }));
 
@@ -31,9 +32,16 @@ vi.mock('../audit/audit.service', () => ({
   },
 }));
 
+vi.mock('../merchant/merchant.service', () => ({
+  merchantService: {
+    listAll: vi.fn(async () => []),
+  },
+}));
+
 const { catalogService } = await import('./catalog.service');
 const { catalogRepository } = await import('./catalog.repository');
 const { auditService } = await import('../audit/audit.service');
+const { merchantService } = await import('../merchant/merchant.service');
 
 const product: Product = {
   id: 'prod-1',
@@ -325,5 +333,47 @@ describe('CatalogService — شجرة التصنيف الجديدة (TASK-18، �
     await catalogService.listProductsByCatalogSubcategory('sub-1');
 
     expect(catalogRepository.findProductsByCatalogSubcategory).toHaveBeenCalledWith('sub-1');
+  });
+});
+
+describe('CatalogService.listPurchasableProducts', () => {
+  // §31 بند 3 — رف "منتجات حقيقية" على الرئيسية، مستقل عن مسار بيان. يستبعد صراحة تاجر العرض
+  // التجريبي poultry-test (موجود فعلياً على staging بـtenant_id حقيقي و41 منتجاً is_active=true —
+  // كان سيتسرَّب لهذا الرف بلا استبعاد صريح، راجع سجل البناء الليلي 2026-09-20 بند 3).
+  it('يستبعد منتجات تاجر poultry-test حتى لو كانت is_active بـtenant_id حقيقي', async () => {
+    const realProduct = withOptions([]); // tenantId: null افتراضياً — نموّه هنا بمعرّف حقيقي أدناه
+    const demoProduct: Product = { ...product, id: 'prod-demo', tenantId: 'demo-tenant-id', name: 'منتج poultry-test وهمي' };
+    const legitProduct: Product = { ...product, id: 'prod-real', tenantId: 'real-tenant-id', name: 'منتج تاجر حقيقي' };
+    vi.mocked(catalogRepository.findPurchasableProducts).mockResolvedValue([demoProduct, legitProduct]);
+    vi.mocked(merchantService.listAll).mockResolvedValue([
+      { id: 'demo-tenant-id', ownerId: 'o1', businessName: 'محل تجريبي', phone: '010', slug: 'poultry-test', commissionRate: 0, isActive: true, createdAt: '', defaultSettlementModel: null },
+      { id: 'real-tenant-id', ownerId: 'o2', businessName: 'محل حقيقي', phone: '011', slug: 'pilot-merchant-01', commissionRate: 0, isActive: true, createdAt: '', defaultSettlementModel: null },
+    ]);
+    void realProduct;
+
+    const result = await catalogService.listPurchasableProducts(10);
+
+    expect(result).toEqual([legitProduct]);
+    expect(catalogRepository.findPurchasableProducts).toHaveBeenCalledWith(40); // limit × FETCH_BUFFER_MULTIPLIER (4)
+  });
+
+  it('لا يستبعد شيئاً لو لم يوجد تاجر بـslug poultry-test على هذه البيئة', async () => {
+    const legitProduct: Product = { ...product, id: 'prod-real', tenantId: 'real-tenant-id' };
+    vi.mocked(catalogRepository.findPurchasableProducts).mockResolvedValue([legitProduct]);
+    vi.mocked(merchantService.listAll).mockResolvedValue([]);
+
+    const result = await catalogService.listPurchasableProducts(5);
+
+    expect(result).toEqual([legitProduct]);
+  });
+
+  it('يقتصر على limit المطلوب بعد الاستبعاد', async () => {
+    const products: Product[] = Array.from({ length: 5 }, (_, i) => ({ ...product, id: `prod-${i}`, tenantId: `tenant-${i}` }));
+    vi.mocked(catalogRepository.findPurchasableProducts).mockResolvedValue(products);
+    vi.mocked(merchantService.listAll).mockResolvedValue([]);
+
+    const result = await catalogService.listPurchasableProducts(2);
+
+    expect(result).toHaveLength(2);
   });
 });

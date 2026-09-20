@@ -1,13 +1,15 @@
 import { Suspense } from 'react';
 import { catalogService } from '@/core/modules/catalog/catalog.service';
-import type { Category, District } from '@/core/modules/catalog/types';
+import type { Category, District, Product } from '@/core/modules/catalog/types';
 import type { CartSummary } from '@/core/modules/cart/types';
 import { StoryBar } from '@/components/StoryBar';
 import { Feed } from '@/components/Feed';
+import { HorizontalShelf } from '@/components/HorizontalShelf';
+import { ProductCard } from '@/components/ProductCard';
 import { DesktopCategorySidebar } from '@/components/storefront/DesktopCategorySidebar';
 import { DesktopCartSidebar } from '@/components/storefront/DesktopCartSidebar';
 import { CartLoadErrorPanel } from '@/components/storefront/CartLoadErrorPanel';
-import { loadFeedPageAction } from './feed-actions';
+import { loadFeedPageAction, loadRealCatalogShelfAction } from './feed-actions';
 import { getCartSummaryAction } from '@/app/(reef)/cart/actions';
 import { FEED_TAB_KEYS, getPostTypesForTab, type FeedTabKey } from '@/config/content-type-registry';
 import { MobileStorefront } from '@/components/storefront/MobileStorefront';
@@ -27,14 +29,23 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   let districts: District[] = [];
   let categories: Category[] = [];
   let firstPage: any = { posts: [], hasMore: false, products: [] };
+  let realCatalogProducts: Product[] = [];
   let cartSummary: CartSummary | null = null;
   let cartLoadFailed = false;
 
   // فشل جلب السلة يُعالَج بمعزل عن فشل الكتالوج/الخلاصة (Promise.allSettled لا try/catch مشترك) —
   // بدون هذا الفصل لا سبيل للتمييز بين "السلة فارغة فعلياً" و"فشل جلبها" (كلاهما كانا يسقطان معاً في
   // نفس catch واحد، فتُعرَض كأنها فارغة دائماً). راجع TASK-03.
+  //
+  // §31 بند 3 — loadRealCatalogShelfAction مضافة هنا (بمعزل عن loadFeedPageAction/بيان تماماً):
+  // رف "منتجات ريف" يعرض الكتالوج القابل للشراء مباشرة، لا يعتمد على وجود منشور مُخصَّص للمنتج.
   const [catalogFeedResult, cartResult] = await Promise.allSettled([
-    Promise.all([catalogService.getDistricts(), catalogService.listCategories(), loadFeedPageAction({ postTypes, offset: 0 })]),
+    Promise.all([
+      catalogService.getDistricts(),
+      catalogService.listCategories(),
+      loadFeedPageAction({ postTypes, offset: 0 }),
+      loadRealCatalogShelfAction(),
+    ]),
     getCartSummaryAction(),
   ]);
 
@@ -42,6 +53,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     districts = catalogFeedResult.value[0] || [];
     categories = catalogFeedResult.value[1] || [];
     firstPage = catalogFeedResult.value[2] || { posts: [], hasMore: false, products: [] };
+    realCatalogProducts = catalogFeedResult.value[3] || [];
   } else {
     console.error('Failed to load storefront data:', catalogFeedResult.reason);
   }
@@ -69,6 +81,17 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             <StoryBar districts={districts} />
           </div>
 
+          {/* §31 بند 3 — رف مستقل عن مسار بيان/المنشورات، يعرض الكتالوج القابل للشراء مباشرة */}
+          {realCatalogProducts.length > 0 && (
+            <HorizontalShelf title="منتجات ريف">
+              {realCatalogProducts.map((p) => (
+                <div key={p.id} className="w-40 shrink-0">
+                  <ProductCard product={p} />
+                </div>
+              ))}
+            </HorizontalShelf>
+          )}
+
           {/* Section Title */}
           <h2 className="text-xl font-bold text-foreground px-2">
             طازج اليوم
@@ -92,6 +115,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             posts={firstPage?.posts || []}
             hasMorePosts={firstPage?.hasMore || false}
             cartLines={cartSummary?.lines || []}
+            realCatalogProducts={realCatalogProducts}
           />
         </div>
 

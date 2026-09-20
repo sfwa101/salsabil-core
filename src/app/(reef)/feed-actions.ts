@@ -47,6 +47,15 @@ export async function getDistrictsAction(): Promise<District[]> {
   return catalogService.getDistricts();
 }
 
+// §31 بند 3 (REEF_PHASE_1_PRODUCT_COMPLETENESS_AUDIT.md) — رف "منتجات حقيقية" على الرئيسية، مستقل
+// تماماً عن مسار بيان/المنشورات أعلاه (loadFeedPageAction). راجع catalogService.listPurchasableProducts
+// لتفاصيل الاستبعاد (تاجر poultry-test التجريبي).
+const REAL_CATALOG_SHELF_LIMIT = 12;
+
+export async function loadRealCatalogShelfAction(): Promise<Product[]> {
+  return catalogService.listPurchasableProducts(REAL_CATALOG_SHELF_LIMIT);
+}
+
 // تمريرة رقيقة لـ bayanService.scaleRecipeQuantities (قياس خطي بسيط، اليوم 23) — تُستدعى من العميل
 // عند كل تغيير لعدّاد عدد أفراد العائلة، نفس نمط ProductOptions.tsx الذي يستدعي calculatePriceAction
 // عند كل تغيير اختيار (مصدر حقيقة واحد للحساب في طبقة الخدمة، لا تكرار للمنطق في العميل).

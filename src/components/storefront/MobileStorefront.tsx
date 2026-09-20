@@ -20,6 +20,10 @@ interface MobileStorefrontProps {
   posts: PostWithDetails[];
   cartLines: CartLineSummary[];
   hasMorePosts: boolean;
+  // §31 بند 3 (REEF_PHASE_1_PRODUCT_COMPLETENESS_AUDIT.md) — الكتالوج القابل للشراء مباشرة، بمعزل
+  // تام عن `products`/`posts` أعلاه (تلك مصدرها منشورات بيان حصراً). راجع
+  // catalogService.listPurchasableProducts.
+  realCatalogProducts: Product[];
 }
 
 export function MobileStorefront({
@@ -30,6 +34,7 @@ export function MobileStorefront({
   posts,
   cartLines,
   hasMorePosts,
+  realCatalogProducts,
 }: MobileStorefrontProps) {
   // TASK-04 — فرع "reel" (كان يعرض <ReelsFeed /> ببيانات MOCK_REELS ثابتة بلا أي علاقة بمنشورات
   // حقيقية — لا عمود فيديو في post_media أصلاً، راجع Header.tsx) أُزيل عمداً. زر التبويب المؤدي لهذه
@@ -43,6 +48,21 @@ export function MobileStorefront({
       <div className="bg-card rounded-[24px] shadow-sm p-3 mx-2.5 sm:mx-4 border border-border/50">
         <StoryBar districts={districts} />
       </div>
+
+      {/* 1.5. §31 بند 3 — رف الكتالوج القابل للشراء مباشرة، مستقل عن خلاصة بيان أدناه */}
+      {realCatalogProducts.length > 0 && (
+        <div className="px-2.5 sm:px-4">
+          <HorizontalShelf title="منتجات ريف">
+            {realCatalogProducts.map((p) => (
+              <MobileSmallProductCard
+                key={p.id}
+                product={p}
+                cartLine={cartLines.find((c) => c.item.productId === p.id)}
+              />
+            ))}
+          </HorizontalShelf>
+        </div>
+      )}
 
       {/* 2. Feed Interleaving Engine */}
       {posts.length > 0 && (

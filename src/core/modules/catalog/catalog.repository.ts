@@ -227,6 +227,23 @@ export class CatalogRepository {
     return (data as ProductRow[]).map(toProduct);
   }
 
+  // §31 بند 3 (REEF_PHASE_1_PRODUCT_COMPLETENESS_AUDIT.md) — منتجات قابلة للشراء فعلياً (tenant_id
+  // حقيقي، لا الاستيراد الأولي بلا تاجر الذي يشكّل 99.3% من الكتالوج) لرف "منتجات حقيقية" على
+  // الرئيسية، بمعزل عن مسار بيان/المنشورات. fetchLimit أعلى من المطلوب فعلياً عمداً — الاستبعاد
+  // الفعلي لتجار تجريبيين (poultry-test) يحدث لاحقاً في catalogService بعد الجلب، لا هنا (فلترة
+  // بالاسم في SQL هشة، أسهل وأوضح بعد التحويل لكائنات JS في طبقة الخدمة).
+  async findPurchasableProducts(fetchLimit: number): Promise<Product[]> {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('is_active', true)
+      .not('tenant_id', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(fetchLimit);
+    if (error) throw error;
+    return (data as ProductRow[]).map(toProduct);
+  }
+
   async findProductsByTenant(tenantId: string): Promise<Product[]> {
     const { data, error } = await supabase.from('products').select('*').eq('tenant_id', tenantId);
     if (error) throw error;
