@@ -318,10 +318,16 @@ export class OrdersService {
     // المخزَّنة فعلياً في customer_orders.total_snapshot صحيحة تماماً لأنها حُسبت واستُقرَّت في العمود
     // العشري لقاعدة البيانات وقت الإنشاء. القراءة من المصدر بدل إعادة الحساب هنا تتجنّب هذا كلياً.
     // غياب صف customer_orders (لا يجب أن يحدث، FK إلزامي) يُعامَل بجمع احتياطي بدل فشل كامل للصفحة.
+    // هذا الاحتياطي **مُلاحَظ فعلياً يتحقَّق حياً** لا نظرياً بحتاً: تحقق حي على staging (نفس البند)
+    // أظهر أن أول قراءة RSC مباشرة بعد Checkout (خلال أقل من ~100ms) قد لا ترى صف customer_orders
+    // المُدرَج للتو (تأخر اتساق قراءة-بعد-كتابة عابر عبر PgBouncer/طبقة الاتصال)، فيُشغَّل هذا
+    // الاحتياطي فعلياً في تدفّق حقيقي، لا افتراضياً فقط — لذلك يجب أن يكون آمناً للعرض بذاته (مقرَّباً
+    // لخانتين عشريتين)، لا مجرد "احتياط نظري لن يُستخدَم أبداً عملياً".
     const customerOrder = requestedOrder.customerOrderId
       ? await customerOrderRepository.findCustomerOrderById(requestedOrder.customerOrderId)
       : null;
-    const grandTotal = customerOrder?.totalSnapshot ?? suborders.reduce((sum, s) => sum + s.order.total, 0);
+    const grandTotal =
+      customerOrder?.totalSnapshot ?? Math.round(suborders.reduce((sum, s) => sum + s.order.total, 0) * 100) / 100;
 
     return { suborders, grandTotal };
   }

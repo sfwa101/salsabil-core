@@ -803,6 +803,24 @@ describe('OrdersService.getOrderForCustomerView', () => {
     expect(result!.grandTotal).toBe(123.98);
     expect(result!.grandTotal).not.toBe(30.99 + 92.99); // 123.97999999999999 — التوثيق الحي للخلل المتجنَّب
   });
+
+  // اكتُشف حياً أثناء نفس جولة التحقق أعلاه: مسار الاحتياط نفسه (customer_orders غير موجود بعد وقت
+  // القراءة) **يتحقَّق فعلياً** على staging — لوحظ حياً أن أول قراءة RSC مباشرة بعد Checkout (نافذة
+  // < 100ms) قد لا ترى صف customer_orders المُدرَج للتو (تأخر اتساق قراءة-بعد-كتابة عابر). لا يجوز
+  // اعتبار هذا المسار "نظرياً لن يُستخدَم" — يجب أن يكون آمناً للعرض بذاته (مقرَّباً لخانتين عشريتين)
+  // بالضبط لأنه يُشغَّل فعلياً في تدفّق حقيقي، لا افتراضياً فقط.
+  it('يُقرِّب مجموع الاحتياط لخانتين عشريتين لو تعذّر جلب customer_orders (يتجنّب نفس خطأ IEEE 754)', async () => {
+    const orderA = makeOrder({ id: 'order-a', tenantId: 'tenant-a', total: 30.99 });
+    const orderB = makeOrder({ id: 'order-b', tenantId: 'tenant-b', total: 92.99 });
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(orderA);
+    vi.mocked(customerOrderRepository.findOrdersByCustomerOrderId).mockResolvedValue([orderA, orderB]);
+    vi.mocked(customerOrderRepository.findOrderItems).mockResolvedValue([]);
+    vi.mocked(customerOrderRepository.findCustomerOrderById).mockResolvedValue(null); // محاكاة تأخر الاتساق العابر
+
+    const result = await ordersService.getOrderForCustomerView('order-a');
+
+    expect(result!.grandTotal).toBe(123.98);
+  });
 });
 
 describe('OrdersService.getOrdersForTenant', () => {
