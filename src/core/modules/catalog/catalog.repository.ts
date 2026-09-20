@@ -342,6 +342,96 @@ export class CatalogRepository {
     return (data as ProductRow[]).map(toProduct);
   }
 
+  // ==========================================================================
+  // §31 بند 8 (REEF_PHASE_1_PRODUCT_COMPLETENESS_AUDIT.md §12/§29 بند 15) — CRUD إدارة حقيقي فوق
+  // نفس الشجرة أعلاه، بدل سكريبتات SQL يدوية لمرة واحدة. كتابة عبر service_role حصراً (نفس نمط
+  // catalog_master_items/merchants — لا سياسة كتابة anon على جداول التصنيف). القراءة هنا (لوحة
+  // الإدارة) لا تُصفّى بـis_active=true كما في findDistricts العامة أعلاه — المدير يجب أن يرى
+  // الأحياء المُعطَّلة أيضاً ليتمكَّن من إعادة تفعيلها.
+  // ==========================================================================
+
+  async findAllDistrictsForAdmin(): Promise<District[]> {
+    const { data, error } = await supabaseAdmin.from('catalog_districts').select('*').order('sort_order');
+    if (error) throw error;
+    return (data as DistrictRow[]).map(toDistrict);
+  }
+
+  async insertDistrict(input: { slug: string; nameAr: string; sortOrder: number }): Promise<District> {
+    const { data, error } = await supabaseAdmin
+      .from('catalog_districts')
+      .insert({ slug: input.slug, name_ar: input.nameAr, sort_order: input.sortOrder, is_active: true })
+      .select('*')
+      .single();
+    if (error) throw error;
+    return toDistrict(data as DistrictRow);
+  }
+
+  async updateDistrict(id: string, input: { nameAr: string; sortOrder: number; isActive: boolean }): Promise<District> {
+    const { data, error } = await supabaseAdmin
+      .from('catalog_districts')
+      .update({ name_ar: input.nameAr, sort_order: input.sortOrder, is_active: input.isActive })
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return toDistrict(data as DistrictRow);
+  }
+
+  // لا فلترة is_active هنا (العمود غير موجود أصلاً على catalog_categories — راجع CatalogCategoryRow).
+  async findAllCategoriesForAdmin(districtId: string): Promise<CatalogCategory[]> {
+    const { data, error } = await supabaseAdmin.from('catalog_categories').select('*').eq('district_id', districtId).order('sort_order');
+    if (error) throw error;
+    return (data as CatalogCategoryRow[]).map(toCatalogCategory);
+  }
+
+  async insertCatalogCategory(input: { districtId: string; slug: string; nameAr: string; sortOrder: number }): Promise<CatalogCategory> {
+    const { data, error } = await supabaseAdmin
+      .from('catalog_categories')
+      .insert({ district_id: input.districtId, slug: input.slug, name_ar: input.nameAr, sort_order: input.sortOrder })
+      .select('*')
+      .single();
+    if (error) throw error;
+    return toCatalogCategory(data as CatalogCategoryRow);
+  }
+
+  async updateCatalogCategory(id: string, input: { nameAr: string; sortOrder: number }): Promise<CatalogCategory> {
+    const { data, error } = await supabaseAdmin
+      .from('catalog_categories')
+      .update({ name_ar: input.nameAr, sort_order: input.sortOrder })
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return toCatalogCategory(data as CatalogCategoryRow);
+  }
+
+  async findAllSubcategoriesForAdmin(categoryId: string): Promise<CatalogSubcategory[]> {
+    const { data, error } = await supabaseAdmin.from('catalog_subcategories').select('*').eq('category_id', categoryId).order('sort_order');
+    if (error) throw error;
+    return (data as CatalogSubcategoryRow[]).map(toCatalogSubcategory);
+  }
+
+  async insertCatalogSubcategory(input: { categoryId: string; slug: string; nameAr: string; sortOrder: number }): Promise<CatalogSubcategory> {
+    const { data, error } = await supabaseAdmin
+      .from('catalog_subcategories')
+      .insert({ category_id: input.categoryId, slug: input.slug, name_ar: input.nameAr, sort_order: input.sortOrder })
+      .select('*')
+      .single();
+    if (error) throw error;
+    return toCatalogSubcategory(data as CatalogSubcategoryRow);
+  }
+
+  async updateCatalogSubcategory(id: string, input: { nameAr: string; sortOrder: number }): Promise<CatalogSubcategory> {
+    const { data, error } = await supabaseAdmin
+      .from('catalog_subcategories')
+      .update({ name_ar: input.nameAr, sort_order: input.sortOrder })
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return toCatalogSubcategory(data as CatalogSubcategoryRow);
+  }
+
   async findProductsByCatalogSubcategory(subcategoryId: string): Promise<Product[]> {
     const { data, error } = await supabase
       .from('products')

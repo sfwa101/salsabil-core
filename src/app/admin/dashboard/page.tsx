@@ -48,6 +48,13 @@ export default async function AdminDashboardPage() {
         >
           الكتالوج الأساسي ←
         </Link>
+        {/* §31 بند 8 — إدارة الأحياء/الأقسام من الواجهة، بدل SQL يدوي */}
+        <Link
+          href="/admin/taxonomy"
+          className="rounded-xl border border-border px-4 py-3 text-sm font-medium text-foreground transition hover:bg-muted"
+        >
+          الأحياء والأقسام ←
+        </Link>
       </div>
 
       <section className="flex flex-col gap-3">

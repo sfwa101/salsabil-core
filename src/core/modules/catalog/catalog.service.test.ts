@@ -28,6 +28,15 @@ vi.mock('./catalog.repository', () => ({
     findProductById: vi.fn(),
     findTenantProductByMasterItem: vi.fn(),
     insertProductFromMaster: vi.fn(),
+    findAllDistrictsForAdmin: vi.fn(),
+    insertDistrict: vi.fn(),
+    updateDistrict: vi.fn(),
+    findAllCategoriesForAdmin: vi.fn(),
+    insertCatalogCategory: vi.fn(),
+    updateCatalogCategory: vi.fn(),
+    findAllSubcategoriesForAdmin: vi.fn(),
+    insertCatalogSubcategory: vi.fn(),
+    updateCatalogSubcategory: vi.fn(),
   },
 }));
 
@@ -474,5 +483,75 @@ describe('CatalogService.updateMerchantOfferStock (§31 بند 5)', () => {
     expect(auditService.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'catalog.merchant_offer_updated', entityId: 'prod-1', metadata: expect.objectContaining({ tenantId: 'tenant-a', quantity: 12, costPrice: 6 }) })
     );
+  });
+});
+
+// §31 بند 8 — إدارة تصنيفات/أحياء من لوحة الإدارة
+describe('CatalogService — إدارة شجرة التصنيف (§31 بند 8)', () => {
+  const district = { id: 'district-1', slug: 'nasr-city', nameAr: 'مدينة نصر', sortOrder: 1, isActive: true };
+  const category = { id: 'cat-1', districtId: 'district-1', slug: 'daily-food', nameAr: 'أطعمة يومية', sortOrder: 1 };
+  const subcategory = { id: 'sub-1', categoryId: 'cat-1', slug: 'dairy', nameAr: 'ألبان', sortOrder: 1 };
+
+  it('listAllDistrictsForAdmin يفوّض لـ findAllDistrictsForAdmin', async () => {
+    vi.mocked(catalogRepository.findAllDistrictsForAdmin).mockResolvedValue([district]);
+
+    const result = await catalogService.listAllDistrictsForAdmin();
+
+    expect(result).toEqual([district]);
+  });
+
+  it('createDistrict ينشئ حياً ويسجّل تدقيقاً', async () => {
+    vi.mocked(catalogRepository.insertDistrict).mockResolvedValue(district);
+
+    const result = await catalogService.createDistrict({ slug: 'nasr-city', nameAr: 'مدينة نصر', sortOrder: 1 }, actor);
+
+    expect(result).toEqual(district);
+    expect(auditService.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'catalog.district_created', entityId: district.id }));
+  });
+
+  it('updateDistrict يُحدِّث ويسجّل تدقيقاً', async () => {
+    vi.mocked(catalogRepository.updateDistrict).mockResolvedValue({ ...district, nameAr: 'اسم جديد' });
+
+    const result = await catalogService.updateDistrict('district-1', { nameAr: 'اسم جديد', sortOrder: 2, isActive: false }, actor);
+
+    expect(result.nameAr).toBe('اسم جديد');
+    expect(catalogRepository.updateDistrict).toHaveBeenCalledWith('district-1', { nameAr: 'اسم جديد', sortOrder: 2, isActive: false });
+    expect(auditService.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'catalog.district_updated', entityId: 'district-1' }));
+  });
+
+  it('createCatalogCategory ينشئ حياً ويسجّل تدقيقاً', async () => {
+    vi.mocked(catalogRepository.insertCatalogCategory).mockResolvedValue(category);
+
+    const result = await catalogService.createCatalogCategory({ districtId: 'district-1', slug: 'daily-food', nameAr: 'أطعمة يومية', sortOrder: 1 }, actor);
+
+    expect(result).toEqual(category);
+    expect(auditService.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'catalog.category_created', entityId: category.id }));
+  });
+
+  it('updateCatalogCategory يُحدِّث ويسجّل تدقيقاً', async () => {
+    vi.mocked(catalogRepository.updateCatalogCategory).mockResolvedValue({ ...category, sortOrder: 3 });
+
+    const result = await catalogService.updateCatalogCategory('cat-1', { nameAr: 'أطعمة يومية', sortOrder: 3 }, actor);
+
+    expect(result.sortOrder).toBe(3);
+    expect(auditService.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'catalog.category_updated', entityId: 'cat-1' }));
+  });
+
+  it('createCatalogSubcategory ينشئ حياً ويسجّل تدقيقاً', async () => {
+    vi.mocked(catalogRepository.insertCatalogSubcategory).mockResolvedValue(subcategory);
+
+    const result = await catalogService.createCatalogSubcategory({ categoryId: 'cat-1', slug: 'dairy', nameAr: 'ألبان', sortOrder: 1 }, actor);
+
+    expect(result).toEqual(subcategory);
+    expect(auditService.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'catalog.subcategory_created', entityId: subcategory.id }));
+  });
+
+  it('updateCatalogSubcategory يُحدِّث ويسجّل تدقيقاً', async () => {
+    vi.mocked(catalogRepository.updateCatalogSubcategory).mockResolvedValue({ ...subcategory, nameAr: 'ألبان وأجبان' });
+
+    const result = await catalogService.updateCatalogSubcategory('sub-1', { nameAr: 'ألبان وأجبان', sortOrder: 1 }, actor);
+
+    expect(result.nameAr).toBe('ألبان وأجبان');
+    expect(auditService.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'catalog.subcategory_updated', entityId: 'sub-1' }));
   });
 });

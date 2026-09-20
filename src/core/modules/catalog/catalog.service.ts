@@ -98,6 +98,115 @@ export class CatalogService {
     return catalogRepository.findProductsByCatalogSubcategory(subcategoryId);
   }
 
+  // ==========================================================================
+  // §31 بند 8 — إدارة الشجرة من لوحة الإدارة، بدل SQL يدوي. actor مطلوب صراحة لكل كتابة (تسجيل
+  // تدقيق) — نفس نمط createMasterItem/updateMasterItemPrice أعلاه.
+  // ==========================================================================
+
+  async listAllDistrictsForAdmin(): Promise<District[]> {
+    return catalogRepository.findAllDistrictsForAdmin();
+  }
+
+  async createDistrict(input: { slug: string; nameAr: string; sortOrder: number }, actor: { id: string; role: UserRole }): Promise<District> {
+    const district = await catalogRepository.insertDistrict(input);
+    await auditService.log({
+      actorId: actor.id,
+      actorRole: actor.role,
+      action: 'catalog.district_created',
+      entityType: 'catalog_district',
+      entityId: district.id,
+      metadata: { slug: district.slug, nameAr: district.nameAr },
+    });
+    return district;
+  }
+
+  async updateDistrict(
+    id: string,
+    input: { nameAr: string; sortOrder: number; isActive: boolean },
+    actor: { id: string; role: UserRole }
+  ): Promise<District> {
+    const district = await catalogRepository.updateDistrict(id, input);
+    await auditService.log({
+      actorId: actor.id,
+      actorRole: actor.role,
+      action: 'catalog.district_updated',
+      entityType: 'catalog_district',
+      entityId: id,
+      metadata: input,
+    });
+    return district;
+  }
+
+  async listAllCategoriesForAdmin(districtId: string): Promise<CatalogCategory[]> {
+    return catalogRepository.findAllCategoriesForAdmin(districtId);
+  }
+
+  async createCatalogCategory(
+    input: { districtId: string; slug: string; nameAr: string; sortOrder: number },
+    actor: { id: string; role: UserRole }
+  ): Promise<CatalogCategory> {
+    const category = await catalogRepository.insertCatalogCategory(input);
+    await auditService.log({
+      actorId: actor.id,
+      actorRole: actor.role,
+      action: 'catalog.category_created',
+      entityType: 'catalog_category',
+      entityId: category.id,
+      metadata: { districtId: input.districtId, slug: category.slug, nameAr: category.nameAr },
+    });
+    return category;
+  }
+
+  async updateCatalogCategory(id: string, input: { nameAr: string; sortOrder: number }, actor: { id: string; role: UserRole }): Promise<CatalogCategory> {
+    const category = await catalogRepository.updateCatalogCategory(id, input);
+    await auditService.log({
+      actorId: actor.id,
+      actorRole: actor.role,
+      action: 'catalog.category_updated',
+      entityType: 'catalog_category',
+      entityId: id,
+      metadata: input,
+    });
+    return category;
+  }
+
+  async listAllSubcategoriesForAdmin(categoryId: string): Promise<CatalogSubcategory[]> {
+    return catalogRepository.findAllSubcategoriesForAdmin(categoryId);
+  }
+
+  async createCatalogSubcategory(
+    input: { categoryId: string; slug: string; nameAr: string; sortOrder: number },
+    actor: { id: string; role: UserRole }
+  ): Promise<CatalogSubcategory> {
+    const subcategory = await catalogRepository.insertCatalogSubcategory(input);
+    await auditService.log({
+      actorId: actor.id,
+      actorRole: actor.role,
+      action: 'catalog.subcategory_created',
+      entityType: 'catalog_subcategory',
+      entityId: subcategory.id,
+      metadata: { categoryId: input.categoryId, slug: subcategory.slug, nameAr: subcategory.nameAr },
+    });
+    return subcategory;
+  }
+
+  async updateCatalogSubcategory(
+    id: string,
+    input: { nameAr: string; sortOrder: number },
+    actor: { id: string; role: UserRole }
+  ): Promise<CatalogSubcategory> {
+    const subcategory = await catalogRepository.updateCatalogSubcategory(id, input);
+    await auditService.log({
+      actorId: actor.id,
+      actorRole: actor.role,
+      action: 'catalog.subcategory_updated',
+      entityType: 'catalog_subcategory',
+      entityId: id,
+      metadata: input,
+    });
+    return subcategory;
+  }
+
   /**
    * يتحقق من أن الاختيار (الحجم/الإضافات) صالح لهذا المنتج
    */

@@ -410,3 +410,35 @@ DEEP — رسالة رفض موحَّدة + rate-limit (نفس نمط owner logi
 يتيمين خاملين تماماً (معرَّفان بوضوح باسم اختباري، بلا أي صلاحية أو ربط تاجر فعلي) بدل حذف صفوف
 `audit_log` — يطابق نص القاعدة رقم 4 حرفياً ("تُنظَّف **أو تُعطَّل**") لا انتهاكاً لها. لا أثر مالي،
 لا أثر أمني، لا ربط بأي تاجر/عميل حقيقي.
+
+---
+
+### بند 8 — واجهة إدارة تصنيفات/أحياء
+
+**حالة: قيد التنفيذ**
+
+**1. Specification:** CRUD حقيقي فوق `catalog_districts`/`catalog_categories`/`catalog_subcategories`
+(الشجرة المُستهلَكة فعلياً من واجهة العميل الحقيقية، TASK-18) من لوحة الإدارة — بدل سكريبتات SQL
+يدوية لمرة واحدة (الحالة الحالية الوحيدة لتغيير أي قسم/حي). نطاق V1: إنشاء + تعديل (اسم/ترتيب)
+للثلاثة مستويات، + تفعيل/تعطيل للحي فقط (العمود `is_active` غير موجود إطلاقاً على
+`catalog_categories`/`catalog_subcategories` بالمخطط الحالي — تحقَّقت من ذلك في الكود قبل الافتراض).
+**لا حذف** لأي مستوى (خطر فقدان بيانات مرتبطة بمنتجات موجودة، خارج نطاق V1 عمداً).
+
+**2. Plan:**
+- `catalog.repository.ts`: `findAllDistrictsForAdmin` (بلا فلترة `is_active` — المدير يحتاج رؤية
+  الأحياء المُعطَّلة لإعادة تفعيلها)، `insertDistrict`/`updateDistrict`،
+  `findAllCategoriesForAdmin`/`insertCatalogCategory`/`updateCatalogCategory`،
+  `findAllSubcategoriesForAdmin`/`insertCatalogSubcategory`/`updateCatalogSubcategory` — جميعها
+  `supabaseAdmin` (نفس نمط `catalog_master_items`/`merchants`: لا سياسة كتابة anon على جداول
+  التصنيف).
+- `catalog.service.ts`: أغلفة رقيقة + `auditService.log` لكل كتابة (6 أنواع حدث تدقيق جديدة).
+- واجهة: `src/app/admin/taxonomy/{page.tsx,actions.ts}` + 4 مكوّنات عميل
+  (`TaxonomyAddDistrictForm`/`TaxonomyDistrictCard`/`TaxonomyCategorySection`/`TaxonomySubcategoryRow`)
+  — شجرة `<details>` أصلية (حي → أقسام قابلة للطي → أقسام فرعية) بلا مكتبة UI إضافية. رابط جديد من
+  `admin/dashboard/page.tsx` ("الأحياء والأقسام ←").
+
+**3. Review ذاتية:** لا تعديل على `admin/catalog/page.tsx` (الكتالوج الأساسي، نطاق مختلف تماماً) —
+إضافة صرفة. Guardian Matrix: بيانات تصنيف (لا مالية مباشرة، لكن تُستهلَك في تصفح العميل الحي) =
+تحقق صحة صريح (`slug` نمط محدَّد، `sortOrder` رقم صحيح غير سالب، `nameAr` غير فارغ) قبل أي كتابة،
+عبر `zod` في طبقة الـServer Action (نفس نمط `admin/catalog/actions.ts`). 45 اختبار وحدة جديد
+(إضافة/تعديل لكل مستوى + تسجيل تدقيق).

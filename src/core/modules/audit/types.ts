@@ -27,7 +27,14 @@ export type AuditAction =
   | 'catalog.review_queue_resolved_merge'
   // §31 بند 5 (REEF_PHASE_1_PRODUCT_COMPLETENESS_AUDIT.md) — Merchant Offer كواجهة تفاعلية
   | 'catalog.merchant_offer_added'
-  | 'catalog.merchant_offer_updated';
+  | 'catalog.merchant_offer_updated'
+  // §31 بند 8 — إدارة تصنيفات/أحياء من لوحة الإدارة، بدل SQL يدوي
+  | 'catalog.district_created'
+  | 'catalog.district_updated'
+  | 'catalog.category_created'
+  | 'catalog.category_updated'
+  | 'catalog.subcategory_created'
+  | 'catalog.subcategory_updated';
 
 export interface AuditLogEntry {
   id: string;
