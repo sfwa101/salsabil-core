@@ -165,6 +165,36 @@ demo-products في HTML الحي لكلا التخطيطين.
 تطبيق تلقائي)" — لا بمعنى "المشكلة الأساسية (99.3% غير قابل للشراء) حُلَّت". تلك تبقى مفتوحة بطبيعتها
 حتى قرار منتجي من المؤسس حول أي من المسارات الثلاثة المذكورة في التقرير.
 
+---
+
+### بند 5 — Merchant Offer كواجهة تفاعلية
+
+**حالة: قيد التنفيذ**
+
+**1. Specification:** بحث تاجر في Product Library بالاسم (لا Barcode، غير موجود بالمخطط)، إضافة
+منتج موجود لعروضه (كمية + سعر توريد)، تعديل كمية/سعر توريد عرض قائم فردياً — بديل تفاعلي حقيقي أول
+مرة، بدل استبدال Excel كامل فقط (`import/page.tsx` يبقى بلا تغيير كمسار موازٍ، لا حذف).
+
+**2. Plan:**
+- `catalog.repository.ts`: `searchMasterItemsByName(query, limit)` — `ilike` على `catalog_master_items.name`.
+- `catalog.service.ts`: `searchMasterItems`، `listMerchantOffers(tenantId)`،
+  `addMerchantOfferFromMasterItem(tenantId, masterItemId, quantity, costPrice, actor)` (يعيد
+  استخدام `upsertTenantProductFromMaster` الخاصة الموجودة أصلاً — نفس نقطة الالتقاء مع استيراد
+  Excel/قائمة المراجعة، لا تكرار منطق)، `updateMerchantOfferStock(tenantId, productId, quantity,
+  costPrice, actor)` (فحص ملكية صريح قبل أي كتابة — عزل مستأجرين).
+- `inventory.repository.ts`/`inventory.service.ts`: `findByProductIds`/`getStockForProducts` (دفعة
+  واحدة، لا N+1) لعرض كمية/سعر توريد كل عروض التاجر معاً.
+- `audit/types.ts`: نوعا حدث تدقيق جديدان (`catalog.merchant_offer_added`/`_updated`).
+- واجهة: `src/app/merchant/offers/{page.tsx,actions.ts}` + `src/components/merchant/
+  {MerchantOfferSearch.tsx,MerchantOfferRow.tsx}` (بحث + نموذج إضافة لكل نتيجة؛ صف تعديل مباشر لكل
+  منتج قائم). رابط جديد من `merchant/orders/page.tsx` ("عروضي ←").
+
+**3. Review ذاتية:** لا تعديل على `importMerchantExcel`/مسار Excel القائم — إضافة صرفة. عزل
+المستأجرين مطبَّق في كلا مساري الإضافة (tenantId من الجلسة فقط، Server Action) والتعديل (فحص
+`product.tenantId === session.tenantId` صريح قبل أي كتابة). Guardian Matrix: منطق مخزون/مالي
+(كمية+سعر توريد) = DEEP — تحقق صحة مدخلات صريح (رفض قيم سالبة) قبل أي كتابة، تسجيل تدقيق لكل
+عملية. لا تعارض مع DD-002 (لا علاقة بالأقفال في-الذاكرة). لا لمس لأي ملف ممنوع.
+
 **Spec:** سكربت تشخيصي **بلا أي كتابة على قاعدة البيانات إطلاقاً** (قراءة فقط) يقترح مطابقات بين
 منتجات مستوردة بلا `tenant_id` وتجار حقيقيين موجودين فعلياً، بناءً على تطابق اسم حرفي بعد التطبيع
 (`normalizeProductName`، نفس الدالة المعتمَدة أصلاً في ADR-031 لمطابقة استيراد Excel — **تطابق حرفي

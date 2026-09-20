@@ -2,8 +2,14 @@
 // فحص توفر المخزون فقط — لا استدعاء لقاعدة بيانات هنا مباشرة، فقط عبر inventoryRepository
 
 import { inventoryRepository } from './inventory.repository';
+import type { InventoryRecord } from './types';
 
 export class InventoryService {
+  // §31 بند 5 — لوحة "عروضي" في بوابة التاجر (كمية/سعر توريد كل منتجاته معاً).
+  async getStockForProducts(productIds: string[]): Promise<InventoryRecord[]> {
+    return inventoryRepository.findByProductIds(productIds);
+  }
+
   /**
    * يتحقق من توفر الكمية المطلوبة. عدم وجود سجل مخزون يُعامَل كـ "غير متاح"
    * (لا استثناء صامت لصالح البيع بلا رقابة)

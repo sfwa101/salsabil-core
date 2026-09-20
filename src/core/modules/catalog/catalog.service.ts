@@ -229,6 +229,77 @@ export class CatalogService {
     return { matched, queued, errors: [] };
   }
 
+  // §31 بند 5 — بحث التاجر في Product Library بالاسم (لا Barcode، غير موجود بالمخطط)، لإضافة منتج
+  // موجود لعروضه تفاعلياً بدل استبدال Excel كامل فقط.
+  async searchMasterItems(query: string): Promise<MasterCatalogItem[]> {
+    const trimmed = query.trim();
+    if (trimmed.length === 0) return [];
+    return catalogRepository.searchMasterItemsByName(trimmed);
+  }
+
+  // كل منتجات تاجر معيَّن — للوحة "عروضي" الجديدة (§31 بند 5). tenantId يجب أن يأتي من جلسة التاجر،
+  // أبداً من مدخل عميل (نفس التزام getOrdersForTenant المجاور في orders.service.ts).
+  async listMerchantOffers(tenantId: string): Promise<Product[]> {
+    return catalogRepository.findProductsByTenant(tenantId);
+  }
+
+  // إضافة عنصر من Product Library لعروض التاجر (منتج جديد له، أو تحديث كميته/سعر توريده لو كان
+  // موجوداً بالفعل — upsertTenantProductFromMaster تتعامل مع الحالتين). هذا المسار التفاعلي الجديد
+  // (§31 بند 5) — البديل الوحيد سابقاً كان استبدال ملف Excel كامل (importMerchantExcel أعلاه).
+  async addMerchantOfferFromMasterItem(
+    tenantId: string,
+    masterItemId: string,
+    quantity: number,
+    costPrice: number,
+    actor: { id: string; role: UserRole }
+  ): Promise<Product> {
+    if (!Number.isFinite(quantity) || quantity < 0) throw new Error('الكمية يجب أن تكون رقماً صحيحاً غير سالب');
+    if (!Number.isFinite(costPrice) || costPrice < 0) throw new Error('سعر التوريد يجب أن يكون رقماً غير سالب');
+
+    const master = await catalogRepository.findMasterItemById(masterItemId);
+    if (!master) throw new Error('عنصر الكتالوج الأساسي غير موجود');
+
+    const product = await this.upsertTenantProductFromMaster(tenantId, master, quantity, costPrice);
+
+    await auditService.log({
+      actorId: actor.id,
+      actorRole: actor.role,
+      action: 'catalog.merchant_offer_added',
+      entityType: 'product',
+      entityId: product.id,
+      metadata: { tenantId, masterItemId, quantity, costPrice },
+    });
+
+    return product;
+  }
+
+  // تعديل كمية/سعر توريد عرض قائم فعلاً للتاجر — بلا حاجة لإعادة البحث عن عنصر الكتالوج الأساسي (على
+  // عكس الإضافة أعلاه). فحص ملكية صريح (تعزل المستأجرين، INV-TEN-001) قبل أي كتابة مخزون.
+  async updateMerchantOfferStock(
+    tenantId: string,
+    productId: string,
+    quantity: number,
+    costPrice: number,
+    actor: { id: string; role: UserRole }
+  ): Promise<void> {
+    if (!Number.isFinite(quantity) || quantity < 0) throw new Error('الكمية يجب أن تكون رقماً صحيحاً غير سالب');
+    if (!Number.isFinite(costPrice) || costPrice < 0) throw new Error('سعر التوريد يجب أن يكون رقماً غير سالب');
+
+    const product = await catalogRepository.findProductById(productId);
+    if (!product || product.tenantId !== tenantId) throw new Error('هذا المنتج لا يخص متجرك — لا يمكنك تعديله');
+
+    await inventoryService.setStockForImport(productId, quantity, costPrice);
+
+    await auditService.log({
+      actorId: actor.id,
+      actorRole: actor.role,
+      action: 'catalog.merchant_offer_updated',
+      entityType: 'product',
+      entityId: productId,
+      metadata: { tenantId, quantity, costPrice },
+    });
+  }
+
   async listReviewQueue(): Promise<ReviewQueueItem[]> {
     return catalogRepository.listReviewQueue('pending');
   }

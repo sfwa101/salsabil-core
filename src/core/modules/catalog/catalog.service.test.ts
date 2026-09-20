@@ -23,6 +23,11 @@ vi.mock('./catalog.repository', () => ({
     findProductsByCatalogCategory: vi.fn(),
     findProductsByCatalogSubcategory: vi.fn(),
     findPurchasableProducts: vi.fn(),
+    searchMasterItemsByName: vi.fn(),
+    findProductsByTenant: vi.fn(),
+    findProductById: vi.fn(),
+    findTenantProductByMasterItem: vi.fn(),
+    insertProductFromMaster: vi.fn(),
   },
 }));
 
@@ -38,10 +43,17 @@ vi.mock('../merchant/merchant.service', () => ({
   },
 }));
 
+vi.mock('../inventory/inventory.service', () => ({
+  inventoryService: {
+    setStockForImport: vi.fn(),
+  },
+}));
+
 const { catalogService } = await import('./catalog.service');
 const { catalogRepository } = await import('./catalog.repository');
 const { auditService } = await import('../audit/audit.service');
 const { merchantService } = await import('../merchant/merchant.service');
+const { inventoryService } = await import('../inventory/inventory.service');
 
 const product: Product = {
   id: 'prod-1',
@@ -375,5 +387,92 @@ describe('CatalogService.listPurchasableProducts', () => {
     const result = await catalogService.listPurchasableProducts(2);
 
     expect(result).toHaveLength(2);
+  });
+});
+
+describe('CatalogService.searchMasterItems (§31 بند 5)', () => {
+  it('يفوّض لـ searchMasterItemsByName بعد trim، بلا استعلام لنص فارغ', async () => {
+    vi.mocked(catalogRepository.searchMasterItemsByName).mockResolvedValue([masterItem]);
+
+    const result = await catalogService.searchMasterItems('  أرز  ');
+
+    expect(catalogRepository.searchMasterItemsByName).toHaveBeenCalledWith('أرز');
+    expect(result).toEqual([masterItem]);
+  });
+
+  it('يعيد مصفوفة فارغة لنص بحث فارغ بلا استدعاء المستودع', async () => {
+    const result = await catalogService.searchMasterItems('   ');
+
+    expect(result).toEqual([]);
+    expect(catalogRepository.searchMasterItemsByName).not.toHaveBeenCalled();
+  });
+});
+
+describe('CatalogService.addMerchantOfferFromMasterItem (§31 بند 5)', () => {
+  it('يرفض كمية سالبة قبل أي قراءة/كتابة', async () => {
+    await expect(catalogService.addMerchantOfferFromMasterItem('tenant-a', 'master-1', -1, 5, actor)).rejects.toThrow('الكمية');
+    expect(catalogRepository.findMasterItemById).not.toHaveBeenCalled();
+  });
+
+  it('يرفض سعر توريد سالب قبل أي قراءة/كتابة', async () => {
+    await expect(catalogService.addMerchantOfferFromMasterItem('tenant-a', 'master-1', 5, -1, actor)).rejects.toThrow('سعر التوريد');
+    expect(catalogRepository.findMasterItemById).not.toHaveBeenCalled();
+  });
+
+  it('يرفض عنصر كتالوج أساسي غير موجود', async () => {
+    vi.mocked(catalogRepository.findMasterItemById).mockResolvedValue(null);
+
+    await expect(catalogService.addMerchantOfferFromMasterItem('tenant-a', 'missing', 5, 5, actor)).rejects.toThrow('غير موجود');
+  });
+
+  it('ينشئ منتج تاجر جديد من العنصر الأساسي، يضبط المخزون، ويسجّل تدقيقاً — لو لم يكن للتاجر منتج مرتبط بهذا العنصر بعد', async () => {
+    vi.mocked(catalogRepository.findMasterItemById).mockResolvedValue(masterItem);
+    vi.mocked(catalogRepository.findTenantProductByMasterItem).mockResolvedValue(null);
+    vi.mocked(catalogRepository.insertProductFromMaster).mockResolvedValue({ ...product, id: 'prod-new', tenantId: 'tenant-a' });
+
+    const result = await catalogService.addMerchantOfferFromMasterItem('tenant-a', masterItem.id, 20, 8, actor);
+
+    expect(catalogRepository.insertProductFromMaster).toHaveBeenCalledWith('tenant-a', masterItem);
+    expect(inventoryService.setStockForImport).toHaveBeenCalledWith('prod-new', 20, 8);
+    expect(result.id).toBe('prod-new');
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'catalog.merchant_offer_added', entityId: 'prod-new', metadata: expect.objectContaining({ tenantId: 'tenant-a', quantity: 20, costPrice: 8 }) })
+    );
+  });
+
+  it('يُحدِّث المخزون فقط (لا صف منتج جديد) لو كان للتاجر بالفعل منتج مرتبط بهذا العنصر', async () => {
+    vi.mocked(catalogRepository.findMasterItemById).mockResolvedValue(masterItem);
+    vi.mocked(catalogRepository.findTenantProductByMasterItem).mockResolvedValue({ ...product, id: 'prod-existing', tenantId: 'tenant-a' });
+
+    await catalogService.addMerchantOfferFromMasterItem('tenant-a', masterItem.id, 30, 9, actor);
+
+    expect(catalogRepository.insertProductFromMaster).not.toHaveBeenCalled();
+    expect(inventoryService.setStockForImport).toHaveBeenCalledWith('prod-existing', 30, 9);
+  });
+});
+
+describe('CatalogService.updateMerchantOfferStock (§31 بند 5)', () => {
+  it('يرفض تعديل منتج لا يخص تاجر الطلب (عزل مستأجرين)', async () => {
+    vi.mocked(catalogRepository.findProductById).mockResolvedValue({ ...product, id: 'prod-1', tenantId: 'tenant-other' });
+
+    await expect(catalogService.updateMerchantOfferStock('tenant-a', 'prod-1', 5, 5, actor)).rejects.toThrow('لا يخص متجرك');
+    expect(inventoryService.setStockForImport).not.toHaveBeenCalled();
+  });
+
+  it('يرفض منتجاً غير موجود إطلاقاً', async () => {
+    vi.mocked(catalogRepository.findProductById).mockResolvedValue(null);
+
+    await expect(catalogService.updateMerchantOfferStock('tenant-a', 'missing', 5, 5, actor)).rejects.toThrow('لا يخص متجرك');
+  });
+
+  it('يضبط المخزون ويسجّل تدقيقاً لمنتج يخص التاجر فعلاً', async () => {
+    vi.mocked(catalogRepository.findProductById).mockResolvedValue({ ...product, id: 'prod-1', tenantId: 'tenant-a' });
+
+    await catalogService.updateMerchantOfferStock('tenant-a', 'prod-1', 12, 6, actor);
+
+    expect(inventoryService.setStockForImport).toHaveBeenCalledWith('prod-1', 12, 6);
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'catalog.merchant_offer_updated', entityId: 'prod-1', metadata: expect.objectContaining({ tenantId: 'tenant-a', quantity: 12, costPrice: 6 }) })
+    );
   });
 });

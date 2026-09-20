@@ -33,12 +33,20 @@ export default async function MerchantOrdersPage() {
         </form>
       </div>
 
-      <Link
-        href="/merchant/import"
-        className="self-start rounded-xl border border-border px-4 py-3 text-sm font-medium text-foreground transition hover:bg-muted"
-      >
-        استيراد الكتالوج (Excel) ←
-      </Link>
+      <div className="flex gap-2">
+        <Link
+          href="/merchant/offers"
+          className="self-start rounded-xl border border-border px-4 py-3 text-sm font-medium text-foreground transition hover:bg-muted"
+        >
+          عروضي ←
+        </Link>
+        <Link
+          href="/merchant/import"
+          className="self-start rounded-xl border border-border px-4 py-3 text-sm font-medium text-foreground transition hover:bg-muted"
+        >
+          استيراد الكتالوج (Excel) ←
+        </Link>
+      </div>
 
       {orders.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-border p-8 text-center text-muted-foreground">

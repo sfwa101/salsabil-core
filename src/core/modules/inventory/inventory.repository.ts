@@ -33,6 +33,15 @@ export class InventoryRepository {
     return data ? toInventoryRecord(data as InventoryRow) : null;
   }
 
+  // §31 بند 5 — لوحة "عروضي" في بوابة التاجر تحتاج كمية/سعر توريد كل منتجاته معاً، لا استعلاماً
+  // منفصلاً لكل صف (N+1) — نفس دافع findProductsByIds المُجمَّعة في catalog.repository.ts.
+  async findByProductIds(productIds: string[]): Promise<InventoryRecord[]> {
+    if (productIds.length === 0) return [];
+    const { data, error } = await supabase.from('inventory').select('*').in('product_id', productIds);
+    if (error) throw error;
+    return (data as InventoryRow[]).map(toInventoryRecord);
+  }
+
   // CRITICAL-FIXES-FROM-AUDIT-001، بند 2 — خصم ذرّي شرطي يحل سباق TOCTOU الذي كان قائماً بين
   // isAvailable() (قراءة) وقرار المتصل المنفصل بالمتابعة. Supabase-js (PostgREST) لا يدعم تعبيراً
   // نسبياً مثل "quantity_available = quantity_available - X" في .update() مباشرة — الخياران

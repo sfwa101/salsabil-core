@@ -368,6 +368,17 @@ export class CatalogRepository {
     return data ? toMasterCatalogItem(data as MasterCatalogItemRow) : null;
   }
 
+  // §31 بند 5 (REEF_PHASE_1_PRODUCT_COMPLETENESS_AUDIT.md) — بحث التاجر في Product Library بالاسم
+  // (لا Barcode، المفهوم غير موجود إطلاقاً في المخطط، §4/§9 من تقرير التدقيق). ilike بلا تطبيع (على
+  // عكس المطابقة الحرفية الصارمة لاستيراد Excel، ADR-031) — هذا بحث تفاعلي للتاجر يختار منه يدوياً،
+  // لا مطابقة آلية تُطبَّق بلا مراجعة بشرية، فلا خطر دمج خاطئ صامت هنا. supabaseAdmin بنفس نمط
+  // listMasterItems/findMasterItemById أعلاه (نفس الجدول).
+  async searchMasterItemsByName(query: string, limit = 20): Promise<MasterCatalogItem[]> {
+    const { data, error } = await supabaseAdmin.from('catalog_master_items').select('*').ilike('name', `%${query}%`).order('name').limit(limit);
+    if (error) throw error;
+    return (data as MasterCatalogItemRow[]).map(toMasterCatalogItem);
+  }
+
   async insertMasterItem(input: {
     categoryId: string;
     name: string;
