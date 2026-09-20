@@ -31,7 +31,7 @@ export function MobileSmallProductCard({
       <Link href={`/product/${product.id}`} className="relative h-24 w-full flex-1 overflow-hidden bg-card p-2 block">
         {/* Top Badges (Right side) */}
         <div className="absolute right-2 top-2 z-10 pointer-events-none">
-          <span className="bg-rose-50 text-rose-600 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm">
+          <span className="bg-destructive/10 text-destructive px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm">
             رائج
           </span>
         </div>

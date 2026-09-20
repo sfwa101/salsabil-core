@@ -117,7 +117,7 @@ export function DesktopCartSidebar({ items = [], total = 0, onCheckout }: Deskto
   }
 
   return (
-    <aside className="w-80 shrink-0 h-full flex flex-col bg-white rounded-xl shadow-sm border lg:my-4 overflow-hidden hidden lg:flex">
+    <aside className="w-80 shrink-0 h-full flex flex-col bg-card rounded-xl shadow-sm border lg:my-4 overflow-hidden hidden lg:flex">
       <div className="p-4 shrink-0 border-b border-border bg-muted/30">
         <h2 className="text-xl font-bold flex items-center gap-2 text-foreground">
           <ShoppingBag size={20} className="text-primary" />
@@ -144,7 +144,7 @@ export function DesktopCartSidebar({ items = [], total = 0, onCheckout }: Deskto
       </div>
 
       {hasVisibleItems && (
-        <div className="p-4 shrink-0 border-t bg-white mt-auto">
+        <div className="p-4 shrink-0 border-t bg-card mt-auto">
           <div className="flex justify-between items-center mb-4 text-foreground">
             <span className="font-semibold">الإجمالي</span>
             <span className="font-extrabold text-lg text-primary">{safeTotal.toLocaleString('ar-EG')} ج.م</span>

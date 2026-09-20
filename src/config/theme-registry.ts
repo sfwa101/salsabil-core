@@ -26,6 +26,10 @@ export interface WorldSemanticTokens {
   border: string;
   destructive: string;
   destructiveForeground: string;
+  /** ثابت عبر كل العوالم/الأوضاع (لا يتبادل بين الفاتح/الداكن كـforeground/background) — طبقة
+   *  تعتيم/نص فوق وسائط عشوائية (فيديو Reels، تدرجات StoryBar). راجع globals.css → --sb-scrim. */
+  scrim: string;
+  scrimForeground: string;
 }
 
 export interface WorldTheme {
@@ -38,6 +42,13 @@ export interface WorldTheme {
 const DESTRUCTIVE = {
   destructive: '#DC2626',
   destructiveForeground: '#FFFFFF',
+} as const;
+
+// ثابتة عبر كل العوالم *وكل الأوضاع* (لا [data-personal-mode] أيضاً، بعكس DESTRUCTIVE التي لا تزال
+// نظرياً قابلة للتخصيص لكل عالم لو احتاج الأمر لاحقاً) — راجع تعليق --sb-scrim في globals.css.
+const SCRIM = {
+  scrim: '#000000',
+  scrimForeground: '#FFFFFF',
 } as const;
 
 export const WORLD_THEMES: Record<WorldSlug, WorldTheme> = {
@@ -59,6 +70,7 @@ export const WORLD_THEMES: Record<WorldSlug, WorldTheme> = {
       mutedForeground: '#6E6285',
       border: '#E4DCF2',
       ...DESTRUCTIVE,
+      ...SCRIM,
     },
   },
   reef: {
@@ -80,6 +92,7 @@ export const WORLD_THEMES: Record<WorldSlug, WorldTheme> = {
       mutedForeground: '#5B6D5F',
       border: '#E3EDE6',
       ...DESTRUCTIVE,
+      ...SCRIM,
     },
   },
   'reef-lavender': {
@@ -104,6 +117,7 @@ export const WORLD_THEMES: Record<WorldSlug, WorldTheme> = {
       mutedForeground: '#766E82',
       border: '#E5DCF2',
       ...DESTRUCTIVE,
+      ...SCRIM,
     },
   },
   asrab: {
@@ -124,6 +138,7 @@ export const WORLD_THEMES: Record<WorldSlug, WorldTheme> = {
       mutedForeground: '#5C6A5E',
       border: '#E3DFC9',
       ...DESTRUCTIVE,
+      ...SCRIM,
     },
   },
   nabdh: {
@@ -144,6 +159,7 @@ export const WORLD_THEMES: Record<WorldSlug, WorldTheme> = {
       mutedForeground: '#5A7472',
       border: '#DCEBEA',
       ...DESTRUCTIVE,
+      ...SCRIM,
     },
   },
   noor: {
@@ -164,6 +180,7 @@ export const WORLD_THEMES: Record<WorldSlug, WorldTheme> = {
       mutedForeground: '#58627A',
       border: '#DCE2ED',
       ...DESTRUCTIVE,
+      ...SCRIM,
     },
   },
   takween: {
@@ -184,6 +201,7 @@ export const WORLD_THEMES: Record<WorldSlug, WorldTheme> = {
       mutedForeground: '#5C6270',
       border: '#E1E4EA',
       ...DESTRUCTIVE,
+      ...SCRIM,
     },
   },
   bayan: {
@@ -204,6 +222,7 @@ export const WORLD_THEMES: Record<WorldSlug, WorldTheme> = {
       mutedForeground: '#6E5C54',
       border: '#EFDFD8',
       ...DESTRUCTIVE,
+      ...SCRIM,
     },
   },
 };

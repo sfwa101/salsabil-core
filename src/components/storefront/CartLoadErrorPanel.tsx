@@ -13,7 +13,7 @@ export function CartLoadErrorPanel() {
   const router = useRouter();
 
   return (
-    <aside className="w-80 shrink-0 h-full flex flex-col bg-white rounded-xl shadow-sm border lg:my-4 overflow-hidden hidden lg:flex">
+    <aside className="w-80 shrink-0 h-full flex flex-col bg-card rounded-xl shadow-sm border lg:my-4 overflow-hidden hidden lg:flex">
       <div className="p-4 shrink-0 border-b border-border bg-muted/30">
         <h2 className="text-xl font-bold flex items-center gap-2 text-foreground">
           <ShoppingBag size={20} className="text-primary" />

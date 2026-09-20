@@ -45,6 +45,8 @@
   --color-border: var(--sb-border);
   --color-destructive: var(--sb-destructive);
   --color-destructive-foreground: var(--sb-destructive-foreground);
+  --color-scrim: var(--sb-scrim);
+  --color-scrim-foreground: var(--sb-scrim-foreground);
   /*
    * إصلاح (ADR-025): shadcn init كانت كتبت هنا حرفياً `--font-sans: var(--font-sans);` — مرجع ذاتي
    * فارغ يُسقِط مكدّس Tailwind الافتراضي الفعلي ويجعل المتصفح يعرض النص بخط Times New Roman
@@ -98,6 +100,19 @@
 :root {
   --sb-destructive: #dc2626;
   --sb-destructive-foreground: #ffffff;
+
+  /*
+   * scrim/scrim-foreground — ثابتان دائماً (لا [data-world]، لا [data-personal-mode]) — نفس مبدأ
+   * destructive أعلاه بالضبط (استثناء موثَّق من نظام العوالم/الأوضاع). الغرض مختلف عن كل توكن آخر
+   * هنا: طبقة تعتيم/نص فوق وسائط عشوائية (فيديو Reels، صور/تدرجات StoryBar) — تحتاج تباين مضمون
+   * (غامق شفاف + نص فاتح) بصرف النظر عن الوضع الفاتح/الداكن النشط، بعكس foreground/background اللذين
+   * يتبادلان القيمة عمداً بين الفاتح/الداكن (هذا هو **سبب وجود** scrim: لا توكن آخر يبقى ثابتاً عبر
+   * كليهما — تحقَّق منه حياً: بدون هذا التوكن، تعتيم/نص Reels وStoryBar فوق الوسائط كان سينعكس
+   * (نص غامق على خلفية غامقة) عند اختيار أي ثيم شخصي داكن). راجع docs/UI_UX_SYSTEM.md §8،
+   * src/config/theme-registry.ts → SCRIM.
+   */
+  --sb-scrim: #000000;
+  --sb-scrim-foreground: #ffffff;
 
   /*
    * ⚠️ ما يلي (--background حتى --sidebar-ring) وليدة `npx shadcn@latest init`

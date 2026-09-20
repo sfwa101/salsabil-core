@@ -44,7 +44,7 @@ function getTabIcon(id: string) {
 
 export async function Header() {
   return (
-    <header className="lg:sticky lg:top-0 z-50 bg-white shadow-sm border-b border-border">
+    <header className="lg:sticky lg:top-0 z-50 bg-card shadow-sm border-b border-border">
       
       {/* === DESKTOP HEADER (Facebook Style) === */}
         <div className="hidden lg:flex relative mx-auto h-14 max-w-[1340px] items-center justify-between px-4">

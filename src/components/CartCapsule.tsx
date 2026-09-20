@@ -209,7 +209,7 @@ export function CartCapsule() {
 
       {/* Mobile Full Screen Cart Overlay */}
       {sheetOpen && (
-        <div className="fixed inset-0 z-[100] flex flex-col bg-white lg:hidden">
+        <div className="fixed inset-0 z-[100] flex flex-col bg-card lg:hidden">
           <div className="flex items-center justify-between border-b border-border px-4 py-4 shrink-0">
             <h2 className="text-lg font-bold text-foreground">سلة المشتريات</h2>
             <button
@@ -240,7 +240,7 @@ export function CartCapsule() {
             )}
           </div>
           {cartData && hasVisibleItems && (
-            <div className="shrink-0 border-t border-border bg-white p-4 pb-6 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+            <div className="shrink-0 border-t border-border bg-card p-4 pb-6 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
               <div className="flex items-center justify-between font-bold text-foreground mb-4">
                 <span className="text-muted-foreground">الإجمالي</span>
                 <span className="text-primary text-2xl">{displayTotalSheet.toLocaleString('ar-EG')} ج.م</span>

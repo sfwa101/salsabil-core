@@ -31,12 +31,12 @@ export function StoryBar({ districts = [] }: { districts?: District[] }) {
           href={`/${district.slug}`}
           className={`group relative flex h-40 w-[100px] shrink-0 snap-start flex-col items-center justify-center overflow-hidden rounded-2xl md:h-48 md:w-[120px] shadow-sm transition-transform active:scale-95 border border-border/50 ${FALLBACK_GRADIENTS[index % FALLBACK_GRADIENTS.length]}`}
         >
-          <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors duration-500"></div>
-          <span className="relative z-10 text-4xl text-white/50 font-black mb-2 group-hover:scale-110 transition-transform duration-500">
+          <div className="absolute inset-0 bg-scrim/10 group-hover:bg-scrim/0 transition-colors duration-500"></div>
+          <span className="relative z-10 text-4xl text-scrim-foreground/50 font-black mb-2 group-hover:scale-110 transition-transform duration-500">
             {district.nameAr.substring(0, 1)}
           </span>
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent pt-6 pb-2">
-            <span className="block w-full text-center text-[11px] font-bold text-white md:text-sm px-1 truncate">
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-scrim/80 to-transparent pt-6 pb-2">
+            <span className="block w-full text-center text-[11px] font-bold text-scrim-foreground md:text-sm px-1 truncate">
               {district.nameAr}
             </span>
           </div>

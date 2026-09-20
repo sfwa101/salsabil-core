@@ -55,7 +55,7 @@ export function ReelsFeed() {
 
   return (
     <div 
-      className="h-[calc(100vh-140px)] w-full overflow-y-scroll snap-y snap-mandatory bg-black relative"
+      className="h-[calc(100vh-140px)] w-full overflow-y-scroll snap-y snap-mandatory bg-scrim relative"
       onScroll={handleScroll}
       style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
     >
@@ -67,7 +67,7 @@ export function ReelsFeed() {
         const isActive = index === activeReelIndex;
         
         return (
-          <div key={reel.id} className="h-full w-full snap-start relative flex items-center justify-center bg-zinc-900">
+          <div key={reel.id} className="h-full w-full snap-start relative flex items-center justify-center bg-scrim">
             {/* Video Background */}
             <video 
               src={reel.videoUrl} 
@@ -79,24 +79,24 @@ export function ReelsFeed() {
             />
             
             {/* Overlay Gradient for Text Readability */}
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/80" />
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-scrim/80" />
 
             {/* Right Action Bar */}
             <div className="absolute right-4 bottom-24 flex flex-col items-center gap-6 z-10">
-              <button className="flex flex-col items-center gap-1 text-white hover:text-primary transition">
-                <div className="bg-black/20 p-3 rounded-full backdrop-blur-sm border border-white/10">
-                  <Heart size={28} className={isActive ? 'fill-white' : ''} />
+              <button className="flex flex-col items-center gap-1 text-scrim-foreground hover:text-primary transition">
+                <div className="bg-scrim/20 p-3 rounded-full backdrop-blur-sm border border-scrim-foreground/10">
+                  <Heart size={28} className={isActive ? 'fill-scrim-foreground' : ''} />
                 </div>
                 <span className="text-xs font-semibold drop-shadow-md">{reel.likes}</span>
               </button>
-              <button className="flex flex-col items-center gap-1 text-white hover:text-white/80 transition">
-                <div className="bg-black/20 p-3 rounded-full backdrop-blur-sm border border-white/10">
+              <button className="flex flex-col items-center gap-1 text-scrim-foreground hover:text-scrim-foreground/80 transition">
+                <div className="bg-scrim/20 p-3 rounded-full backdrop-blur-sm border border-scrim-foreground/10">
                   <MessageCircle size={28} />
                 </div>
                 <span className="text-xs font-semibold drop-shadow-md">{reel.comments}</span>
               </button>
-              <button className="flex flex-col items-center gap-1 text-white hover:text-white/80 transition">
-                <div className="bg-black/20 p-3 rounded-full backdrop-blur-sm border border-white/10">
+              <button className="flex flex-col items-center gap-1 text-scrim-foreground hover:text-scrim-foreground/80 transition">
+                <div className="bg-scrim/20 p-3 rounded-full backdrop-blur-sm border border-scrim-foreground/10">
                   <Share2 size={28} />
                 </div>
                 <span className="text-xs font-semibold drop-shadow-md">مشاركة</span>
@@ -109,19 +109,19 @@ export function ReelsFeed() {
                 <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold">
                   {reel.merchantName.charAt(0)}
                 </div>
-                <span className="text-white font-bold text-shadow">{reel.merchantName}</span>
-                <button className="text-xs bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded-full backdrop-blur-sm transition border border-white/20">
+                <span className="text-scrim-foreground font-bold text-shadow">{reel.merchantName}</span>
+                <button className="text-xs bg-scrim-foreground/20 hover:bg-scrim-foreground/30 text-scrim-foreground px-3 py-1 rounded-full backdrop-blur-sm transition border border-scrim-foreground/20">
                   متابعة
                 </button>
               </div>
-              <p className="text-white/90 text-sm mb-4 text-shadow line-clamp-2 leading-relaxed">
+              <p className="text-scrim-foreground/90 text-sm mb-4 text-shadow line-clamp-2 leading-relaxed">
                 {reel.title}
               </p>
               
               {/* Shoppable Product Card inside Reel */}
-              <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-3 flex items-center justify-between shadow-lg">
+              <div className="bg-scrim-foreground/10 backdrop-blur-md border border-scrim-foreground/20 rounded-xl p-3 flex items-center justify-between shadow-lg">
                 <div className="flex flex-col">
-                  <span className="text-white font-semibold text-sm line-clamp-1">{reel.product.name}</span>
+                  <span className="text-scrim-foreground font-semibold text-sm line-clamp-1">{reel.product.name}</span>
                   <span className="text-primary-foreground font-extrabold">{reel.product.price} ج.م</span>
                 </div>
                 <Button 

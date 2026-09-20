@@ -142,10 +142,10 @@ export function PostCard({ post, products }: PostCardProps) {
 
           {/* Action Buttons Overlay - Mobile Only */}
           <div className="absolute top-3 left-4 flex flex-col gap-2 lg:hidden">
-            <button className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-foreground shadow-sm backdrop-blur-sm hover:bg-white">
+            <button className="flex h-9 w-9 items-center justify-center rounded-full bg-card/90 text-foreground shadow-sm backdrop-blur-sm hover:bg-card">
               <Heart size={18} />
             </button>
-            <button className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-foreground shadow-sm backdrop-blur-sm hover:bg-white">
+            <button className="flex h-9 w-9 items-center justify-center rounded-full bg-card/90 text-foreground shadow-sm backdrop-blur-sm hover:bg-card">
               <Share2 size={18} />
             </button>
           </div>
