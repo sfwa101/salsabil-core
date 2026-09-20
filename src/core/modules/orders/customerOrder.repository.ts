@@ -251,6 +251,28 @@ export class CustomerOrderRepository {
     return (data as MerchantSuborderItemRow[]).map(toOrderItem);
   }
 
+  // TASK-16-ish (§31 بند 2 من REEF_PHASE_1_PRODUCT_COMPLETENESS_AUDIT.md) — كل merchant_suborders
+  // التابعة لنفس customer_order الأب، لعرضها معاً على صفحة تتبّع العميل الضيف (لا نصيب تاجر واحد
+  // فقط كما كان). ترتيب زمني تصاعدي (أول تاجر أُنشئ أولاً) — يطابق ترتيب الإنشاء الفعلي في checkout().
+  async findOrdersByCustomerOrderId(customerOrderId: string): Promise<Order[]> {
+    const { data, error } = await supabaseAdmin
+      .from('merchant_suborders')
+      .select(SUBORDER_SELECT_WITH_DELIVERY_ADDRESS)
+      .eq('customer_order_id', customerOrderId)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    return (data as unknown as MerchantSuborderRow[]).map(toOrderFromSuborderRow);
+  }
+
+  // لقراءة delivery_fee_snapshot الحقيقي من الأب (customer_orders) — دائماً صفر اليوم (TODO صريح
+  // في checkout()، ADR-033 بند هـ) لكن القراءة تأتي من المصدر الفعلي لا افتراضاً ثابتاً في الواجهة،
+  // حتى لا تنكسر صامتة عند بناء حساب رسوم توصيل حقيقي لاحقاً.
+  async findCustomerOrderById(id: string): Promise<CustomerOrder | null> {
+    const { data, error } = await supabaseAdmin.from('customer_orders').select('*').eq('id', id).maybeSingle();
+    if (error) throw error;
+    return data ? toCustomerOrder(data as CustomerOrderRow) : null;
+  }
+
   async findOrdersByTenantId(tenantId: string): Promise<Order[]> {
     const { data, error } = await supabaseAdmin
       .from('merchant_suborders')

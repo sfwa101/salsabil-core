@@ -30,9 +30,9 @@ interface VendorGroup {
   lines: CartLineSummary[];
 }
 
-// تجميع بصري بحت حسب التاجر — لا يعني دعم checkout لطلب متعدد التجار (لا يزال يرفضه صراحة،
-// ordersService.performCheckout، ADR-009). منتج بلا tenantId (نظرياً حسب types.ts، لا حالة حية
-// اليوم) يُجمَّع تحت تسمية عامة بدل كسر الصفحة.
+// تجميع بصري حسب التاجر — checkout يدعم فعلياً طلب متعدد التجار منذ ADR-033 (يُقسَّم تلقائياً حسب
+// tenant_id إلى merchant_suborders منفصلة، لا رفض). منتج بلا tenantId (نظرياً حسب types.ts، لا حالة
+// حية اليوم) يُجمَّع تحت تسمية عامة بدل كسر الصفحة.
 function groupByTenant(lines: CartLineSummary[], merchantNameById: Map<string, string>): VendorGroup[] {
   const groups = new Map<string, VendorGroup>();
   for (const line of lines) {
@@ -97,9 +97,9 @@ export default async function CartPage() {
       <h1 className="mb-6 text-2xl font-semibold text-foreground">سلتي</h1>
 
       {isMultiVendor && (
-        <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm font-medium text-amber-800 dark:text-amber-300">
-          طلبك يحتوي على منتجات من {groups.length} تجار — طلبات من أكثر من تاجر واحد غير مدعومة بعد،
-          يُرجى إكمال كل تاجر في طلب منفصل.
+        <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm font-medium text-foreground">
+          طلبك يحتوي على منتجات من {groups.length} تجار — سيُقسَّم طلبك تلقائياً حسب كل تاجر، وستصلك
+          الأصناف على استلامات منفصلة، كل واحدة بحالتها الخاصة.
         </div>
       )}
 

@@ -153,6 +153,8 @@ vi.mock('./customerOrder.repository', () => ({
     createMerchantSuborderItems: vi.fn(async () => []),
     findOrderById: vi.fn(),
     findOrderItems: vi.fn(),
+    findOrdersByCustomerOrderId: vi.fn(async () => []),
+    findCustomerOrderById: vi.fn(async () => null),
     findOrdersByTenantId: vi.fn(async () => []),
     findAll: vi.fn(async () => []),
     updateOrderStatus: vi.fn(),
@@ -712,28 +714,65 @@ describe('OrdersService.getOrderForCustomerView', () => {
     expect(customerOrderRepository.findOrderItems).not.toHaveBeenCalled();
   });
 
-  it('يُثري كل بند باسم المنتج الحقيقي عبر catalogService', async () => {
-    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }));
+  it('يُثري كل بند باسم المنتج الحقيقي عبر catalogService (سلة تاجر واحد)', async () => {
+    const order = makeOrder({ status: 'confirmed' });
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(order);
+    vi.mocked(customerOrderRepository.findOrdersByCustomerOrderId).mockResolvedValue([order]);
     vi.mocked(customerOrderRepository.findOrderItems).mockResolvedValue([
       { id: 'oi-1', orderId: 'order-1', productId: chicken.id, quantity: 2, selection: { sizeId: 'small' }, unitPriceSnapshot: 100, createdAt: new Date().toISOString() },
     ]);
 
     const result = await ordersService.getOrderForCustomerView('order-1');
 
-    expect(result!.items).toHaveLength(1);
-    expect(result!.items[0].productName).toBe('دجاجة اختبار');
-    expect(result!.items[0].item.unitPriceSnapshot).toBe(100);
+    expect(result!.suborders).toHaveLength(1);
+    expect(result!.suborders[0].items[0].productName).toBe('دجاجة اختبار');
+    expect(result!.suborders[0].items[0].item.unitPriceSnapshot).toBe(100);
+    expect(result!.grandTotal).toBe(order.total);
   });
 
   it('يعيد productName: null لو حُذف المنتج (لا يفشل الاستعلام)', async () => {
-    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(makeOrder({ status: 'confirmed' }));
+    const order = makeOrder({ status: 'confirmed' });
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(order);
+    vi.mocked(customerOrderRepository.findOrdersByCustomerOrderId).mockResolvedValue([order]);
     vi.mocked(customerOrderRepository.findOrderItems).mockResolvedValue([
       { id: 'oi-1', orderId: 'order-1', productId: 'deleted-product', quantity: 1, selection: {}, unitPriceSnapshot: 50, createdAt: new Date().toISOString() },
     ]);
 
     const result = await ordersService.getOrderForCustomerView('order-1');
 
-    expect(result!.items[0].productName).toBeNull();
+    expect(result!.suborders[0].items[0].productName).toBeNull();
+  });
+
+  // §31 بند 2 — يطابق سيناريو التحقق الحي الموثَّق في REEF_PHASE_1_PRODUCT_COMPLETENESS_AUDIT.md
+  // §17 (سلة بتاجرين، 11 + 12.75 = 23.75 جنيه) الذي كشف الفجوة أصلاً: قبل هذا الإصلاح كانت هذه
+  // الدالة تعيد نصيب أول تاجر فقط (order/items مفردَين)، لا كل الإخوة معاً بإجمالي حقيقي شامل.
+  it('يعيد كل merchant_suborders معاً بإجمالي كلي حقيقي لطلب متعدد التجار', async () => {
+    const orderA = makeOrder({ id: 'order-a', tenantId: 'tenant-a', total: 11 });
+    const orderB = makeOrder({ id: 'order-b', tenantId: 'tenant-b', total: 12.75 });
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(orderA);
+    vi.mocked(customerOrderRepository.findOrdersByCustomerOrderId).mockResolvedValue([orderA, orderB]);
+    vi.mocked(customerOrderRepository.findOrderItems).mockImplementation(async (suborderId: string) =>
+      suborderId === 'order-a'
+        ? [{ id: 'oi-a', orderId: 'order-a', productId: chicken.id, quantity: 1, selection: {}, unitPriceSnapshot: 11, createdAt: new Date().toISOString() }]
+        : [{ id: 'oi-b', orderId: 'order-b', productId: fish.id, quantity: 1, selection: {}, unitPriceSnapshot: 12.75, createdAt: new Date().toISOString() }]
+    );
+    vi.mocked(customerOrderRepository.findCustomerOrderById).mockResolvedValue({
+      id: customerOrderId,
+      userId: testUser.id,
+      deliveryAddress: defaultDeliveryAddress,
+      paymentMethod: 'cash_on_delivery',
+      subtotalSnapshot: 23.75,
+      deliveryFeeSnapshot: 0,
+      totalSnapshot: 23.75,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    const result = await ordersService.getOrderForCustomerView('order-a');
+
+    expect(result!.suborders).toHaveLength(2);
+    expect(result!.suborders.map((s) => s.merchantName)).toEqual(['تاجر أ', 'تاجر ب']);
+    expect(result!.grandTotal).toBe(23.75);
   });
 });
 

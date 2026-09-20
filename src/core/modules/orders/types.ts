@@ -162,7 +162,17 @@ export interface OrderItemWithProductName {
   productName: string | null; // null فقط لو حُذف المنتج لاحقاً (لا حذف فعلي في المشروع اليوم)
 }
 
-export interface OrderCustomerView {
+// §31 بند 2 (REEF_PHASE_1_PRODUCT_COMPLETENESS_AUDIT.md) — قبل هذا التغيير كانت هذه الواجهة تحمل
+// order/items لتاجر واحد فقط (نصيب أول تاجر في customer_order)، حتى لسلة حقيقية متعددة التجار —
+// فجوة موثَّقة صراحة في ADR-033 بند (هـ)/Consequences. الآن تحمل كل merchant_suborders التابعة
+// لنفس customer_order معاً، بإجمالي حقيقي شامل، لا نصيباً واحداً مموَّهاً بمظهر الإجمالي الكامل.
+export interface OrderCustomerViewSuborder {
   order: Order;
+  merchantName: string | null; // null لو تعذّر جلب اسم التاجر (لا يمنع عرض بقية البيانات)
   items: OrderItemWithProductName[];
+}
+
+export interface OrderCustomerView {
+  suborders: OrderCustomerViewSuborder[];
+  grandTotal: number; // Σ(suborder.total) + customer_orders.delivery_fee_snapshot — من DB مباشرة
 }

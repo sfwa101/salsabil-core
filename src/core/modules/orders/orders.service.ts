@@ -278,19 +278,48 @@ export class OrdersService {
   // عملياً، gen_random_uuid()) كآلية تفويض بحد ذاتها — نفس نمط "رقم تتبّع شحنة" شائع في أي خدمة
   // توصيل حقيقية. لتقليل الأثر لو تسرَّب رابط لطرف غير مقصود: هذه الدالة (ومستهلكها الوحيد،
   // الصفحة) لا تُعيد عنوان التوصيل ولا هاتف/اسم العميل — الحالة والعناصر والإجمالي فقط.
+  // §31 بند 2 — كان يعيد نصيب التاجر المطلوب بمعرّفه فقط (order/items مفردَين)، حتى لو كان جزءاً
+  // من customer_order متعدد التجار (فجوة ADR-033 المعروفة: العميل يرى منتجاً واحداً وإجمالاً جزئياً
+  // فقط). الآن يجلب كل الإخوة (merchant_suborders) التابعين لنفس customer_order عبر customerOrderId
+  // ويعيدهم معاً بإجمالي حقيقي شامل. orderId المطلوب هنا يبقى أي suborder id من نفس المجموعة (الرابط
+  // الذي يحمله العميل يبقى صالحاً كما هو، لا حاجة لتغيير بنية الرابط نفسها).
   async getOrderForCustomerView(orderId: string): Promise<OrderCustomerView | null> {
-    const order = await customerOrderRepository.findOrderById(orderId);
-    if (!order) return null;
+    const requestedOrder = await customerOrderRepository.findOrderById(orderId);
+    if (!requestedOrder) return null;
 
-    const items = await customerOrderRepository.findOrderItems(orderId);
-    const itemsWithProductNames = await Promise.all(
-      items.map(async (item) => {
-        const product = await catalogService.getProductById(item.productId);
-        return { item, productName: product?.name ?? null };
+    // customerOrderId موجود دائماً عملياً (كل Order صادر من customerOrder.repository.ts) — الشرط
+    // دفاعي بحت (النوع اختياري في types.ts لتفادي كسر بناء Order حرفي قديم في الاختبارات).
+    const siblingOrders = requestedOrder.customerOrderId
+      ? await customerOrderRepository.findOrdersByCustomerOrderId(requestedOrder.customerOrderId)
+      : [requestedOrder];
+
+    const tenantIds = [...new Set(siblingOrders.map((o) => o.tenantId))];
+    const merchants = tenantIds.length > 0 ? await merchantService.getByIds(tenantIds) : [];
+    const merchantNameById = new Map(merchants.map((m) => [m.id, m.businessName]));
+
+    const suborders = await Promise.all(
+      siblingOrders.map(async (order) => {
+        const items = await customerOrderRepository.findOrderItems(order.id);
+        const itemsWithProductNames = await Promise.all(
+          items.map(async (item) => {
+            const product = await catalogService.getProductById(item.productId);
+            return { item, productName: product?.name ?? null };
+          })
+        );
+        return { order, merchantName: merchantNameById.get(order.tenantId) ?? null, items: itemsWithProductNames };
       })
     );
 
-    return { order, items: itemsWithProductNames };
+    // مصدر الحقيقة الوحيد لرسوم التوصيل: customer_orders.delivery_fee_snapshot (دائماً صفر اليوم،
+    // TODO صريح في checkout()) — لا يُفترَض صفراً هنا مباشرة حتى لا ينكسر هذا صامتاً عند بناء حساب
+    // فعلي لاحقاً. غياب صف customer_orders (لا يجب أن يحدث، FK إلزامي) يُعامَل كصفر لا كفشل كامل.
+    const customerOrder = requestedOrder.customerOrderId
+      ? await customerOrderRepository.findCustomerOrderById(requestedOrder.customerOrderId)
+      : null;
+    const deliveryFeeSnapshot = customerOrder?.deliveryFeeSnapshot ?? 0;
+    const grandTotal = suborders.reduce((sum, s) => sum + s.order.total, 0) + deliveryFeeSnapshot;
+
+    return { suborders, grandTotal };
   }
 
   // CRITICAL-FIXES-FROM-AUDIT-001، بند 4 — نفس إصلاح getOrderWithItems أعلاه بالضبط. يتطلب جلب
