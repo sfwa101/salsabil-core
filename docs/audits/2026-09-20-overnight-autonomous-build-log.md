@@ -139,7 +139,13 @@ Commit ثالث (أدناه). **هذا ليس قراراً معلَّقاً با
 
 ### بند 3 — ربط الصفحة الرئيسية بالكتالوج الحقيقي
 
-**حالة: قيد التنفيذ**
+**حالة: مُغلَق ✅**
+**Commit hash:** `026638e`. Deployment نهائي على staging: `salsabil-core-mzf54q5bl-salsabil2` خلف
+alias `staging.reefam.com`.
+**تحقق حي:** curl حي (Desktop + iPhone UA للموبايل) ضد `staging.reefam.com/` بعد النشر — رف "منتجات
+ريف" ظاهر في كلا التخطيطين، أول منتج فيه ("جونسون كريم منعم بزبدة الشيا 300مل") تحقَّق مباشرة من DB
+أنه `tenant_id` حقيقي مملوك لـ`pilot-merchant-02` (لا poultry-test). صفر إشارة poultry-test/
+demo-products في HTML الحي لكلا التخطيطين.
 
 **⚠️ تعارض حقيقي اكتُشف قبل أي كود — مُسجَّل هنا بدل الحسم الصامت (DOCUMENTATION_RULES.md §7):**
 `REEF_PHASE_1_PRODUCT_COMPLETENESS_AUDIT.md` §29 بند 21/§25/§28 يدَّعي أن الرئيسية "لا تعرض أياً من
