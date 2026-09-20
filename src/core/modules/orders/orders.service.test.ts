@@ -774,6 +774,35 @@ describe('OrdersService.getOrderForCustomerView', () => {
     expect(result!.suborders.map((s) => s.merchantName)).toEqual(['تاجر أ', 'تاجر ب']);
     expect(result!.grandTotal).toBe(23.75);
   });
+
+  // اكتُشف حياً أثناء تحقق §31 بند 2 على staging (30.99 + 92.99): جمع أعداد عشرية في JavaScript
+  // (Σ(suborder.total)) ينتج خطأ تقريب حقيقي (123.97999999999999 لا 123.98، IEEE 754) — يُعرَض
+  // حرفياً للعميل لو اعتمدت الدالة على هذا الجمع. القراءة من customer_orders.total_snapshot مباشرة
+  // (عمود عشري مضبوط الخانتين، محسوب مرة واحدة وقت checkout) تتجنّبه كلياً — هذا الاختبار يمنع رجوعاً
+  // مستقبلياً لإعادة الحساب في JS.
+  it('يقرأ الإجمالي الكلي من customer_orders.total_snapshot لا بإعادة جمع عشري في JS (يتجنّب خطأ تقريب IEEE 754)', async () => {
+    const orderA = makeOrder({ id: 'order-a', tenantId: 'tenant-a', total: 30.99 });
+    const orderB = makeOrder({ id: 'order-b', tenantId: 'tenant-b', total: 92.99 });
+    vi.mocked(customerOrderRepository.findOrderById).mockResolvedValue(orderA);
+    vi.mocked(customerOrderRepository.findOrdersByCustomerOrderId).mockResolvedValue([orderA, orderB]);
+    vi.mocked(customerOrderRepository.findOrderItems).mockResolvedValue([]);
+    vi.mocked(customerOrderRepository.findCustomerOrderById).mockResolvedValue({
+      id: customerOrderId,
+      userId: testUser.id,
+      deliveryAddress: defaultDeliveryAddress,
+      paymentMethod: 'cash_on_delivery',
+      subtotalSnapshot: 123.98,
+      deliveryFeeSnapshot: 0,
+      totalSnapshot: 123.98,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    const result = await ordersService.getOrderForCustomerView('order-a');
+
+    expect(result!.grandTotal).toBe(123.98);
+    expect(result!.grandTotal).not.toBe(30.99 + 92.99); // 123.97999999999999 — التوثيق الحي للخلل المتجنَّب
+  });
 });
 
 describe('OrdersService.getOrdersForTenant', () => {

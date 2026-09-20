@@ -310,14 +310,18 @@ export class OrdersService {
       })
     );
 
-    // مصدر الحقيقة الوحيد لرسوم التوصيل: customer_orders.delivery_fee_snapshot (دائماً صفر اليوم،
-    // TODO صريح في checkout()) — لا يُفترَض صفراً هنا مباشرة حتى لا ينكسر هذا صامتاً عند بناء حساب
-    // فعلي لاحقاً. غياب صف customer_orders (لا يجب أن يحدث، FK إلزامي) يُعامَل كصفر لا كفشل كامل.
+    // مصدر الحقيقة الوحيد للإجمالي الكلي: customer_orders.total_snapshot نفسه (يشمل رسوم التوصيل
+    // أصلاً، محسوب مرة واحدة وقت checkout() ومخزَّن كعمود numeric مضبوط الخانتين العشريتين) — لا
+    // إعادة جمع Σ(suborder.total) في JS هنا: اكتُشف حياً أثناء تحقق هذا البند (سيناريو تاجرين
+    // حقيقي، 30.99+92.99) أن جمع الأعداد العشرية في JavaScript ينتج خطأ تقريب فعلي وملموس
+    // (123.97999999999999 بدل 123.98) لأن Number لا يخزّن الأعشار تماماً (IEEE 754) — بينما القيمة
+    // المخزَّنة فعلياً في customer_orders.total_snapshot صحيحة تماماً لأنها حُسبت واستُقرَّت في العمود
+    // العشري لقاعدة البيانات وقت الإنشاء. القراءة من المصدر بدل إعادة الحساب هنا تتجنّب هذا كلياً.
+    // غياب صف customer_orders (لا يجب أن يحدث، FK إلزامي) يُعامَل بجمع احتياطي بدل فشل كامل للصفحة.
     const customerOrder = requestedOrder.customerOrderId
       ? await customerOrderRepository.findCustomerOrderById(requestedOrder.customerOrderId)
       : null;
-    const deliveryFeeSnapshot = customerOrder?.deliveryFeeSnapshot ?? 0;
-    const grandTotal = suborders.reduce((sum, s) => sum + s.order.total, 0) + deliveryFeeSnapshot;
+    const grandTotal = customerOrder?.totalSnapshot ?? suborders.reduce((sum, s) => sum + s.order.total, 0);
 
     return { suborders, grandTotal };
   }
