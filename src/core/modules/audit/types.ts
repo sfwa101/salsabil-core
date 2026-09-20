@@ -39,7 +39,10 @@ export type AuditAction =
   | 'delivery.job_created'
   | 'delivery.driver_added'
   | 'delivery.driver_assigned'
-  | 'delivery.job_status_updated';
+  | 'delivery.job_status_updated'
+  // §31 بند 10 — إشعارات SMS عند تغيّر حالة الطلب. audit_log هو سجل المحاولات نفسه (لا جدول جديد،
+  // لا DDL) — metadata.sent يميّز إرسالاً حقيقياً عن محاولة مسجَّلة بلا بيانات اعتماد مُفعَّلة.
+  | 'notification.sms_attempted';
 
 export interface AuditLogEntry {
   id: string;

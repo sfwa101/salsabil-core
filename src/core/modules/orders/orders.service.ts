@@ -22,6 +22,7 @@ import { khalilService } from '../../kernel/khalil/service';
 import { roundToCents } from '../../kernel/money';
 import { merchantService } from '../merchant/merchant.service';
 import { auditService } from '../audit/audit.service';
+import { notificationService } from '../notifications/notification.service';
 import { cashOnDeliveryProvider } from '../payments/cash-on-delivery.provider';
 import { ordersRepository } from './orders.repository';
 import { customerOrderRepository, type CustomerOrder, type SettlementModel } from './customerOrder.repository';
@@ -469,6 +470,11 @@ export class OrdersService {
         );
       }
     }
+
+    // §31 بند 10 — إشعار SMS للعميل والتاجر عند تغيّر حالة الطلب. Best-Effort صريح: الدالة نفسها
+    // لا ترمي أبداً (تسجّل فشلها في audit_log داخلياً) — انتقال الحالة نفسه نجح بالفعل في الأسطر
+    // أعلاه، فشل إشعار غير حرج يجب ألا يُفشِل استجابة ناجحة فعلاً للمستدعي.
+    await notificationService.notifyOrderStatusChanged(updatedOrder);
 
     return updatedOrder;
   }

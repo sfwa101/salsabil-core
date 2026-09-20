@@ -104,6 +104,9 @@ vi.mock('../../kernel/khalil/khalil.repository', () => ({
     findWorldBySlug: vi.fn(async () => testWorld),
     findPersonaByUserAndWorld: vi.fn(async () => null),
     createPersona: vi.fn(async () => testPersona),
+    // §31 بند 10 — notificationService.notifyOrderStatusChanged (يُستدعى الآن من نهاية
+    // transitionStatus) يعتمد على khalilService.findUserById، الذي يستدعي هذه مباشرة.
+    findUserById: vi.fn(async () => null),
   },
 }));
 
@@ -185,6 +188,9 @@ const merchantsById: Record<string, Merchant> = { [merchantA.id]: merchantA, [me
 vi.mock('../merchant/merchant.service', () => ({
   merchantService: {
     getByIds: vi.fn(async (ids: string[]) => ids.map((id) => merchantsById[id]).filter((m): m is Merchant => !!m)),
+    // §31 بند 10 — notificationService.notifyOrderStatusChanged يستدعي merchantService.findById
+    // مباشرة لإيجاد مالك التاجر (لإشعاره)، الآن يُستدعى من نهاية transitionStatus.
+    findById: vi.fn(async (id: string) => merchantsById[id] ?? null),
   },
 }));
 
