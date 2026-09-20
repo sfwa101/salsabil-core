@@ -34,7 +34,12 @@ export type AuditAction =
   | 'catalog.category_created'
   | 'catalog.category_updated'
   | 'catalog.subcategory_created'
-  | 'catalog.subcategory_updated';
+  | 'catalog.subcategory_updated'
+  // §31 بند 9 — أول كود يستهلك delivery_offices/drivers/delivery_jobs
+  | 'delivery.job_created'
+  | 'delivery.driver_added'
+  | 'delivery.driver_assigned'
+  | 'delivery.job_status_updated';
 
 export interface AuditLogEntry {
   id: string;
