@@ -23,7 +23,7 @@ export function MerchantLoginForm() {
       setError(result.error);
       return;
     }
-    router.push(result.mustChangePassword ? '/merchant/change-password' : '/merchant/orders');
+    router.push(result.mustChangePassword ? '/merchant/change-password' : '/merchant/dashboard');
     router.refresh();
   }
 

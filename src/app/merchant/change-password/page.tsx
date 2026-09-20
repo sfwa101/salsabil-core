@@ -19,7 +19,7 @@ export default async function MerchantChangePasswordPage() {
           </p>
         )}
       </div>
-      <ChangePasswordForm action={changeMerchantPasswordAction} redirectTo="/merchant/orders" />
+      <ChangePasswordForm action={changeMerchantPasswordAction} redirectTo="/merchant/dashboard" />
     </main>
   );
 }

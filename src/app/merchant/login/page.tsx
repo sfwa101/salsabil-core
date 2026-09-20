@@ -5,7 +5,7 @@ import { MerchantLoginForm } from '@/components/MerchantLoginForm';
 export default async function MerchantLoginPage() {
   const session = await getMerchantSession();
   if (session) {
-    redirect(session.mustChangePassword ? '/merchant/change-password' : '/merchant/orders');
+    redirect(session.mustChangePassword ? '/merchant/change-password' : '/merchant/dashboard');
   }
 
   return (
