@@ -108,6 +108,13 @@ export class MerchantService {
     return merchantRepository.findById(id);
   }
 
+  // §31 بند 7 — مسار تسجيل دخول موظف التاجر يحتاج تحديد التاجر صراحة (لا حل تلقائي عبر كل التجار
+  // التي قد ينتمي لها المستخدم — قرار معماري موثَّق أصلاً في merchantStaff/types.ts). التاجر يُدخِل
+  // "معرّف متجره" (slug)، لا معرّفاً تقنياً (UUID).
+  async findBySlug(slug: string): Promise<Merchant | null> {
+    return merchantRepository.findBySlug(slug);
+  }
+
   async getByIds(ids: string[]): Promise<Merchant[]> {
     return merchantRepository.findByIds(ids);
   }

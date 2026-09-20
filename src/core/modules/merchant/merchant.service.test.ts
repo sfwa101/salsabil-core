@@ -46,6 +46,7 @@ vi.mock('./merchant.repository', () => ({
     findByOwnerId: vi.fn(),
     findAll: vi.fn(async () => [activeMerchant]),
     setActiveStatus: vi.fn(async (id: string, isActive: boolean) => ({ ...activeMerchant, id, isActive })),
+    findBySlug: vi.fn(),
   },
 }));
 
@@ -170,5 +171,25 @@ describe('MerchantService — عمليات الإدارة (اليوم 11)', () =
 
     expect(merchantRepository.setActiveStatus).toHaveBeenCalledWith('merchant-1', false);
     expect(result).toEqual({ ...activeMerchant, id: 'merchant-1', isActive: false });
+  });
+});
+
+// §31 بند 7 — مسار تسجيل دخول موظف التاجر يحتاج تحديد التاجر بالـslug صراحة
+describe('MerchantService.findBySlug', () => {
+  it('يفوّض لـ merchantRepository.findBySlug بنفس slug', async () => {
+    vi.mocked(merchantRepository.findBySlug).mockResolvedValue(activeMerchant);
+
+    const result = await merchantService.findBySlug('pilot-merchant-01');
+
+    expect(merchantRepository.findBySlug).toHaveBeenCalledWith('pilot-merchant-01');
+    expect(result).toEqual(activeMerchant);
+  });
+
+  it('يعيد null لمعرّف متجر غير موجود', async () => {
+    vi.mocked(merchantRepository.findBySlug).mockResolvedValue(null);
+
+    const result = await merchantService.findBySlug('missing-slug');
+
+    expect(result).toBeNull();
   });
 });

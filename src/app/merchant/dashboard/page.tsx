@@ -94,6 +94,15 @@ export default async function MerchantDashboardPage() {
         >
           عروضي ←
         </Link>
+        {/* §31 بند 7 — إدارة الموظفين لمالك المتجر فقط، نفس تحقق الصلاحية المفروض داخل الصفحة نفسها */}
+        {session.role === 'merchant_owner' && (
+          <Link
+            href="/merchant/staff"
+            className="self-start rounded-xl border border-border px-4 py-3 text-sm font-medium text-foreground transition hover:bg-muted"
+          >
+            موظفوني ←
+          </Link>
+        )}
       </div>
     </main>
   );

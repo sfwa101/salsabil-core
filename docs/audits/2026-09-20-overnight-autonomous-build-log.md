@@ -349,3 +349,41 @@ demo-products في HTML الحي لكلا التخطيطين.
 والآن موحَّد في أداة مشتركة واحدة بدل تكراره مرة رابعة مستقبلاً).**
 
 ---
+
+### بند 7 — واجهة موظف التاجر + تسجيل دخول
+
+**حالة: قيد التنفيذ**
+
+**1. Specification:** Backend كامل وجاهز أصلاً (TASK-14، `merchantStaffService`) — صفر مستهلك واجهة
+له قبل هذا البند. المطلوب: (أ) صفحة owner لإضافة/تعطيل موظف. (ب) مسار تسجيل دخول منفصل تماماً عن
+owner للموظف.
+
+**2. Plan:**
+- `merchant.service.ts`: `findBySlug(slug)` — تمريرة رقيقة لـ`merchantRepository.findBySlug`
+  (موجودة أصلاً بالمستودع، غير مُستخدَمة). ضرورية لأن تسجيل دخول الموظف **يحتاج تحديد التاجر
+  صراحة** — قرار معماري موثَّق أصلاً في `merchantStaff/types.ts`: "لا حل تلقائي عبر كل التجار التي
+  قد ينتمي لها المستخدم... الاستدعاء دائماً ضمن سياق تاجر واحد معروف مسبقاً".
+- `src/app/merchant/staff-login/{page.tsx,actions.ts}` + `MerchantStaffLoginForm.tsx`: نموذج
+  3 حقول (معرّف المتجر slug + هاتف + كلمة مرور). `loginStaffAction` يُنفِّذ
+  `khalilService.verifyPasswordForPhone` **دائماً أولاً** (بصرف النظر عن صلاحية الـslug) — نفس
+  فلسفة FIX-TIMING-ATTACK-VULNERABILITY-AUTH الموثَّقة أصلاً في `khalil.service.ts` (تفادي فرق زمني
+  قابل للقياس يكشف slugs صحيحة)، ثم `merchantStaffService.assertActiveStaff` للتحقق من عضوية نشطة
+  فعلية، رسالة رفض موحَّدة واحدة بصرف النظر عن أي من الأسباب الثلاثة (slug/هاتف/عضوية) فشل — يمنع
+  تعداد. **الجلسة الناتجة تستخدم نفس كوكي/آلية جلسة owner بالضبط** (`sb_merchant_session` عبر
+  `setMerchantSessionCookie`) — الصفحات الحالية (طلباتي/عروضي) تتعرَّف على دور `'employee'` أصلاً
+  عبر `MERCHANT_ACTOR_ROLES`، فلا حاجة لأي تعديل عليها.
+- `src/app/merchant/staff/{page.tsx,actions.ts}` + `MerchantStaffAddForm.tsx`: owner فقط (تحقق
+  صريح مزدوج — في الصفحة نفسها وداخل `merchantStaffService` أيضاً). الإضافة تستخدم
+  `khalilService.findOrCreateCustomerByPhone` (نفس الدالة المستخدَمة أصلاً لعملاء Checkout — تنشئ
+  بدور `'customer'`؛ `merchantStaffService.addStaff` يرفعه لاحقاً إلى `'employee'`، لا تكرار منطق
+  إنشاء مستخدم)، ثم `khalilService.setTemporaryPassword` (كلمة مرور مؤقتة جديدة تُعرَض مرة واحدة
+  فقط للـowner، نفس نمط `scripts/backfill-existing-owner-passwords.ts`).
+- `merchant/dashboard/page.tsx`: رابط "موظفوني ←" لمالك المتجر فقط.
+
+**3. Review ذاتية:** لا تعديل على `merchantStaffService`/`OrderRow.tsx`/أي مسار owner قائم — إضافة
+صرفة. **تعارض دائرة استيراد مُتجنَّب صراحة:** `merchantStaffService` يستورد `merchantService` أصلاً
+(اتجاه موجود)؛ منطق تسجيل دخول الموظف الجديد وُضِع في `Server Action` (`staff-login/actions.ts`) لا
+داخل `merchant.service.ts` نفسه، تفادياً لعلاقة استيراد عكسية (`merchant.service.ts` ←
+`merchantStaffService`) كانت ستُنتج حلقة دائرية يرفضها `dependency-cruiser` (`no-circular`) —
+تحقَّق فعلياً بتشغيل `npm run arch:check` بعد التنفيذ، 0 مخالفة. Guardian Matrix: مسار مصادقة جديد =
+DEEP — رسالة رفض موحَّدة + rate-limit (نفس نمط owner login حرفياً) + دفاع مزدوج للصلاحيات owner-only.
