@@ -1,6 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+// COMMIT-DEPLOY-SLICES-1-3-FIX (2026-09-22) — DesktopHeaderStem (رُبِط بالإنتاج فعلياً في الشريحة 1)
+// أضاف useSearchParams() لحالة التبويب النشط الحقيقية، وهذه الصفحة تُصيِّره مباشرة بلا Suspense —
+// Next.js يفرض Suspense حول useSearchParams() عند التصيير الساكن وقت البناء. مسارات الإنتاج (reef)
+// ديناميكية دائماً (كوكيز/قراءة قاعدة بيانات) فلم تُصادِف هذا القيد إطلاقاً. `export const dynamic =
+// 'force-dynamic'` جُرِّب أولاً وفشل (لا يُبطِل فحص Suspense وقت البناء لصفحة 'use client' كاملة في
+// هذا الإصدار) — الحل الفعلي: Suspense حول نقطة الاستدعاء الفعلية (راجع أسفل الملف عند <DesktopHeaderStem />).
+// إخراج جزئي من مسار العرض الفوري (CSR bailout) لصفحة اختبار داخلية آمن بالكامل — لا صلة بـSEO/أداء
+// إنتاجي، لا يمس أي مسار إنتاجي ولا أي Stem. مصرَّح به صراحة من المؤسس قبل التنفيذ.
+
+import React, { useState, useEffect, Suspense } from 'react';
 import { getDummyProducts, getDummyCategories, getDummyFeedItems, getDummyReels, DummyReel } from '@/services/dummy-ui-service';
 import { StemProductCard } from '@/components/ui/StemProductCard';
 import { StemHeroFeedCard } from '@/components/ui/StemHeroFeedCard';
@@ -569,10 +578,12 @@ export function TestUIContent() {
 
 
       {/* Desktop Header Full Width */}
-      <DesktopHeaderStem 
-        searchQuery={searchQuery}
-        onSearch={setSearchQuery}
-      />
+      <Suspense fallback={null}>
+        <DesktopHeaderStem
+          searchQuery={searchQuery}
+          onSearch={setSearchQuery}
+        />
+      </Suspense>
 
       <div className="hidden lg:flex flex-row w-full max-w-[1400px] mx-auto px-6 py-6 gap-6 items-start">
         
