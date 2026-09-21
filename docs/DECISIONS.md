@@ -1,9 +1,9 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.38
+version: 1.40
 authority: Security & Correctness (قسم DECISION DEBT REGISTRY) + Engineering Decision Log (باقي الملف)
-last_updated: 2026-09-19
+last_updated: 2026-09-21
 last_verified: 2026-09-14
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف
@@ -1962,7 +1962,12 @@ Related Documents: ADR-024، ideas/IDEAS.md → IDEA-002، src/config/neighborho
           ليعكس أن "عرض منتجات وهمية على الرئيسية" أُغلِق فعلياً بتاريخ 2026-09-19 (سابق لتاريخ نشر
           نسخة التدقيق النهائية)، مع إبقاء الفجوة المعمارية الأعمق (الاعتماد الحصري على posts) كبند
           مفتوح منفصل بصياغة أدق.
-الحالة: OPEN — يحتاج تحديث تحرير المؤسس لنص التدقيق نفسه، لا إصلاح كود إضافي (الكود الحي صحيح فعلاً).
+الحالة: RESOLVED — 2026-09-20: تحديث تحريري مباشر من المؤسس لنص `REEF_PHASE_1_PRODUCT_COMPLETENESS_AUDIT.md`
+          (مقدمة الملف، §28 صف "منتجات الصفحة الرئيسية"، §29 بند 21، §31 بند 3) — كل موضع يوضّح الآن
+          صراحة أن العرض الوهمي المحدَّد (19 منتجاً تجريبياً تحت `poultry-test`) كان مُغلَقاً فعلياً
+          بتاريخ 2026-09-19 (قبل نشر نسخة التدقيق النهائية)، مع إبقاء الفجوة المعمارية الأعمق
+          (الاعتماد الحصري على منشورات Bayan CMS بدل ربط مباشر بكامل الكتالوج القابل للشراء) كبند
+          BLOCKER مفتوح منفصل بصياغة أدق. توثيق فقط — بلا تغيير كود.
 Related Documents: docs/audits/REEF_PHASE_1_PRODUCT_COMPLETENESS_AUDIT.md،
           docs/audits/2026-09-19-fix-fake-products-darkmode-execution-report-staging.md،
           docs/audits/2026-09-20-overnight-autonomous-build-log.md → بند 3،
@@ -2821,6 +2826,83 @@ Related: DD-019 (السجل الأصلي المُعدَّل هنا)، ADR-031 (c
           specs/orders/SUPPLY_RESOLUTION_ENGINE_DESIGN.md،
           docs/audits/REEF_PHASE_1_PRODUCT_COMPLETENESS_AUDIT.md (§2, §9, §10, §18, §29 بنود 1-4،
           §31 بند 5)، docs/ROADMAP.md (سطور 112-147)
+```
+
+### DD-021
+```
+Decision: لا قرار معلَّق — توثيق واقعة تكليف مكتملة، نفس نمط DD-007/DD-009/DD-018 بالضبط (السجل
+          المستقل المطلوب وفق docs/DOCUMENTATION_RULES.md §5.1 شرط 4). بتاريخ 2026-09-20، كلَّف
+          المؤسس مباشرة وبلا لبس بإنشاء docs/ERP_SAAS_VISION.md (رؤية سلسبيل كمنصة SaaS/ERP شاملة
+          قابلة للاستخدام من أي متجر/شركة/مصنع، وريف المدينة كأول تطبيق فعلي لمحركاتها لا نظام
+          منفصل) والربط منه صراحة من SALSABIL_CONSTITUTION.md وdocs/ARCHITECTURE.md "كمرجع أساسي
+          يُقرأ أول أي مهمة مستقبلية تخص لوحات الإدارة/التاجر" — نص التكليف كما ورد في مهمة التوثيق.
+Reason: هذا السجل هو الأثر المستقل الذي يثبت أن إضافة الإشارة المرجعية لـdocs/ERP_SAAS_VISION.md في
+          SALSABIL_CONSTITUTION.md (v1.6، §0 و§5) جاءت بتفويض مباشر من المؤسس داخل نفس المحادثة، لا
+          باجتهاد ذاتي من الوكيل. نفس المنطق المُطبَّق حرفياً في DD-007 (v1.3)، DD-009 (v1.4)،
+          وDD-018 (v1.5) للسوابق المماثلة.
+Risk: بلا هذا السجل، الإضافة لـSALSABIL_CONSTITUTION.md كانت ستعتمد فقط على الملاحظة التنفيذية داخل
+          الملف نفسه كدليل — وهو تحديداً نوع الادعاء غير المستقل الذي يمنعه الشرط الرابع في
+          docs/DOCUMENTATION_RULES.md §5.1.
+Owner: Founder
+Created: 2026-09-20
+Review by: N/A — سجل توثيقي مكتمل بذاته
+Blocking: NO
+Status: RESOLVED — بمجرد كتابة هذا السجل نفسه، مطابقاً للشرط الرابع في docs/DOCUMENTATION_RULES.md
+          §5.1.
+Related: SALSABIL_CONSTITUTION.md §0, §5 (v1.6)، docs/ERP_SAAS_VISION.md (جديد)،
+          docs/ARCHITECTURE.md §9 (v1.12)، DD-007/DD-009/DD-018 (السوابق المطابقة)،
+          docs/DOCUMENTATION_RULES.md §5.1
+```
+
+### DD-022
+```
+Decision: هل تُفصَل inventory.cost_price في جدول/عرض منفصل مقفول بالكامل عبر service_role (بدل عمود
+          داخل جدول inventory العام)، أم يكفي التقييد الحالي على مستوى الأعمدة (column-level GRANT/
+          REVOKE) مع بقاء العمود في نفس الجدول العام؟
+Reason: تحقُّق حي مباشر (2026-09-21، SEC-P1-1 من SALSABIL_BACKEND_ARCHITECTURE_FORENSIC_AUDIT) أثبت
+          أن inventory.cost_price (تكلفة شراء التاجر — بيانات مالية حساسة صراحة، راجع
+          SUPPLY_RESOLUTION_ENGINE_DESIGN.md §2) كانت قابلة للقراءة الكاملة عبر مفتاح anon العام على
+          dev وstaging معاً، بسبب سياسة RLS القائمة أصلاً على inventory ("Public read inventory"
+          using (true)، schema-setup.sql:126) التي تسبق إضافة العمود نفسه (FIX-COST-PRICE-01،
+          2026-09-19) ولم تُعدَّل وقت تلك الإضافة رغم تحذير صريح مكتوب في نفس ملف الإصلاح آنذاك
+          (2026-09-19-fix-inventory-cost-price.sql:38-44) ولم يُحوَّل إلى Decision Debt وقتها — هذا
+          الإدخال يصحح ذلك التقصير بأثر رجعي.
+          **دليل حي مباشر (2026-09-21):** طلب Data API حقيقي بمفتاح anon على staging أعاد صفاً بقيمة
+          cost_price=12.00 فعلية (لا افتراضية) — التسريب لم يكن نظرياً، كان نشطاً فعلياً وقت الاكتشاف.
+          على dev كل القيم كانت null وقت الفحص — نفس الثغرة الهيكلية، بلا محتوى حساس مُسرَّب فعلياً بعد.
+Risk: لو بقيت البنية الحالية (عمود واحد داخل جدول عام) دون فصل حقيقي، أي نسيان مستقبلي لتطبيق
+          column-level REVOKE عند أي إعادة بناء RLS/Schema (Migration رسمية مستقبلية، DD-005) يعيد فتح
+          نفس الثغرة بصمت. الفصل الكامل (جدول/عرض service_role فقط) يزيل فئة الخطر كاملة بدل الاعتماد
+          على ضبط صلاحية عمود واحد قابل للنسيان.
+Immediate Tactical Fix Applied (نطاق ضيق، بلا تغيير بنية الجدول — مصرَّح به مباشرة من المؤسس استثناءً
+          من دورة الـTriage العادية، 2026-09-21):
+  (أ) scripts/2026-09-21-fix-inventory-cost-price-rls-exposure.sql — REVOKE SELECT (cost_price) ON
+      public.inventory FROM anon, authenticated; على dev وstaging معاً. **بانتظار تنفيذ يدوي من
+      المؤسس عبر Supabase SQL Editor** — لا اتصال Postgres مباشر لـClaude Code في هذا المشروع (نفس
+      القيد الموثَّق مسبقاً في 2026-09-19-fix-inventory-cost-price.sql:24)، فلا DDL نُفِّذ تلقائياً.
+  (ب) src/core/modules/inventory/inventory.repository.ts — findByProductId (فحص كمية فقط، عميل anon)
+      لم يعد يطلب cost_price إطلاقاً (select صريح بدل *). findByProductIds (المستهلك الوحيد:
+      app/merchant/offers/page.tsx، صفحة تاجر مُصادَق عليها عبر getMerchantSession تعرض تكلفة منتجاته
+      هو فقط) انتقل من عميل anon إلى supabaseAdmin — يطابق النمط المعماري القائم فعلياً لكل قراءة
+      بيانات حساسة خاصة بصاحبها (نفس نمط carts/orders/merchants، ADR-008/ADR-012). هذا التغيير ضروري
+      *قبل* تطبيق REVOKE أعلاه لتفادي كسر لوحة "عروضي" (كانت تعتمد على select('*') عبر anon على نفس
+      هذا العمود) — مُتحقَّق منه: 61/61 اختبار وحدة (cart+orders+inventory) نجح، npx tsc --noEmit نظيف،
+      بعد التعديل مباشرة في هذه الجلسة.
+Broader Fix Deferred (عمداً، لا إسقاطاً — MIGRATION_REQUIRED في خطة الـTriage القادمة):
+  فصل cost_price إلى جدول/عرض منفصل مقفول بالكامل عبر service_role (بدل عمود مُقيَّد داخل جدول عام) —
+  يزيل الاعتماد الدائم على ضبط صلاحية عمود بعينه. غير منفَّذ الآن عمداً (خارج النطاق الضيق المُصرَّح به
+  لهذا الإصلاح العاجل) — يحتاج تصميم Migration جديدة ومراجعة أوسع لكل مستهلكي inventory الحاليين.
+Owner: Founder (قرار الفصل الكامل)، Engineering (التنفيذ التكتيكي أعلاه)
+Created: 2026-09-21
+Review by: عند بناء أول Migration رسمية (DD-005) أو عند أي توسّع فعلي لبيانات inventory الحساسة (مثال:
+          هامش ريف، SUPPLY_RESOLUTION_ENGINE_DESIGN.md §3) — أيهما أسبق
+Blocking: NO للتشغيل الحالي بعد تطبيق الإصلاح التكتيكي يدوياً وتأكيد التحقق الحي — YES لأي بناء مستقبلي
+          فوق cost_price بافتراض عزل بيانات دائم بدل ضبط صلاحية عمود قابل للنسيان
+Status: OPEN — الإصلاح التكتيكي مكتوب (كود مُطبَّق ومُختبَر، SQL بانتظار تنفيذ يدوي من المؤسس ثم تحقق
+          حي عبر Data API قبل إغلاقه إلى RESOLVED جزئياً). الفصل الكامل يبقى OPEN بشكل مستقل بعدها.
+Related: SEC-P1-1 (SALSABIL_BACKEND_ARCHITECTURE_FORENSIC_AUDIT §E)، ADR-008، ADR-012، ADR-031،
+          docs/DATABASE.md §6، scripts/2026-09-19-fix-inventory-cost-price.sql (التحذير الأصلي غير
+          المُحوَّل وقتها)، DD-005 (Migrations رسمية)
 ```
 
 ---

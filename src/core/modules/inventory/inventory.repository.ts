@@ -27,17 +27,30 @@ function toInventoryRecord(row: InventoryRow): InventoryRecord {
 }
 
 export class InventoryRepository {
+  // SEC-P1-1 (2026-09-21، DD-022) — لا يطلب cost_price إطلاقاً هنا: هذه القراءة تخدم فقط فحوصات
+  // كمية عامة/داخلية (isAvailable، decrementIfAvailable/restore أدناه) عبر عميل anon، ولا مستهلك
+  // لها يحتاج تكلفة الشراء. عمود صريح بدل select('*') — دفاع تطبيقي مستقل عن REVOKE على مستوى
+  // العمود نفسه (scripts/2026-09-21-fix-inventory-cost-price-rls-exposure.sql).
   async findByProductId(productId: string): Promise<InventoryRecord | null> {
-    const { data, error } = await supabase.from('inventory').select('*').eq('product_id', productId).maybeSingle();
+    const { data, error } = await supabase
+      .from('inventory')
+      .select('product_id, quantity_available, updated_at')
+      .eq('product_id', productId)
+      .maybeSingle();
     if (error) throw error;
     return data ? toInventoryRecord(data as InventoryRow) : null;
   }
 
   // §31 بند 5 — لوحة "عروضي" في بوابة التاجر تحتاج كمية/سعر توريد كل منتجاته معاً، لا استعلاماً
   // منفصلاً لكل صف (N+1) — نفس دافع findProductsByIds المُجمَّعة في catalog.repository.ts.
+  // SEC-P1-1 (2026-09-21، DD-022) — المستهلك الوحيد (app/merchant/offers/page.tsx) صفحة تاجر
+  // مُصادَق عليها (getMerchantSession) تعرض تكلفة *منتجاته هو* فقط (productIds مُشتقَّة أصلاً من
+  // catalogService.listMerchantOffers(session.tenantId)) — قراءة بيانات مالية خاصة بصاحبها بعد
+  // تفويض مُتحقَّق منه مسبقاً، فتنتقل لعميل service_role بدل anon (نفس نمط carts/orders/merchants،
+  // ADR-008/ADR-012) بدل الاعتماد على صلاحية عمود anon المُقيَّدة حديثاً لهذا الاستهلاك المشروع.
   async findByProductIds(productIds: string[]): Promise<InventoryRecord[]> {
     if (productIds.length === 0) return [];
-    const { data, error } = await supabase.from('inventory').select('*').in('product_id', productIds);
+    const { data, error } = await supabaseAdmin.from('inventory').select('*').in('product_id', productIds);
     if (error) throw error;
     return (data as InventoryRow[]).map(toInventoryRecord);
   }
