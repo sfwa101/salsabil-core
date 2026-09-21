@@ -1,0 +1,563 @@
+---
+title: SALSABIL FRONTEND ⇄ BACKEND INTEGRATION AUDIT
+date: 2026-09-21
+type: audit
+scope: READ_ONLY — لا كود، لا migration، لا تعديل على أي ملف غير هذا التقرير (نفس نمط REEF_PHASE_1_PRODUCT_COMPLETENESS_AUDIT.md)
+author: Claude Code (تركيب من 2 وكيلَي استكشاف متوازيين + قراءة مباشرة لكل وثائق الحوكمة وسجلات التنفيذ الحديثة)
+---
+
+# AUDIT ONLY
+**FILES MODIFIED: 0**
+**DATABASE CHANGES: 0**
+**DEPENDENCIES CHANGED: 0**
+**COMMITS: 0**
+
+هذا الملف الوحيد هو الناتج الوحيد لهذه المهمة. لا تعديل على أي كود، Type، Service، ActionRouter،
+ApplicationRuntime، DataResolver، Component، أو قاعدة بيانات.
+
+---
+
+## 1. Executive Summary
+
+**الحقيقة بجملة واحدة:** يوجد Backend حقيقي، ناضج، ومُختبَر بعمق لمعظم نطاقات ريف (Cart/Catalog/
+Orders/Inventory/Merchant/Delivery/Notifications/Bayan/Admin/Khalil) — ويوجد بالتوازي طبقة UI جديدة
+كاملة ("Antigravity"/"Stem") غير مُتتبَّعة في Git، **لا تستهلك أي خدمة Backend حقيقية إطلاقاً** — كل
+بياناتها Mock (`dummy-ui-service.ts`)، وحالتها (السلة، العناوين) محلية بالكامل (`localStorage`/
+React state)، ولا يوجد أي كود جسر (Adapter/DataSource) يربط الاثنين اليوم.
+
+**الاكتشاف الأهم الذي يغيّر شكل أي خطة عمل لاحقة:** أغلب مكوّنات "Stem" الجديدة **ليست قدرات جديدة**
+— هي إعادة بناء بصري متوازية لمكوّنات إنتاجية **موجودة فعلاً ومربوطة بالفعل بـBackend حقيقي**:
+
+| Stem الجديد (غير مربوط، Mock) | المكوّن الإنتاجي المقابل (موجود، مربوط بـBackend حقيقي) |
+|---|---|
+| `HorizontalShelfStem.tsx` | `src/components/HorizontalShelf.tsx` |
+| `StemProductCard.tsx` | `src/components/ProductCard.tsx` |
+| `StemHeroFeedCard.tsx` | `src/components/PostCard.tsx` |
+| `BottomNavStem.tsx` | `src/components/BottomNav.tsx` |
+| `WorldsTrayStem.tsx` | `src/components/WorldSwitcher.tsx` |
+| `CartLineItemStem.tsx` | `src/components/CartLineItem.tsx` |
+| `VendorCartGroupStem.tsx` | `src/components/CartVendorGroup.tsx` |
+| `DesktopHeaderStem.tsx`/`MobileHeaderStem.tsx` | `src/components/Header.tsx`، `HeaderSearchBar.tsx` |
+| `AddressModalStem.tsx` | `src/components/DeliveryAddressButton.tsx` |
+| `ReelsHorizontalShelfStem.tsx`/`ReelsEmbedModalStem.tsx` | `src/components/ReelsFeed.tsx`، `ReelsShelfPlaceholder.tsx` (+ `posts.post_type='reel'` حقيقي في Bayan) |
+| `ProductQuickViewStem.tsx` | `src/components/ProductSheetContent.tsx`/`RecipeSheetContent.tsx` |
+
+**هذا لا يعني أن العمل ضائع** — التصميم البصري الجديد قد يكون تحسيناً حقيقياً (Apple-style، راجع
+`docs/UI_UX_MIGRATION_ANALYSIS.md`). لكنه يعني أن **الأولوية المعمارية الحقيقية ليست "بناء Backend
+لهذه الشاشات"** (الغالبية العظمى منها Backend جاهز فعلاً ومُختبَر) **بل قرار حاكم**: هل "Stem" طبقة
+عرض بديلة (Presentation Layer Swap) فوق نفس الـData Layer الإنتاجي القائم، أم إعادة بناء مستقلة ستُدمَج
+لاحقاً؟ لا شيء في الكود يحسم هذا اليوم — راجع §14 Open Questions.
+
+**خمس حقائق رئيسية:**
+
+1. **SDUI Engine (`src/sdui/*`) آلية عامة نظيفة بلا أي Mock داخلها** — لكنها لم تُستهلَك حتى اليوم إلا
+   من صفحتَي اختبار (`test-ui`, `test-portability`)، وكلتاهما 100% Mock Data. لا صفحة إنتاجية واحدة
+   تستخدم `PageEngine`/`ApplicationRuntime`/`DataResolver` — الفحص التلقائي (`grep`) أكّد صفر نتيجة خارج
+   ملفَي الاختبار.
+2. **`SectionSchema.type` في `page.schema.ts` يقبل 4 أنواع أقسام فقط** (`hero_card`, `product_shelf`,
+   `reels_shelf`, `category_bar`) — أي أن **14 من أصل 18 مكوّن Stem** (السلة، الهيدر، المودالات،
+   الـNav، العناوين) غير قابلة للتشغيل عبر محرك SDUI أصلاً اليوم؛ تُركَّب يدوياً في `test-ui/page.tsx`
+   خارج آلية الـSchema/Registry تماماً.
+3. **لا يوجد Adapter واحد يحوّل Type حقيقي (`Product`, `Cart`, `Order`, `World`) إلى شكل Prop لأي Stem**
+   — 5 أشكال "منتج" متوازية، و5 أشكال "بند سلة" متوازية، موثَّقة بالتفصيل في §9. ربط البيانات الحقيقية
+   لن يكون "استبدال Mock بـReal" فقط — يحتاج كتابة طبقة تحويل جديدة بالكامل.
+4. **ثغرة تصميم عقد فعلية (لا افتراضية):** `ADD_TO_CART` في `src/sdui/actions/action-contracts.ts`
+   يحمل حقل `price` يُرسَل من الواجهة — هذا يخالف مباشرة `SALSABIL_CONSTITUTION.md §4 بند 2` و
+   `INV-SEC-001` ("لا يُقبَل أي سعر يصل من العميل"). لم يُربَط بعد بأي Mutation حقيقي، فلا ثغرة حية
+   اليوم — لكن العقد نفسه يحتاج تصحيحاً **قبل** أي ربط حقيقي، لا بعده.
+5. **تصادم تسمية معماري حقيقي:** Bayan (Backend حقيقي) يملك بالفعل `posts.post_type = 'reel'` —
+   لكنه محتوى **صورة** بمنشور مُصنَّف "ريل"، لا فيديو مُضمَّن. طبقة Stem تبني `ReelSnapshot`/`DummyReel`
+   بمفهوم مختلف تماماً (فيديو خارجي مُضمَّن: `embedUrl`, `platform: youtube|tiktok|instagram|facebook`).
+   نفس الاسم، مفهومان مختلفان تماماً — راجع §9 وتصنيف `D — ARCHITECTURAL CONFLICT` في §5.
+
+---
+
+## 2. Current Backend Map
+
+> المصدر: قراءة مباشرة للكود (`src/core/modules/*`, `src/core/kernel/*`, `scripts/*.sql`) + `INVARIANTS.md`
+> + سجل البناء الليلي `docs/audits/2026-09-20-overnight-autonomous-build-log.md` (الأحدث والأكثر دقة —
+> `docs/DATABASE.md`/`docs/DOMAIN_MAP.md` **قديمان صراحة**، راجع §14 CONFLICT).
+
+| Domain | Types | Service | Repository | Server Actions (مستهلكة) | DB Tables | RLS | Business Rules | التقييم |
+|---|---|---|---|---|---|---|---|---|
+| **Cart** | `cart/types.ts` (`Cart`, `CartItem`, `AddItemInput`, `CartSummary`, `CartLineSummary`) — لا حقل سعر | `cart.service.ts` (`getSummary`, `addItem`, `updateItemQuantity`, `removeItem`, `clearCart`, `mergeGuestCartIntoUser`) | `cart.repository.ts` (JOIN حقيقي، `service_role`) | `(reef)/cart/actions.ts` | `carts`, `cart_items` | نمط 2 (مقفول، `service_role`) | BR-016 (حد أدنى) `OPEN_QUESTION` | **Production-capable** |
+| **Catalog** | `catalog/types.ts` (`Product`, `ProductOption`, `District`, `CatalogCategory`, `CatalogSubcategory`, `MasterCatalogItem`) | `catalog.service.ts` (`calculatePrice`, `validateSelection`, شجرة حي/قسم/قسم فرعي CRUD، Excel import كامل، `listPurchasableProducts`) | `catalog.repository.ts` | `admin/catalog/actions.ts`, `admin/taxonomy/actions.ts`, `merchant/import/actions.ts`, `merchant/offers/actions.ts` | `categories`, `products`, `inventory`, `catalog_districts`, `catalog_categories`, `catalog_subcategories`, `catalog_master_items`, `catalog_review_queue` | نمط 1 للقراءة العامة (`categories`/`products`/`inventory`)، نمط 2 لجداول الاستيراد | BR-002 (منتج/قسم واحد) مُنفَّذ بنيوياً | **Production-capable** |
+| **Orders** | `orders/types.ts` — `ORDER_TRANSITIONS`/`ORDER_TRANSITION_ACTORS` (آلة حالات 7 حالات) | `orders.service.ts` (`checkout`, `transitionStatus`, `getOrderForCustomerView`, `getOrdersForTenant`, `getAllOrders`) | `orders.repository.ts` (قديم، مجمَّد) + `customerOrder.repository.ts` (الحي، Multi-Merchant) | `checkout/actions.ts`, `merchant/orders/actions.ts`, `admin/dashboard/actions.ts` | **قديم (مجمَّد):** `orders`/`order_items`/`order_status_history`. **حي (ADR-033):** `customer_orders`, `merchant_suborders`, `merchant_suborder_items`, `merchant_suborder_status_history` | نمط 2 بالكامل | BR-009 (مسؤولية التأخير) بنية تحتية جاهزة، منطق التحديد غير مبني | **Production-capable** (مع مخاطر مُعلَنة: `DD-002` قفل ذاكرة لا ينجو من تعدد الخوادم، `INV-TEN-001` قوائم الطلبات الجماعية بلا فحص داخلي) |
+| **Inventory** | `inventory/types.ts` (`InventoryRecord`) | `inventory.service.ts` (`isAvailable`, `reserve`, `release`) | `inventory.repository.ts` — `decrementIfAvailable`/`restore` (Optimistic Concurrency حقيقي، مُختبَر حياً بتزامن فعلي) | (عبر Orders/Cart فقط) | `inventory` | نمط 1 قراءة، `service_role` كتابة | — | **Production-capable** (أقوى كود تزامن في المشروع) |
+| **Payments** | `PaymentProvider` (واجهة) | `CashOnDeliveryProvider.charge()` — **ينجح دائماً بلا اتصال خارجي** | — | (عبر Orders) | لا جداول مخصَّصة | — | — | **Stub** — الواجهة حقيقية ومربوطة، التطبيق الوحيد وهمي بالكامل |
+| **Merchant** | `merchant/types.ts` (`Merchant`, `MerchantRegistrationInput`) | `merchant.service.ts` (`loginOwnerByPhone`, `listAll`, `setActiveStatus`) | `merchant.repository.ts` | `merchant/login/actions.ts`, `admin/dashboard/actions.ts` | `merchants` | نمط 2 | BR-007 (شفافية) جزئي | **Production-capable** (لا تسجيل تاجر ذاتي — سكربت CLI فقط) |
+| **MerchantStaff** | `merchantStaff/types.ts` | `merchantStaff.service.ts` (`addStaff`, `assertActiveStaff`, `resolveActorContextForTenant`) | `merchantStaff.repository.ts` | `merchant/staff/actions.ts`, `merchant/staff-login/actions.ts` | `merchant_staff` | نمط 2 | — | **Production-capable** (نطاق ضيق بالتصميم) |
+| **Delivery** | `delivery/types.ts` — `DELIVERY_JOB_TRANSITIONS` (آلة حالات ثانية مستقلة) | `delivery.service.ts` (`listReadySuborderCandidates`, `assignDriverToJob`, `transitionJobStatus`) | `delivery.repository.ts` | `delivery/office/*/actions.ts`, `delivery/driver/*/actions.ts` | `delivery_offices`, `drivers`, `delivery_jobs`, `delivery_job_suborders` | نمط 2 | — | **Production-capable لنطاق V1** (بناء جديد جداً — commit واحد، تغطية اختبار أضعف) |
+| **Notifications** | — | `notification.service.ts` (`notifyOrderStatusChanged`, Best-Effort، لا يرمي أبداً) | `sms-provider.ts` (SMS Misr) | (استدعاء داخلي من `orders.service.ts`) | لا جدول (تسجيل في `audit_log`) | نمط 2 (`audit_log`) | — | **Partial** — الكود حقيقي، لكن **لا بيانات اعتماد SMS مُفعَّلة في أي بيئة** اليوم (إرسال فعلي مستحيل تقنياً حالياً) |
+| **Bayan** | `bayan/types.ts` (`Post`, `PostMedia`, `PostMediaLink`, `POST_TYPES` بما فيها `'reel'`) | `bayan.service.ts` (`listFeed`, `scaleRecipeQuantities`, CRUD إداري كامل) | `bayan.repository.ts` | `feed-actions.ts`, `admin/posts/actions.ts` | `posts`, `post_media`, `post_products` | نمط 1 للمنشورات المنشورة؛ **`post_media`/`post_products` بلا عزل مسودة على مستوى RLS — مسؤولية طبقة التطبيق فقط** | — | **Production-capable وكامل** حسب نطاقه المُعلَن |
+| **Admin** | — (نطاق تجميع، لا جدول خاص) | `admin.service.ts` (`loginByPhone`, `listMerchants`, `setMerchantActiveStatus`) | — | `admin/login/actions.ts`, `admin/dashboard/actions.ts` | (يقرأ `merchants`/`sessions`/`audit_log` عبر خدمات أخرى) | — | — | **Production-capable** لنطاقه الضيق المُعلَن |
+| **Audit** | — | `audit.service.ts` (`log`, `findRecent`) | — | (استدعاء داخلي من كل النطاقات) | `audit_log` | نمط 2 | INV-AUDIT-001 `VIOLATED` جزئياً (خصم/استرجاع مخزون ناجح غير مُسجَّل) | **Production-capable** (أوسع قدرة مشتركة في المشروع، تغطية أضيق من ادعاء الدستور الحرفي) |
+| **Customer** | — | `customer.service.ts` (`register`, `login`, `startClaim`/`confirmClaim` عبر OTP) | (يُعيد استخدام `khalil`) | `account/*/actions.ts` | `users`, `sessions` (خليل) | نمط 2 | — | **Production-capable** |
+| **Khalil (Identity/Context)** | `khalil/types.ts` (`World`, `UserPersona`) | `khalil.service.ts` (جلسات، أدوار، هوية، `listActiveWorlds`) | `khalil.repository.ts` (وصول حصري، مفروض آلياً) | (يُستهلَك من كل النطاقات) | `users`, `sessions`, `worlds`, `user_personas` | نمط 2 | — | **Production-capable** |
+| **Security/OTP (kernel)** | — | `password.ts` (scrypt + timing-attack fix مُراجَع مرتين)، `otp.service.ts` (fail-closed، one-time-use)، `rate-limit.ts` (ذاكرة محلية فقط) | — | — | `sessions` (كلمة مرور)، جدول OTP challenges | — | — | **Production-capable** |
+
+**ملاحظة حاسمة على المصدر:** `docs/DATABASE.md` (آخر تحديث 2026-09-09) و`docs/DOMAIN_MAP.md` (آخر
+تحديث 2026-09-06) **لا يذكران** أياً من: Multi-Merchant Order Splitting (`customer_orders`/
+`merchant_suborders`، `ADR-033`، 2026-09-15)، Delivery، MerchantStaff، Notifications، أو تصنيف
+Catalog الجديد (`catalog_districts`/`catalog_categories`/`catalog_subcategories`، TASK-17/18). هذا
+**CONFLICT حقيقي بين الوثائق والكود** — راجع §14.
+
+---
+
+## 3. Current Frontend Map
+
+### 3.1 SDUI Engine (`src/sdui/*`) — آلية عامة، بلا Mock داخلها، غير مُستهلَكة إنتاجياً
+
+| الملف | الدور | الحالة |
+|---|---|---|
+| `engine/PageEngine.tsx` | يتحقق من `pageData` عبر `PageSchema` (zod)، يُركِّب `page.sections` عبر `componentRegistry.get(type)` | آلية Render خالصة، لا Fetch |
+| `runtime/ApplicationRuntime.ts` | يجمع `CapabilityRegistry` + `ActionRouter` | Wrapper رقيق |
+| `runtime/ActionRouter.ts` | يوجّه `action.type` لِHandler مسجَّل | لا اتصال Backend |
+| `runtime/CapabilityRegistry.ts` | `Map` في الذاكرة | تسجيل خالص |
+| `data/DataResolver.ts` | يحلّ `{$bind, params}` عبر `QueryRegistry` + `DataSource.resolve()` — **يستخدم أول `DataSource` مُسجَّل فقط** (تعليق صريح في الكود: لا توجيه متعدد المصادر بعد) | آلية عامة، القيد موثَّق |
+| `data/DataSource.ts` | واجهة `resolve(queryId, params)` وحيدة الدالة | **لا تطبيق حقيقي واحد لها في كل المستودع** — التطبيقان الوحيدان (`ReefMockDataSource`, `PortabilityMockDataSource`) كلاهما Mock 100% |
+| `data/QueryRegistry.ts` | `Map<queryId, {paramSchema, resultSchema}>` | لا استعلامات افتراضية مُسجَّلة — كل صفحة تبني سجلّها بنفسها |
+| `actions/action-contracts.ts` | `UIAction` (union: `ADD_TO_CART`, `OPEN_QUICK_VIEW`, `OPEN_REEL`, `NAVIGATE`, `SELECT_CATEGORY`, `CHANGE_FEED_TAB`, `EXECUTE_SEARCH`, `CLEAR_CART`) | `EXECUTE_SEARCH` مُعرَّف بلا أي `dispatch`/Handler في كل المستودع (تحقَّق بحثاً مباشراً) |
+| `schema/page.schema.ts` | `SectionSchema.type` = `z.enum(['hero_card','product_shelf','reels_shelf','category_bar'])` فقط | **قيد بنيوي حرج** — يمنع 14/18 من مكوّنات Stem من العمل عبر المحرك |
+
+### 3.2 مكوّنات "Stem" (`src/components/ui/*.tsx`) — 18 ملفاً، كلها غير مُتتبَّعة في Git
+
+جدول كامل (اسم، هل عرضي بحت، الاعتماد على Mock، الشكل الموازي الإنتاجي) موجود في §9/الملخص أعلاه. تلخيص
+سلوكي:
+
+- **عرضية بحتة (تستقبل كل شيء عبر Props):** `HorizontalShelfStem`, `CategoryBarStem`, `StemProductCard`,
+  `ProductQuickViewStem`, `StemHeroFeedCard`, `DesktopHeaderStem`, `VendorCartGroupStem`,
+  `CartLineItemStem`, `CartBreakdownStem`, `CartUpgradeBannerStem`.
+- **تجلب بيانات/حالة ذاتياً (Self-fetching):** `BottomNavStem`/`MobileHeaderStem` (`dynamic-nav-config.ts`،
+  ثابت لا CMS)، `MobileCartSheetStem` (**الوحيد** الذي يستدعي دالة Mock وقت الـRender:
+  `getDummyUpsells()`).
+- **تُخزِّن حالة محلية مباشرة (تتجاوز أي Service):** `AddressModalStem` (`localStorage` مباشرة، عناوين
+  افتراضية Hardcoded).
+- **مربوطة بنيوياً (Type-level) بخدمة الـMock:** `WorldsTrayStem`, `ReelsEmbedModalStem`,
+  `ReelsHorizontalShelfStem`, `MobileCartSheetStem` — تستورد `DummyWorld`/`DummyReel` من
+  `@/services/dummy-ui-service` مباشرة كنوع Prop، فلا يمكنها حتى الـType-check ضد بيانات حقيقية بلا
+  تعديل.
+
+**لا مكوّن Stem واحد يستورد أي شيء من `src/core/modules/*`** — صفر اقتران مباشر بالـBackend الحقيقي،
+وصفر اقتران بالمحرك المعزول (`test-portability`) الذي يثبت أن SDUI نفسه لا يحتاج Reef/Supabase.
+
+### 3.3 صفحات الاختبار
+
+- **`src/app/test-ui/page.tsx`** (678 سطر) — العرض التوضيحي الكامل لـ"Antigravity" (موبايل+ديسكتوب).
+  يستورد حصرياً من `@/services/dummy-ui-service`، حالة السلة عبر `DummyCartContext`
+  (`localStorage: sb_cart_state_v1`). يسجّل `homePageSchema` ثابتاً (4 أقسام فقط، مطابقة لقيد
+  `page.schema.ts`). **صفر استيراد من `src/core`.**
+- **`src/app/test-portability/page.tsx`** (147 سطر) — اختبار عزل معماري صريح (تعليق حرفي في الملف:
+  "DOES NOT import useDummyCart, Reef context, or Supabase"). يثبت أن محرك SDUI نفسه محمول، لا أكثر.
+- **`src/app/(reef)/data/ReefMockDataSource.ts`** — التطبيق الوحيد شبه-الإنتاجي لـ`DataSource`، لكنه
+  100% Mock (يستدعي `dummy-ui-service.ts` فقط). ملاحظة موقع مهمة: يعيش داخل مجلد `(reef)/` الإنتاجي
+  الحقيقي رغم أنه لا يحتوي بيانات حقيقية إطلاقاً — خطر لبس مستقبلي إن ظُنَّ "مصدر بيانات ريف الحقيقي".
+
+### 3.4 الشاشات الإنتاجية القائمة (خارج نطاق Antigravity، للمقارنة فقط)
+
+كل شاشة إنتاجية فُحصت (`(reef)/page.tsx`, `cart/page.tsx`, `checkout/page.tsx`, `product/[id]/page.tsx`,
+`[district]/**`, `admin/dashboard/page.tsx`, `merchant/dashboard/page.tsx`,
+`delivery/driver/dashboard/page.tsx`) تستورد **مباشرة** من `@/core/modules/*` أو عبر Server Actions
+حقيقية — **صفر استخدام لـ`PageEngine`/SDUI في أي مسار إنتاجي.** بحث `grep` لـ`PageEngine|sdui` عبر
+`src/app/` كله أعاد نتائج فقط في `test-ui`, `test-portability`, و`(reef)/data/ReefMockDataSource.ts`.
+
+---
+
+## 4. Screen Inventory (طبقة Antigravity/Stem — 12 قسم/شاشة فعلية داخل `test-ui`)
+
+لكل قسم: الاسم | المسؤولية | البيانات المطلوبة | Actions | Runtime State | Components | Contracts |
+Mock المعتمَد عليه | Static/Mock/Real | حدود واضحة مع Backend؟
+
+1. **Header (Desktop/Mobile)** — تصفح عام + تبديل عالم + بحث. بيانات: `World[]`, نص بحث. Actions: `NAVIGATE`, (بحث بلا Action مُعرَّف فعلياً يُنفَّذ). Runtime State: React محلي (فتح/غلق قائمة). Components: `DesktopHeaderStem`, `MobileHeaderStem`. Contracts: Props محلية + `getDummyWorlds()`. **Mock بالكامل.** حدود Backend: **غير واضحة للبحث** (لا Capability إطلاقاً)، واضحة للعوالم (`khalilService.listActiveWorlds()` موجودة فعلاً).
+2. **WorldsTrayStem** — قائمة تبديل عوالم منبثقة. بيانات: `DummyWorld[]`. Actions: `NAVIGATE`/تحديد عالم. Runtime State: فتح/غلق. Components: `WorldsTrayStem`. Contracts: `DummyWorld` (من `dummy-ui-service.ts` مباشرة — ربط بنيوي بـMock). **Mock بالكامل.** حدود Backend: واضحة (نفس `World` الحقيقي بشكل مختلف).
+3. **CategoryBarStem** — تصفح الأحياء/الأقسام. بيانات: `CategoryStem[]` محلي (`id,name,image?,active?`). Actions: `SELECT_CATEGORY`. Runtime State: القسم النشط. Contracts: نوع محلي فقط. **Mock بالكامل.** حدود Backend: واضحة (`catalog_districts`/`catalog_categories` حقيقي وله شكل مختلف تماماً).
+4. **Feed (`StemHeroFeedCard`)** — خلاصة منشورات/عروض مُنسَّقة. بيانات: شكل محلي غير مستورَد (5ِ شكل "منتج/محتوى" مستقل). Actions: `ADD_TO_CART`, `OPEN_QUICK_VIEW`, تنقّل تصنيف. Runtime State: لا شيء خاص. Contracts: Props محلية بالكامل. Mock: `getDummyFeedItems()`. Static/Mock/Real: **Mock.** حدود Backend: واضحة (`bayan.service.listFeed()` يغطي هذه المسؤولية فعلياً، ومربوط بمكوّن إنتاجي مختلف `PostCard.tsx` بالفعل).
+5. **ProductShelf (`HorizontalShelfStem`+`StemProductCard`)** — رفوف منتجات أفقية. بيانات: `ProductCardStemProps[]`. Actions: `ADD_TO_CART`, `OPEN_QUICK_VIEW`. Runtime State: لا شيء. Contracts: `ProductCardStemProps` (`@/types/ui-contracts.ts`). Mock: `getDummyProducts()`. **Mock بالكامل.** حدود Backend: واضحة (`catalogService.listPurchasableProducts()` حقيقي، شكل مختلف).
+6. **Reels (`ReelsHorizontalShelfStem`/`ReelsEmbedModalStem`)** — فيديو قصير مُضمَّن. بيانات:
+   `DummyReel{id,title,chefOrSource,platform,thumbnailUrl,embedUrl}`. Actions: `OPEN_REEL`. Runtime
+   State: مودال مفتوح/مغلق. Contracts: `DummyReel`/`ReelSnapshot` (نوعان متوازيان). Mock:
+   `getDummyReels()`. **Mock بالكامل — ولا مفهوم مطابق في Backend فعلياً (راجع §9، تصادم تسمية مع
+   `posts.post_type='reel'`).** حدود Backend: **غير واضحة إطلاقاً — تعارض معماري، لا فجوة بسيطة.**
+7. **ProductQuickViewStem** — تفاصيل منتج سريعة + إضافة للسلة. بيانات: `QuickViewProductSnapshot`.
+   Actions: `ADD_TO_CART` (**يحمل `price` من الواجهة — راجع §9 تحذير الأمان**). Runtime State: مودال.
+   Contracts: `QuickViewProductSnapshot` (`sdui/actions/action-contracts.ts`). Mock: بيانات محقونة من
+   `StemProductCard`. **Mock بالكامل.** حدود Backend: واضحة للقراءة (`catalogService`)، **غير آمنة
+   بعقدها الحالي** للإضافة للسلة.
+8. **Cart (`MobileCartSheetStem`+`CartLineItemStem`+`CartBreakdownStem`+`CartUpgradeBannerStem`+
+   `VendorCartGroupStem`)** — سلة كاملة + تجميع تاجر + Checkout. بيانات: `Record<string,{quantity,
+   price}>` (شكل خاص، ليس `Cart`/`CartItem` الحقيقي). Actions: تحديث كمية، `CLEAR_CART`، Checkout محلي.
+   Runtime State: `DummyCartContext` (`localStorage: sb_cart_state_v1`). Contracts: أشكال محلية متعددة
+   (راجع §9). Mock: `DummyCartContext` + `getDummyUpsells()`. **Mock بالكامل، بما فيه Checkout نفسه**
+   (يولّد معرّف طلب وهمي `RF-${random}` محلياً، صفر اتصال شبكة). حدود Backend: واضحة جداً
+   (`cart.service.ts`/`ordersService.checkout()` حقيقيان وناضجان) لكن **الشكل مختلف جذرياً، لا استبدال
+   بسيط**.
+9. **AddressModalStem** — إدارة عناوين محفوظة. بيانات: مصفوفة عناوين. Actions: إضافة/تعديل/حذف محلي.
+   Runtime State: `localStorage: sb_saved_addresses_v1` (مباشرة، بلا أي Service وسيط). Contracts: نوع
+   محلي. Mock: `defaultAddresses` Hardcoded. **Mock بالكامل.** حدود Backend: **لا يوجد Backend لهذه
+   المسؤولية إطلاقاً** — لا جدول عناوين قابل لإعادة الاستخدام في كل المشروع (`delivery_address` Snapshot
+   فقط عند كل Checkout).
+10. **OrderSuccessModalStem** — تأكيد ما بعد الطلب. بيانات: `OrderDetails{items:any[]}` محلي غير مُدقَّق.
+    Actions: رابط واتساب متابعة (`wa.me` مبني في الواجهة). Runtime State: لا شيء. Contracts: نوع محلي.
+    Mock: معرّف طلب مُصطَنع بالكامل. **Mock بالكامل رغم وجود بيانات حقيقية جاهزة فعلياً من
+    `ordersService.checkout()`.** حدود Backend: واضحة تماماً — **لا حاجة لأي Backend جديد هنا، فقط
+    استهلاك الإرجاع الحقيقي بدل اختلاقه.**
+11. **BottomNavStem/MobileHeaderStem (تبويبات)** — تنقّل سفلي ثابت. بيانات: `getBottomNavConfig()`/
+    `getSegmentedFeedTabsConfig()` من `dynamic-nav-config.ts` (اسم "Dynamic" لكنه Hardcoded بالكامل، لا
+    مصدر بيانات). Actions: `NAVIGATE`. Runtime State: التبويب النشط. **Static (باسم Dynamic مُضلِّل).**
+    حدود Backend: لا حاجة فعلية لواحد اليوم (بنية ثابتة معقولة)، لكن الاسم يوحي بخطأ بأن هناك تهيئة
+    ديناميكية قائمة.
+12. **Delivery Fee (جزء من `CartBreakdownStem`)** — عرض رسوم توصيل. بيانات: رقم رسوم. Runtime State: لا
+    شيء. **Mock/صفر ثابت في الغالب** (لا حقل مخصَّص مؤكَّد في الفحص، لكن الشكل الإنتاجي المقابل
+    `delivery_fee_snapshot` **صفر مُثبَّت دائماً بالكود** — `TODO` صريح، لا خوارزمية حساب). حدود Backend:
+    **لا يوجد Backend حقيقي لحساب رسوم التوصيل إطلاقاً بعد** — لا في Antigravity ولا في الإنتاج.
+
+---
+
+## 5. Contract Matrix
+
+| Screen | Capability | Data Needed | Frontend Contract | Backend Service | Backend Action | DB Source | Status |
+|---|---|---|---|---|---|---|---|
+| Header | World switching | `World[]` | `WorldsTrayStem`(`DummyWorld`) | `khalilService.listActiveWorlds()` | `listActiveWorldsAction` (موجود، مستهلَك إنتاجياً بالفعل في `WorldSwitcher.tsx`) | `worlds` | **A — READY** (يحتاج Adapter فقط) |
+| Header | Search | query→results | `EXECUTE_SEARCH` (مُعرَّف، غير مُنفَّذ) | — | — | — | **C — BACKEND REQUIRED** (لا محرك بحث في كل المشروع) |
+| CategoryBarStem | تصفح الأحياء/الأقسام | `District`/`CatalogCategory` tree | `CategoryBarStem` (محلي) | `catalogService` (شجرة الحي/القسم) | صفحات `(reef)/[district]/**` تستهلكها مباشرة | `catalog_districts/categories/subcategories` | **A — READY** (Adapter فقط) |
+| Feed | خلاصة منشورات/عروض | `PostWithDetails`+`Product` | `StemHeroFeedCardProps` (محلي، 5ِ شكل) | `bayanService.listFeed()` | `loadFeedPageAction` | `posts/post_media/post_products` | **A — READY** (Adapter فقط؛ يوجد بالفعل مكوّن إنتاجي مربوط `PostCard.tsx`) |
+| ReelsHorizontalShelfStem / ReelsEmbedModalStem | فيديو قصير مُضمَّن | `embedUrl`,`platform`,`thumbnailUrl` | `DummyReel`/`ReelSnapshot` | لا مطابقة — `posts.post_type='reel'` يعني صورة لا فيديو مُضمَّن | — | `posts` (بشكل مختلف تماماً) | **D — ARCHITECTURAL CONFLICT** |
+| ProductShelf | تصفح منتجات قابلة للشراء | `Product[]` | `ProductCardStemProps` | `catalogService.listPurchasableProducts()` | `loadRealCatalogShelfAction` (جديد 2026-09-20) | `products/inventory` | **A — READY** (Adapter فقط) |
+| ProductQuickViewStem | تفاصيل + إضافة للسلة | `Product`+خيارات+سعر | `QuickViewProductSnapshot` + `ADD_TO_CART` (يحمل `price`!) | `catalogService.calculatePrice/validateSelection`, `cart.service.addItem` | `(reef)/product/[id]/actions.ts`, `cart/actions.ts` | `products/inventory/cart_items` | **A للقراءة — D لعقد `ADD_TO_CART`** (حقل `price` يجب حذفه من العقد قبل أي ربط) |
+| Cart (كل مكوّنات السلة) | إدارة سلة + Checkout | `Cart/CartItem/CartSummary` + Multi-vendor + `Order` | `DummyCartContext` (شكل محلي مختلف جذرياً) | `cart.service.ts`, `ordersService.checkout()` | `cart/actions.ts`, `checkout/actions.ts` | `carts/cart_items`→`customer_orders/merchant_suborders/merchant_suborder_items` | **A — READY** (Backend ناضج تماماً، لكن يحتاج استبدال State Model كاملاً، لا Adapter بسيط) |
+| AddressModalStem | عناوين محفوظة قابلة لإعادة الاستخدام | عنوان مُسمَّى + تفاصيل | `AddressModalStem` (`localStorage`) | لا يوجد | لا يوجد | لا يوجد (فقط Snapshot لكل Checkout) | **C — BACKEND REQUIRED** (نطاق عناوين جديد بالكامل) |
+| OrderSuccessModalStem | تأكيد ما بعد الطلب | `Order` حقيقي (معرّف/إجمالي/بنود) | `OrderDetails{items:any[]}` (مُختلَق محلياً) | `ordersService.checkout()`/`getOrderForCustomerView()` (يُرجِعان بيانات حقيقية بالفعل) | `checkout/actions.ts` | `customer_orders/merchant_suborders` | **A — READY** (البيانات الحقيقية موجودة فعلاً وجاهزة للاستهلاك — المشكلة اختلاق بيانات لا نقص Backend) |
+| BottomNavStem/MobileHeaderStem tabs | تنقّل ثابت | قائمة تبويبات | `dynamic-nav-config.ts` (Static) | غير مطلوب فعلياً اليوم | — | — | **B — MOCKABLE** (يصح بقاؤه Static دائماً، لا حاجة فعلية Backend) |
+| Delivery Fee (في CartBreakdownStem) | حساب رسوم توصيل | رقم رسوم | Prop رقمي | لا يوجد محرك حساب | — | `customer_orders.delivery_fee_snapshot` (صفر دائماً)، `delivery_quotes` (فارغ) | **C — BACKEND REQUIRED** |
+
+---
+
+## 6. Action Trace
+
+### 6.1 `ADD_TO_CART` — الاتجاه UI→DB (طبقة Antigravity اليوم)
+
+```
+StemProductCard (onAction prop)
+   → ActionRouter.dispatch({type:'ADD_TO_CART', payload:{id, price, amount?}})
+   → CapabilityRegistry handler (مُسجَّل محلياً في test-ui/page.tsx فقط)
+   → DummyCartContext.setState (تحديث Record<string,{quantity,price}> محلي)
+   → 🛑 يتوقف هنا — لا Server Action، لا Service، لا Repository، لا Database
+```
+
+**المسار الإنتاجي الحقيقي المقابل (لا علاقة له بالمسار أعلاه، مستقل تماماً):**
+```
+ProductOptions.tsx (إنتاجي)
+   → cart/actions.ts (Server Action، Zod validation)
+   → cart.service.ts.addItem() (فحص منتج نشط + validateSelection + isAvailable)
+   → cart.repository.ts (INSERT/UPDATE عبر service_role)
+   → Supabase (cart_items)
+```
+كلا المسارين يعملان بشكل صحيح **بمعزل تام عن بعضهما** — لا نقطة تقاطع واحدة اليوم.
+
+### 6.2 Checkout — الاتجاه UI→DB
+
+```
+MobileCartSheetStem.handleCheckout()
+   → توليد معرّف طلب وهمي (`RF-${Math.random()}`) + عنوان Hardcoded محلياً
+   → CLEAR_CART action → DummyCartContext.clear()
+   → 🛑 صفر اتصال شبكة، صفر استدعاء Backend
+```
+
+**المسار الإنتاجي الحقيقي المقابل:**
+```
+CheckoutForm.tsx (إنتاجي)
+   → checkout/actions.ts.submitCheckoutAction() (Zod: اسم/هاتف مصري/عنوان)
+   → ordersService.checkout() → performCheckout()
+      → تجميع بنود السلة حسب tenant_id
+      → inventoryService.reserve() لكل بند (Optimistic Concurrency)
+      → khalilService.findOrCreateCustomerByPhone()
+      → cashOnDeliveryProvider.charge() (ينجح دائماً — Stub)
+      → إنشاء customer_orders + merchant_suborders(×N) + merchant_suborder_items + status_history
+      → cart.service.clearCart()
+   → إرجاع Order حقيقي (id/total/suborders)
+   → router.push('/order/[id]') → getOrderForCustomerView() → صفحة حقيقية
+```
+
+### 6.3 الاتجاه العكسي DB→UI — الخلاصة (Feed)
+
+**المسار الإنتاجي الحقيقي (يعمل فعلياً):**
+```
+posts/post_media/post_products (DB)
+   → bayan.repository.ts → bayan.service.ts.listFeed()
+   → feed-actions.ts.loadFeedPageAction() (Server Action، لا DataResolver)
+   → (reef)/page.tsx (React Server Component، استدعاء مباشر، لا PageEngine)
+   → PostCard.tsx / HorizontalShelf.tsx (مكوّنات إنتاجية حقيقية)
+   → UI
+```
+
+**المسار المصمَّم في SDUI (موجود آلياً، غير مُغذَّى ببيانات حقيقية أبداً):**
+```
+[لا Service حقيقي] → DataSource.resolve() → DataResolver → PageEngine → componentRegistry → UI
+```
+**الفجوة الحقيقية الوحيدة هنا ليست Backend مفقوداً** — هي **غياب أي Class تُطبِّق `DataSource` وتستدعي
+`bayanService`/`catalogService` الحقيقيين داخلياً**. هذا Glue Code لم يُكتَب بعد، لا قدرة Backend
+ناقصة. هذا أهم بند تقني فردي في هذا التقرير لفتح الطريق أمام ربط حقيقي — راجع P0 في §13.
+
+---
+
+## 7. State Trace
+
+| طبقة الحالة | أين | كيف تُدار | مصدر الحقيقة |
+|---|---|---|---|
+| **حالة UI عابرة** (تبويب نشط، مودال مفتوح) | كل مكوّنات Stem + `test-ui/page.tsx` | React `useState` محلي | لا خلاف — حالة عرض بحتة، لا تحتاج Backend أبداً |
+| **حالة السلة (Antigravity)** | `DummyCartContext.tsx` | `localStorage: sb_cart_state_v1`، شكل `Record<string,{quantity,price}>` | **محلي بالكامل بمعزل عن أي Session/Cookie حقيقي** |
+| **حالة السلة (إنتاجية)** | `cart-session.ts` + `cart.service.ts` | Cookie (`session_token`) → صف `carts` في DB، السعر يُعاد حسابه حياً دائماً (لا يُخزَّن أبداً) | **DB هو مصدر الحقيقة الوحيد** |
+| **حالة العناوين (Antigravity)** | `AddressModalStem` | `localStorage: sb_saved_addresses_v1` مباشرة | لا مصدر حقيقة Backend — لا يوجد Backend أصلاً |
+| **حالة الجلسة/الهوية** | إنتاجي فقط | Cookie `httpOnly` → `sessions` (DB) | لا مكافئ في طبقة Antigravity إطلاقاً — لا شاشة دخول واحدة بين مكوّنات Stem المفحوصة |
+| **حالة SDUI Runtime** | `ApplicationRuntime`/`CapabilityRegistry` | `Map` في الذاكرة، يُعاد بناؤها بالكامل عند كل تحميل صفحة | لا استمرارية، لا علاقة بأي DB |
+
+**الخلاصة:** لا يوجد اليوم أي جسر بين "حالة Antigravity" و"حالة الإنتاج الحقيقية" — إن فتح مستخدم
+`test-ui` وأضاف منتجات لسلته الوهمية، ثم فتح `/cart` الحقيقية، **لن يرى أي أثر لما فعله** (سلتان
+منفصلتان تماماً، بلا أي تزامن). هذا **قرار معماري ضمني لم يُصرَّح به أحد** — يحتاج حسماً صريحاً (§14).
+
+---
+
+## 8. Gemini Findings Verification — ACTION-01/02/03, STATE-01/02
+
+**نتيجة البحث المباشر (بحث حرفي `ACTION-0[123]|STATE-0[12]`، حساس/غير حساس لحالة الأحرف، عبر كل
+المستودع بما فيه `docs/`, `src/`, `scripts/`, ملفات الاختبار):**
+
+```
+Grep pattern: ACTION-0[123]|STATE-0[12] (case-insensitive) → 0 نتيجة في كل المستودع
+```
+
+**الحالة: `UNKNOWN` — لا يمكن التحقق.** هذه المعرِّفات (`ACTION-01/02/03`, `STATE-01/02`) **غير موجودة
+في أي وثيقة، تعليق كود، Commit message، أو اسم ملف في هذا المستودع.** لم أفترض محتواها أو أخمّن ماذا
+تعنيه — وفق `AGENTS.md §5` ("Never Infer Missing Architecture")، هذا يُسجَّل صراحة كـ`UNKNOWN` +
+"توجد فجوة معمارية تحتاج قراراً"، لا كافتراض معقول.
+
+**ما يمكن قوله بثقة (بلا افتراض هوية النتائج نفسها):** إذا كانت هذه المشاكل صادرة عن جلسة Gemini
+منفصلة تحلّل طبقة Antigravity، فإن **الفئات الأكثر ترجيحاً لمشاكل حقيقية من نوع "ACTION"/"STATE"** في
+هذه الطبقة تحديداً — بناءً على كل ما وُثِّق في هذا التقرير، لا تخميناً معزولاً — هي على الأرجح إحدى:
+- عقد `ADD_TO_CART` يحمل `price` من العميل (خطر Action حقيقي موثَّق في §5/§9).
+- `EXECUTE_SEARCH` مُعرَّف بلا أي Handler مُنفَّذ (Action ميت).
+- ازدواج حالة السلة (`DummyCartContext` محلي مقابل `cart.service` الحقيقي، §7) — أقرب مرشَّح لمشكلة
+  "STATE" حقيقية.
+- عدم تزامن حالة SDUI Runtime مع أي مصدر حقيقة دائم (§7).
+
+**لكن هذا تخمين مُعلَن كتخمين، لا تحقيق.** يجب على المؤسس تزويد النص الأصلي لهذه النتائج الخمس من
+Gemini في مهمة لاحقة ليُعاد فحصها فحصاً حقيقياً — لا حسم هنا.
+
+---
+
+## 9. Duplicate/Conflicting Contracts
+
+### 9.1 ازدواج المكوّنات (Component-Level — الأهم، راجع §1)
+
+11 مكوّن Stem على الأقل له مقابل إنتاجي مربوط بـBackend حقيقي بالفعل (الجدول الكامل في §1). هذا ليس
+تكراراً في الاسم فقط — كلاهما يحل نفس المسؤولية التجارية اليوم، بواجهتين مختلفتين تماماً.
+
+### 9.2 ازدواج نوع "المنتج" (5 أشكال متوازية غير موحَّدة)
+
+1. `Product` — `src/core/modules/catalog/types.ts` (الحقيقي: `basePrice`, `categoryId`, `tenantId`…)
+2. `ProductCardStemProps` — `src/types/ui-contracts.ts` (`title`, `price`, `badge`, `publisher`)
+3. `QuickViewProductSnapshot` — `src/sdui/actions/action-contracts.ts` (`price?` اختياري، `publisher?`
+   أرفع)
+4. شكل inline داخل `StemHeroFeedCard.tsx` (`isProduct?`, `originalPrice?`, `badge?`…)
+5. الشكل الحرفي المُعاد من `getDummyProducts()` (يطابق #2 بنيوياً لكن غير مُصرَّح بنوع عند الإرجاع)
+
+**لا Adapter/Mapper واحد يحوّل #1 إلى أي من #2-5 في كل المستودع.**
+
+### 9.3 ازدواج نوع "بند السلة" (5 أشكال متوازية)
+
+1. `Cart`/`CartItem`/`AddItemInput` — `src/core/modules/cart/types.ts` (الحقيقي — بلا سعر مخزَّن)
+2. `CartLineItemProps` — `CartLineItemStem.tsx` (`title`, `price`, `quantity` مُسطَّح)
+3. الشكل Inline في `VendorCartGroupStem.tsx` (شبه مطابق لـ#2، مُعرَّف بشكل منفصل)
+4. `Record<string,{quantity,price}>` — `DummyCartContext`/`MobileCartSheetStem`/`test-ui/page.tsx`
+   (تمثيل رابع، Map-keyed)
+5. `OrderDetails.items: any[]` — `OrderSuccessModalStem.tsx` (غير مُدقَّق إطلاقاً)
+
+### 9.4 ازدواج/تصادم نوع "الريل"
+
+`ReelSnapshot` (`sdui/actions/action-contracts.ts`) مقابل `DummyReel` (`dummy-ui-service.ts`) — حقول
+متطابقة تقريباً، لكن مكوّنات مختلفة تستخدم كلاً منهما بشكل غير متسق حتى **داخل طبقة Antigravity نفسها**.
+وكلاهما **لا علاقة لهما مفهومياً** بـ`posts.post_type='reel'` الحقيقي في Backend (راجع §5/التصادم
+المعماري `D`).
+
+### 9.5 لا يوجد نوع `Price`/`Money` موحَّد في كل المشروع
+
+بحث مباشر (`export interface/type Price|Money`) أعاد صفر نتيجة. السعر رقم خام (`number`) في كل مكان.
+الأداة الوحيدة المركزية هي دالة `roundToCents()` (`src/core/kernel/money.ts`) — **مُستخدَمة بانضباط في
+المسار الإنتاجي** (بعد 3 إصلاحات حية لأخطاء IEEE-754 موثَّقة في سجل البناء الليلي)، لكن **غير مُستخدَمة
+إطلاقاً في `MobileCartSheetStem.tsx`/`test-ui`'s `DesktopCartSidebar`** — كلاهما يعيد بناء حساب
+سعر/إجمالي محلياً بـ`Number(...) || 0` خام، بلا تقريب موحَّد. هذا نفس فئة الخلل المُصلَحة 3 مرات فعلياً
+في الإنتاج — **مرشَّح قوي لتكرار نفس الخلل** إن رُبِطت هذه المكوّنات بأي بيانات حقيقية بلا تصحيح أولاً.
+
+### 9.6 عقد `UIAction.ADD_TO_CART` يخالف قاعدة أمنية قائمة
+
+راجع §1/§5 — يحمل `price` من الواجهة، يخالف `INV-SEC-001`/`SALSABIL_CONSTITUTION.md §4 بند 2` مباشرة
+إن اقترن مستقبلاً بأي Mutation حقيقية بلا تصحيح العقد أولاً.
+
+---
+
+## 10. Ownership Boundaries
+
+| Concern | Owner | Evidence | Current State |
+|---|---|---|---|
+| Product price authority | **Backend** | `CatalogService.calculatePrice()`، `CheckoutInput` بلا حقل سعر، `INV-SEC-001` | محسوم ومُنفَّذ — لكن عقد `ADD_TO_CART` في Antigravity يخالفه بنيوياً (§9.6) |
+| Cart quantity | **Backend** (إنتاجياً)، **Frontend محلي** (Antigravity) | `cart.service.ts` حقيقي؛ `DummyCartContext` منفصل تماماً | **UNDECIDED عملياً** — لا قرار مسجَّل حول أيهما يسود عند الدمج |
+| Catalog resolution | **Backend** | `catalogService`، مُستهلَك إنتاجياً | محسوم؛ Antigravity يستهلك نسخة Mock موازية بلا قرار دمج |
+| UI state (تبويب/مودال) | **Frontend** | React state محلي في كلا الجانبين | لا خلاف — لا يحتاج قراراً |
+| Authentication | **Backend** | `khalil` + `sessions` + كلمة مرور scrypt | Antigravity **لا يملك أي مفهوم دخول/جلسة إطلاقاً** — لم يُفحَص كجزء من هذه الطبقة |
+| Authorization | **Backend** (Service layer فقط، لا RLS) | `assertActorCanAccessOrder`، `canAccessTenant` | Antigravity بلا أي مفهوم تفويض |
+| Pricing calculation | **Backend حصراً** | `INV-SEC-001` | عقد `ADD_TO_CART` يهدد هذا الحصر إن رُبِط بلا تصحيح (§9.6) |
+| Order creation | **Backend** | `ordersService.checkout()` ناضج، مُختبَر تزامناً | Antigravity يزيّف الطلب بالكامل محلياً (`RF-${random}`) — لا اتصال Backend إطلاقاً |
+| Rendering | **Frontend** | React/Next.js في كلا الجانبين | لا خلاف |
+| Address persistence | **UNDECIDED** | لا Backend، لا قرار مؤسس مسجَّل عن حاجته | Antigravity يحلّه محلياً بـ`localStorage` بلا أي تكليف معماري |
+| Delivery fee calculation | **UNDECIDED** | `delivery_fee_snapshot` صفر ثابت بالكود، لا محرك حساب في أي طبقة | لم يُبنَ في أي مكان، حتى Mock لا يعالجه بجدية |
+| Reels/short-video content model | **UNDECIDED — تصادم فعلي** | Backend: `posts.post_type='reel'` (صورة)؛ Antigravity: فيديو مُضمَّن خارجي | يحتاج قراراً معمارياً قبل أي بناء إضافي (§14) |
+
+---
+
+## 11. Contract Stub Readiness
+
+لكل شاشة/قدرة تحتاج Stub — الاسم المطلوب + الخدمة المتوقَّعة + الـSignature المقترح + شكل البيانات، **بلا
+إنشاء أي من هذه الآن:**
+
+### `MOCK_CONTRACT_NEEDED` → `READY_REAL_CONTRACT` عملياً (Backend جاهز، فقط Adapter مطلوب)
+- **Type:** `ProductAdapter: (p: Product) => ProductCardStemProps` — تحويل `basePrice→price`, `name→title`, حل `publisher` عبر `merchantService.findById(tenantId)`.
+- **Type:** `WorldAdapter: (w: World) => DummyWorld`-shaped.
+- **Type:** `PostAdapter: (p: PostWithDetails, products: Product[]) => StemHeroFeedCardProps`.
+- **Type:** `CategoryAdapter: (c: CatalogCategory | District) => CategoryStem`.
+- **Type:** `OrderAdapter: (o: Order) => OrderDetails` (يستبدل التوليد المحلي المُختلَق بالكامل).
+
+### `BACKEND_CONTRACT_NEEDED` (Backend غير موجود، لا يُبنى الآن)
+- **Address Domain:**
+  - Type مقترح: `Address {id, userId, label, fullAddress, district?, isDefault, createdAt}`.
+  - Service متوقَّع: `AddressService.list(userId)/create(input)/update(id,input)/delete(id)/setDefault(id)`.
+  - شكل البيانات: نفس نمط `Merchant`/`Cart` — جدول جديد `addresses`، ملكية عبر `user_id` من الجلسة فقط.
+- **Search Capability:**
+  - Type مقترح: `SearchResult {productId, name, imageUrl, score}`.
+  - Service متوقَّع: `SearchService.query(text, filters?)`.
+  - شكل البيانات: يحتاج قراراً أعمق (Meilisearch `PROPOSED` في `docs/ARCHITECTURE.md §5`، أم بحث DB بسيط `ILIKE` أولاً؟) — `ARCHITECTURAL_DECISION_REQUIRED` وليس Stub بسيط.
+- **Delivery Fee Engine:**
+  - Type مقترح: `DeliveryQuote {distanceKm?, baseFee, surge?, total}`.
+  - Service متوقَّع: `DeliveryQuoteService.calculate(origin, destination)`.
+  - شكل البيانات: جدول `delivery_quotes` موجود بنيوياً بالفعل (فارغ)، يحتاج منطق حساب فعلي فقط — أقرب Backend-gap للجاهزية.
+
+### `ARCHITECTURAL_DECISION_REQUIRED` (لا Stub قبل قرار)
+- **Reels/short-video:** هل "ريل" في ريف = منشور Bayan مُصنَّف `reel` (صورة)، أم فيديو خارجي مُضمَّن
+  (يوتيوب/تيك توك)، أم الاثنان بمفهومين منفصلين باسمين مختلفين؟ لا Stub يُبنى قبل هذا القرار — بناء
+  Stub بالاسم الحالي (`Reel`) يخاطر بتكريس التصادم بدل حله.
+- **`ADD_TO_CART` payload:** يجب حسم إزالة حقل `price` من `UIAction` **كتصحيح عقد**، لا كـStub جديد —
+  هذا تصحيح لعقد موجود بالفعل، ليس بناء قدرة جديدة.
+
+---
+
+## 12. READY / MOCKABLE / BACKEND REQUIRED / ARCHITECTURAL CONFLICT — الملخص
+
+- **A — READY (8 قدرات):** World switching، تصفح الأحياء/الأقسام، الخلاصة/المنشورات، رفوف المنتجات،
+  قراءة تفاصيل منتج، السلة (Backend جاهز، يحتاج استبدال State Model)، تأكيد الطلب (بيانات حقيقية
+  جاهزة، الاستخدام الحالي وهمي بلا داعٍ).
+- **B — MOCKABLE (1 قدرة):** تنقّل ثابت (BottomNav/Header tabs) — يصح بقاؤه Static فعلياً، لا حاجة
+  Backend حقيقية اليوم.
+- **C — BACKEND REQUIRED (3 قدرات):** البحث، العناوين القابلة لإعادة الاستخدام، حساب رسوم التوصيل.
+- **D — ARCHITECTURAL CONFLICT (2 قدرة/عقد):** Reels/short-video (تصادم مفهوم كامل مع Bayan)، عقد
+  `ADD_TO_CART` (حقل `price` يخالف قاعدة أمنية قائمة).
+
+---
+
+## 13. P0–P3 Recommended Sequence
+
+> لا اقتراحات تنفيذية إلا ما يلزم لتحديد المسار — لا إصلاحات فعلية هنا.
+
+**P0 — يجب حسمه قبل استمرار بناء الواجهات:**
+1. **قرار حاكم من المؤسس:** هل طبقة Stem تستبدل المكوّنات الإنتاجية القائمة (§1) تدريجياً، أم بناء
+   موازٍ يُدمَج لاحقاً؟ هذا يحدد كل شيء آخر — بلا هذا القرار، أي عمل إضافي على Stem يخاطر بتكرار عمل
+   موجود بالفعل (يخالف `AGENTS.md §2`).
+2. **تصحيح عقد `ADD_TO_CART`** (إزالة حقل `price`) — قبل أي ربط حقيقي، لا بعده (خطر أمني كامن).
+3. **قرار معماري صريح حول "Reels"** — أي مفهوم يعتمد، قبل أي بناء إضافي على `ReelsHorizontalShelfStem`/
+   `ReelsEmbedModalStem`.
+4. **تحديث `docs/DATABASE.md`/`docs/DOMAIN_MAP.md`** ليعكسا الواقع الفعلي (Multi-Merchant، Delivery،
+   MerchantStaff، Notifications، تصنيف Catalog الجديد) — فجوة توثيقية حقيقية تُربِك أي قرار لاحق مبني
+   عليهما (راجع §14).
+
+**P1 — يمكن بناؤه بالتوازي (لا يحتاج قرار P0 أولاً):**
+1. بناء `DataSource` حقيقي واحد على الأقل (يُغلِّف `catalogService`/`bayanService`) لإثبات أن محرك SDUI
+   يعمل مع بيانات حقيقية — إثبات مفهوم، لا استبدال كامل بعد.
+2. توحيد أشكال "المنتج"/"بند السلة" الخمسة (§9.2/9.3) في Type واحد لكل مفهوم — حتى قبل قرار P0-1، هذا
+   يقلّل الدين التقني المتراكم أياً كان القرار.
+3. استبدال `roundToCents()` المفقود في `MobileCartSheetStem`/`DesktopCartSidebar` (§9.5) — إصلاح صغير
+   يمنع تكرار خلل مُصلَح 3 مرات فعلياً.
+
+**P2 — يمكن تأجيله:**
+1. Address Domain الجديد (جدول + Service) — مطلوب فعلياً، لكن لا يمنع تقدماً آخر.
+2. Delivery Fee Engine — نفس الشيء، بنية DB موجودة أصلاً (`delivery_quotes` فارغ).
+3. توسيع `page.schema.ts`'s `SectionSchema.type` enum لتغطية باقي مكوّنات Stem (14 من 18) إن استمر
+   قرار استخدام SDUI فعلياً لها.
+
+**P3 — تحسينات مستقبلية:**
+1. محرك بحث حقيقي (Meilisearch أو بديل) — `PROPOSED` أصلاً، لا ضغط فوري.
+2. توحيد `dynamic-nav-config.ts` كسجل مركزي حقيقي (Stem Cell Architecture الكاملة) بدل Hardcoded —
+   غير عاجل، البنية الثابتة الحالية تعمل.
+
+---
+
+## 14. Open Questions
+
+1. **قرار حاكم غائب تماماً:** هل Antigravity/Stem تصميم بديل يستبدل الإنتاج تدريجياً، أم مسار مستقل؟
+   لا شيء في الكود أو الوثائق يحسم هذا — `UNKNOWN`.
+2. **مصير `ReefMockDataSource.ts`:** يعيش داخل `(reef)/data/` الإنتاجي رغم كونه 100% Mock — هل هذا
+   موقعه النهائي المقصود أم خطأ مسار مؤقت؟
+3. **مفهوم "Reels" في ريف:** صورة مُصنَّفة (Bayan الحالي) أم فيديو مُضمَّن خارجي (Antigravity)؟ راجع §5/§11.
+4. **CONFLICT حقيقي بين الوثائق والكود (يُسجَّل هنا صراحة وفق `AGENTS.md §6`، لا يُحسَم):**
+   `docs/DATABASE.md` (2026-09-09) و`docs/DOMAIN_MAP.md` (2026-09-06) لا يعكسان Multi-Merchant Order
+   Splitting (`ADR-033`، 2026-09-15)، Delivery، MerchantStaff، Notifications، أو تصنيف Catalog الجديد
+   (TASK-17/18) — كلها مبنية وحية على `staging.reefam.com` حسب سجل البناء الليلي 2026-09-20، بلا أي
+   تحديث لهذين الملفين. هذا يتجاوز نطاق هذه المهمة (Read-Only) لإصلاحه، لكنه CONFLICT حقيقي يستحق
+   تسجيلاً منفصلاً في `docs/DECISIONS.md` بواسطة مهمة توثيقية مخصَّصة.
+5. **هوية ACTION-01/02/03, STATE-01/02 غير معروفة** (راجع §8) — يحتاج تزويداً من المؤسس/Gemini لإعادة
+   فحصها فعلياً.
+6. **هل `DummyCartContext`/`localStorage` سلوك مقصود مؤقت أم افتراض معماري ضمني** بأن السلة قد تكون
+   Client-Only مستقبلاً؟ يخالف `INV-SEC-001`/مبدأ "السعر من الخادم دائماً" إن استمر لما بعد مرحلة
+   النموذج الأولي — يحتاج تصريحاً صريحاً.
+7. **حدود Guardian Matrix لأي مهمة دمج مستقبلية:** بما أن الدمج سيمس Cart (مالي) وOrders (مالي/حالة)
+   وربما Authentication — أي مهمة دمج فعلية تحتاج تصنيف شدة `DEEP` وفق `AGENTS.md §17`، لا معاملتها
+   كـ"مجرد ربط واجهة".
+
+---
+
+## 15. Exact Files/Locations Inspected
+
+### وثائق حوكمة (قراءة كاملة أو شبه كاملة)
+`AGENTS.md`، `SALSABIL_CONSTITUTION.md` (§0-§15 تقريباً)، `INVARIANTS.md` (كامل)، `docs/ARCHITECTURE.md`
+(كامل)، `docs/DOMAIN_MAP.md` (كامل)، `docs/SECURITY.md` (كامل)، `docs/BUSINESS_RULES.md` (كامل)،
+`docs/API_CONTRACTS.md` (كامل)، `docs/DATABASE.md` (مُستشهَد به عبر تقارير أخرى، لا قراءة سطر-بسطر في
+هذه الجلسة تحديداً)، أجزاء من `docs/DECISIONS.md` (CONFLICT-001 إلى 010، ADR-033، ADR-034، DD-001،
+DECISION DEBT REGISTRY)، `docs/CHANGELOG.md` (رأس الملف + عيّنات).
+
+### تقارير تدقيق سابقة (قراءة كاملة)
+`docs/audits/2026-09-20-overnight-autonomous-build-log.md` (كامل، 664 سطراً)،
+`docs/audits/REEF_PHASE_1_PRODUCT_COMPLETENESS_AUDIT.md` (~120 سطراً من 457)،
+`docs/audits/COMPREHENSIVE_PRE_LAUNCH_AUDIT.md` (كامل، 74 سطراً).
+
+### Backend (عبر وكيل استكشاف متخصِّص + تحقق مباشر إضافي)
+كل ملفات `src/core/modules/{cart,catalog,orders,inventory,payments,merchant,merchantStaff,delivery,
+notifications,bayan,admin,audit,customer}/*.ts` (Types/Service/Repository)، `src/core/kernel/{database,
+khalil,otp,security,validation}/*.ts`، `src/core/kernel/money.ts`، عيّنة من `src/app/**/actions.ts`
+(`checkout/actions.ts` كاملاً)، كل ملفات `scripts/*.sql` (قراءة محتوى، بلا تنفيذ).
+
+### Frontend/Antigravity (عبر وكيل استكشاف متخصِّص + تحقق مباشر إضافي)
+كل ملفات `src/sdui/**/*.ts(x)` (9 ملفات، قراءة كاملة)، كل ملفات `src/components/ui/*Stem*.tsx` (18
+ملفاً)، `src/app/test-ui/page.tsx` (678 سطراً)، `src/app/test-portability/page.tsx` (147 سطراً)،
+`src/app/(reef)/data/ReefMockDataSource.ts`، `src/services/dummy-ui-service.ts`،
+`src/services/dynamic-nav-config.ts`، `src/context/DummyCartContext.tsx`، `src/types/ui-contracts.ts`،
+عيّنة من صفحات `src/app/(reef)/**/page.tsx`، `src/app/admin/**/page.tsx`، `src/app/merchant/**/page.tsx`،
+`src/app/delivery/**/page.tsx` (تأكيد عدم استخدام SDUI). قائمة كاملة لـ`src/components/*.tsx` الإنتاجية
+(48 ملفاً) لمقارنة الازدواج المعماري (§1/§9).
+
+### فحوص بحث مباشرة (هذه الجلسة)
+`grep` لـ`ACTION-0[123]|STATE-0[12]` (صفر نتيجة، كامل المستودع)، `grep` لـ`reel|Reel|embedUrl` داخل
+`src/core/modules/bayan` (أكّد `post_type='reel'` بلا `embedUrl`/`platform`)، `git status`/`git log`
+لتأكيد حالة التتبّع وتسلسل الـCommits الحديثة، `ls src/components/*.tsx` لتأكيد قائمة المكوّنات
+الإنتاجية الكاملة.
+
+---
+
+*نهاية التقرير. AUDIT ONLY — FILES MODIFIED: 0 (هذا الملف هو الناتج الوحيد المُصرَّح به) — DATABASE
+CHANGES: 0 — DEPENDENCIES CHANGED: 0 — COMMITS: 0.*
