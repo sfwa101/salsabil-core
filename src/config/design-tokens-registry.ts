@@ -79,6 +79,8 @@ export interface ShadowScale {
   tinted: string;
   /** توهّج نابض خفيف — لعناصر تنبيه/تمييز حي (مثال محتمل: شارة "جديد"، نقطة حالة). */
   glow: string;
+  /** ظل ناعم جداً مقتبس من Apple UI للبطاقات. */
+  appleSoft: string;
 }
 
 export const SHADOW_SCALE: ShadowScale = {
@@ -88,6 +90,7 @@ export const SHADOW_SCALE: ShadowScale = {
   pill: '0 6px 20px -4px hsl(var(--sb-primary) / 0.35)',
   tinted: '0 10px 30px -10px hsl(var(--sb-primary) / 0.35)',
   glow: '0 0 20px hsl(var(--sb-primary) / 0.3)',
+  appleSoft: '0 4px 20px -2px hsl(150 20% 20% / 0.04), 0 2px 8px hsl(150 20% 20% / 0.02)',
 };
 
 /** سطح زجاجي (Glass Morphism) — استخراج حرفي من .glass/.glass-strong في مرجع Lovable. القيمتان

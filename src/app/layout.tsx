@@ -34,7 +34,7 @@ const cairo = Cairo({
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ar" dir="rtl" data-world="diwan" className={`${tajawal.variable} ${cairo.variable}`}>
-      <body>
+      <body className="bg-[var(--sb-muted)]">
         <PersonalThemeInitializer />
         {children}
       </body>

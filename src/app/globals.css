@@ -701,10 +701,20 @@ html[data-personal-theme='navy'][data-personal-mode='dark'] {
   --sb-shadow-pill: 0 6px 20px -4px hsl(var(--sb-primary) / 0.35);
   --sb-shadow-tinted: 0 10px 30px -10px hsl(var(--sb-primary) / 0.35);
   --sb-shadow-glow: 0 0 20px hsl(var(--sb-primary) / 0.3);
+  --sb-shadow-apple-soft: 0 4px 20px -2px hsl(150 20% 20% / 0.04), 0 2px 8px hsl(150 20% 20% / 0.02);
 
   /* منحنيات الحركة — design-tokens-registry.ts → MOTION_EASING */
   --sb-ease-apple: cubic-bezier(0.32, 0.72, 0, 1);
   --sb-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* حواف Apple — design-tokens-registry.ts */
+  --sb-radius-2xl: calc(var(--radius) + 8px);
+  --sb-radius-3xl: calc(var(--radius) + 12px);
+
+  /* تأثيرات زجاجية — design-tokens-registry.ts */
+  --sb-blur-md: blur(12px);
+  --sb-blur-lg: blur(24px);
+  --sb-bg-glass: hsl(var(--sb-card) / 0.85);
 }
 
 @layer utilities {
