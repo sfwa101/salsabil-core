@@ -11,6 +11,7 @@
 // فعل test-ui/page.tsx مع بياناته الوهمية — نفس DataResolver/DataSource بلا أي تعديل عليهما، فقط
 // موضع استدعاء مختلف يحترم حدود server-only الفعلية للمشروع.
 
+import { notFound } from 'next/navigation';
 import { QueryRegistry } from '@/sdui/data/QueryRegistry';
 import { DataResolver } from '@/sdui/data/DataResolver';
 import { RealCatalogDataSource } from '@/app/(reef)/data/RealCatalogDataSource';
@@ -35,6 +36,17 @@ const testIntegrationPageSchema: SDUIPage = {
 };
 
 export default async function TestIntegrationPage() {
+  // P0 SECURITY GUARD (2026-09-22): هذا المسار يكتب فعلياً على cart_items الحقيقية عبر Server
+  // Actions السلة القائمة — راجع docs/audits/2026-09-21-real-backend-sdui-integration-poc.md §F
+  // وFinding 2 في docs/audits/2026-09-22-post-antigravity-integration-forensic-audit.md §19.
+  // `next build` يضبط NODE_ENV='production' لكل بيئة مبنية/منشورة (Vercel production وpreview/
+  // staging معاً، لا الإنتاج فقط) — فهذا الحارس يمنع الوصول في أي بيئة مبنية، ويُبقيه متاحاً فقط
+  // تحت `next dev` المحلي للتحقق الهندسي المُتحكَّم به. حارس خادم بحت (Server Component، يُنفَّذ
+  // قبل أي قراءة/كتابة) — لا يعتمد على إخفاء رابط تنقّل ولا على أي فحص من جهة العميل.
+  if (process.env.NODE_ENV === 'production') {
+    notFound();
+  }
+
   const registry = new QueryRegistry();
   registry.register({
     id: 'query.real_products',

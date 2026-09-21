@@ -1,9 +1,9 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.40
+version: 1.41
 authority: Security & Correctness (قسم DECISION DEBT REGISTRY) + Engineering Decision Log (باقي الملف)
-last_updated: 2026-09-21
+last_updated: 2026-09-22
 last_verified: 2026-09-14
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف
@@ -1762,6 +1762,100 @@ Related Documents: docs/DATABASE.md (`products`, `categories`)، ADR-004 (JSONB 
           عامة تصلح لأي قطاع، لا ريف فقط)
 ```
 
+## ADR-035
+```
+Title: SDUI / Stem كطبقة عرض (Presentation Layer) عبر Adapters — لا طبقة نطاق/أعمال بديلة
+
+Status: ACCEPTED — يُرسِّخ رسمياً نمطاً مُثبَتاً عملياً بالفعل (POC مُتحقَّق حياً + شريحة واحدة حية في
+          الإنتاج)، لا تصميماً نظرياً جديداً. يُغلق فجوة توثيقية مرصودة صراحة: Finding 4 في
+          docs/audits/2026-09-22-post-antigravity-integration-forensic-audit.md §19 (لا ADR/DD
+          مسجَّل لهذا النمط رغم أن docs/salsabil-frontend-integration-pattern.md موسوم `ADOPTED`
+          منذ 2026-09-21) — تكرار لنمط فشل حوكمي سبق أن رصده تدقيق 2026-09-14 (مرجع ADR غير مسجَّل
+          لميزة `catalog_master_items` وقتها).
+
+Date: 2026-09-22
+
+Context: منذ 2026-09-21 بُني ويعمل فعلياً مساران منفصلان تحت اسم "Stem"/"SDUI"، مفصَّلان بالكامل في
+          docs/audits/2026-09-22-post-antigravity-integration-forensic-audit.md: (أ) نواة SDUI حقيقية
+          (`DataResolver`/`PageEngine`/`ApplicationRuntime`/`ActionRouter`/`CapabilityRegistry`) مع
+          `StemProductCard`/`HorizontalShelfStem`، مُثبَتة حياً (Playwright + قراءة DB مستقلة، POC
+          2026-09-21) وموصولة فعلياً بشِلف الرئيسية سطح المكتب (`RealCatalogShelfSDUI.tsx`)؛ (ب) 16
+          مكوّن Stem عرضي إضافي (commit `a37a484`) بلا أي موصِّل إنتاجي — مستهلكها الوحيد صفحة اختبار
+          (`/test-ui`). نمط التكامل الحاكم موجود فعلياً كوثيقة تشغيلية
+          (docs/salsabil-frontend-integration-pattern.md، `ADOPTED`) لكنه لم يُسجَّل قط كقرار معماري
+          رسمي في هذا الملف. هذا الإدخال يُرسِّخ القرار رسمياً، ويضيف أربع قواعد لم تكن موثَّقة صراحة
+          في نمط التكامل القائم (بنود 1، 5، 6، 7 أدناه).
+
+Decision:
+  1. **Stem طبقة عرض حصراً.** مكوّنات SDUI/Stem (الحالية والمستقبلية) مكوّنات عرض فقط — لا تُصبح طبقة
+     نطاق/أعمال بديلة، ولا تستبدل `catalogService`/`cartService`/`orders.service`/`inventoryService`/
+     المصادقة (`khalil`)/منطق التسعير/التفويض/الدفع. أي Stem يستدعي service/repository مباشرة (بدل
+     عبور Adapter ← Capability ← Server Action القائمة) مخالفة معمارية.
+  2. **الخادم مصدر الحقيقة دائماً.** السعر/الإجماليات/الخصومات/المخزون/حالة السلة/الطلبات/التفويض/
+     الحسابات المالية/قواعد العمل تُحسَب وتُحسَم على الخادم حصراً — لا تصبح الواجهة مرجعاً لقيمة مالية
+     أبداً. تحديداً: `ADD_TO_CART` **لا يقبل** حقل سعر من العميل — مُطبَّق فعلياً اليوم
+     (`action-contracts.ts`، أُزيل صراحة أثناء POC 2026-09-21، راجع تقريره §D) ويُصبح بهذا القرار
+     قاعدة رسمية ثابتة، لا مجرد نتيجة POC عابرة (`INV-SEC-001`).
+  3. **حد الـAdapter.** النمط القياسي الوحيد: Real Backend → Data Source/Service → Adapter →
+     DataResolver → SDUI/PageEngine → Stem → UI Action → Capability → Server Action/Backend Service
+     القائمة (التفصيل التقني الكامل موثَّق في docs/salsabil-frontend-integration-pattern.md، لا
+     يُكرَّر هنا). الـAdapters تُحوِّل نماذج الخادم/النطاق إلى عقود عرض فقط — **لا يجوز لها تكرار
+     منطق أعمال**. الملفات الخمسة الجوهرية لهذا المسار (`DataResolver`، `PageEngine`،
+     `ApplicationRuntime`، `ActionRouter`، `CapabilityRegistry`) لا تتغير لكل ميزة (Hard Rule 1 في
+     الوثيقة أعلاه)، مُتحقَّق منها حياً بفاحص `architecture:check` (قاعدة Engine Isolation).
+  4. **تكامل بشرائح عمودية (Vertical Slices).** أي تكامل واجهة مستقبلي = عرض + Adapter + مسار قراءة
+     حقيقي من الخادم + مسار كتابة/Action حقيقي (إن انطبق) + تحقق حي فعلي — الشريحة "مكتملة" فقط بعد
+     إثبات المسار الكامل ضد الخادم الحقيقي، لا عند اكتمال العرض بصرياً فقط. **مجموعة Stems عرضية
+     مكتملة الشكل بصرياً ليست دليل تكامل** — هذا بالضبط حال الـ16 مكوّناً غير الموصولة اليوم
+     (docs/audits/2026-09-22-post-antigravity-integration-forensic-audit.md §3، §19 Finding 1).
+  5. **لا بنية إنتاج وهمية موازية.** `DummyCartContext`، `dummy-ui-service`، أي repository/منطق
+     تسعير وهمي مشابه يبقى مسموحاً به **حصراً** كبنية تطوير/اختبار معزولة (مسارات `/test-*` الحالية) —
+     **ليست مساراً إنتاجياً بأي حال**. أي عمل إنتاجي جديد **لا يجوز** أن يبني تطبيق أعمال وهمياً ثانياً
+     بنيّة وصله لاحقاً — الوصل بالخادم الحقيقي جزء من تعريف "منجَز" للشريحة نفسها (بند 4 أعلاه)، لا
+     مرحلة لاحقة منفصلة.
+  6. **قاعدة خط التجميع (Assembly-Line) لـAntigravity.** Antigravity يستمر ببناء/تصميم Stems عرضية.
+     أي عمل إنتاجي مستقبلي (لا تجريبي/عرض داخلي فقط) يتبع الترتيب: (1) فحص القدرة الخلفية القائمة،
+     (2) تصميم/إكمال الـStem العرضي، (3) بناء الـAdapter، (4) وصل بيانات حقيقية، (5) وصل Action/قدرة
+     حقيقية، (6) تحقق حي، (7) توثيق، (8) الانتقال للشريحة التالية فقط بعدها. **يُمنَع بناء دفعة كبيرة
+     من صفحات إنتاجية منفصلة ثم تأجيل الوصل الخلفي للنهاية** — هذا بالضبط ما أنتج الفجوة الحالية (16
+     Stem بلا موصِّل واحد). القدرة الخلفية القائمة (13 نطاقاً، راجع
+     docs/audits/2026-09-22-post-antigravity-integration-forensic-audit.md §7) تُعاد استخدامها دائماً
+     — لا إعادة بناء خلفية قائمة لمجرد ملاءمة واجهة جديدة.
+  7. **POC 2026-09-21 هو النمط المرجعي.** docs/audits/2026-09-21-real-backend-sdui-integration-poc.md
+     (POC VERIFIED) هو التطبيق المرجعي لأي عمل تكامل مستقبلي. الشرائح القادمة تُعيد استخدام نفس نمطه
+     المعماري ما لم يُغيِّره قرار معماري موثَّق صراحة (ADR جديد يُعدِّل هذا الإدخال) — لا انحراف صامت
+     لكل شريحة جديدة.
+
+Alternatives: (أ) ترك النمط موثَّقاً فقط في docs/salsabil-frontend-integration-pattern.md بلا ADR
+          رسمي — مرفوض: هذا بالضبط الفجوة التي رصدها تدقيق 2026-09-22 (Finding 4) وتدقيق 2026-09-14
+          قبله لنمط توثيقي مشابه — تكرار نفس فشل الحوكمة عمداً غير مقبول.
+          (ب) السماح لـAntigravity بمتابعة بناء Stems عرضية إضافية بلا قيد تسلسل (استمرار النمط الذي
+          أنتج الـ16 مكوّناً غير الموصولة) — مرفوض: تدقيق 2026-09-22 §20 يُثبت بالدليل (16 شريحة غير
+          موصولة مقابل شريحة واحدة موصولة ومُتحقَّقة) أن هذا النمط ينتج تراكماً غير متصل لا تكاملاً
+          فعلياً.
+
+Why: هذا القرار يُرسِّخ نمطاً أثبت نجاحه فعلياً مرتين (POC + شِلف الرئيسية) ويمنع تكرار الفجوة
+          الحوكمية التي تركت النمط بلا سند ADR رسمي رغم اعتماده الفعلي. القواعد الإضافية (بنود 1، 5،
+          6، 7 أعلاه) مُستخرَجة مباشرة من نتائج تدقيق 2026-09-22 لسد فجوات لم تكن موثَّقة صراحة من قبل:
+          خطر إعادة بناء منطق أعمال داخل Stem، خطر بنية وهمية موازية تُبنى بلا خطة وصل، غياب تسلسل
+          واضح لعمل Antigravity الإنتاجي، غياب مرجعية صريحة للـPOC كنمط معياري.
+
+Consequences: أي مهمة تكامل واجهة مستقبلية (Header/BottomNav، Cart Stems، إلخ — راجع تدقيق 2026-09-22
+          §11 للترتيب المقترح) تُقاس بهذا القرار: شريحة عمودية كاملة + تحقق حي، لا عرض بصري وحده.
+          Antigravity تحتاج توجيهاً صريحاً بألا تبني المزيد من الأسطح العرضية غير المتصلة قبل أن
+          يُغلَق ما هو قائم (16 Stem). **لا تعديل كود في هذا القرار نفسه — توثيق/حوكمة فقط.**
+
+Related Documents: docs/salsabil-frontend-integration-pattern.md (`ADOPTED`، التفصيل التقني الكامل
+          لمسار البيانات/الأكشن)، docs/audits/2026-09-21-real-backend-sdui-integration-poc.md (POC
+          VERIFIED، النمط المرجعي)،
+          docs/audits/2026-09-22-post-antigravity-integration-forensic-audit.md (§3، §6-9، §19
+          Finding 1/4، §20 — مصدر الأدلة لهذا القرار)،
+          docs/audits/2026-09-21-migrate-home-real-shelf-to-sdui-report.md، SALSABIL_CONSTITUTION.md
+          §4 (لا منطق أعمال/سعر في الواجهة — القاعدة الدستورية الأصلية التي يُطبِّقها هذا القرار على
+          SDUI تحديداً)، docs/ARCHITECTURE.md ADR-005 (اتجاه الاعتماد)، `INV-SEC-001` (لا سعر من
+          العميل)
+```
+
 ---
 
 ## سجل التعارضات (CONFLICT LOG)
@@ -2896,13 +2990,41 @@ Owner: Founder (قرار الفصل الكامل)، Engineering (التنفيذ 
 Created: 2026-09-21
 Review by: عند بناء أول Migration رسمية (DD-005) أو عند أي توسّع فعلي لبيانات inventory الحساسة (مثال:
           هامش ريف، SUPPLY_RESOLUTION_ENGINE_DESIGN.md §3) — أيهما أسبق
-Blocking: NO للتشغيل الحالي بعد تطبيق الإصلاح التكتيكي يدوياً وتأكيد التحقق الحي — YES لأي بناء مستقبلي
+Blocking: NO للتشغيل الحالي (شرط "تأكيد التحقق الحي" أدناه استُوفي 2026-09-22) — YES لأي بناء مستقبلي
           فوق cost_price بافتراض عزل بيانات دائم بدل ضبط صلاحية عمود قابل للنسيان
-Status: OPEN — الإصلاح التكتيكي مكتوب (كود مُطبَّق ومُختبَر، SQL بانتظار تنفيذ يدوي من المؤسس ثم تحقق
-          حي عبر Data API قبل إغلاقه إلى RESOLVED جزئياً). الفصل الكامل يبقى OPEN بشكل مستقل بعدها.
-Related: SEC-P1-1 (SALSABIL_BACKEND_ARCHITECTURE_FORENSIC_AUDIT §E)، ADR-008، ADR-012، ADR-031،
+Status: SEC-P1-1 (تسريب inventory.cost_price نفسه، عبر الإصلاح التكتيكي أعلاه) — **CLOSED (2026-09-22)**.
+          "Decision" الأصلي لهذا الإدخال (هل يُفصَل cost_price إلى جدول/عرض منفصل بالكامل؟) يبقى
+          **OPEN** بشكل مستقل — قرار معماري لم يُحسَم بعد، لا علاقة له بإغلاق الثغرة نفسها (راجع
+          "Broader Fix Deferred" أعلاه).
+
+SEC-P1-1 Closure Detail (2026-09-22):
+  - **Application-layer verification — COMPLETE.** كود التطبيق لا يعتمد في أي مسار على SELECT * غير
+    مقيَّد على inventory عبر anon/authenticated — مُتحقَّق منه بفحص شامل لكل استدعاء .from('inventory')
+    وكل select('*') عبر المستودع بالكامل (5 أنماط بحث مستقلة)، راجع
+    docs/audits/2026-09-21-inventory-rls-regression-verification.md §A/§B/§D (READ-ONLY VERIFICATION،
+    نتيجة PASS على كل محور).
+  - **Live database verification — FOUNDER EXTERNAL VERIFICATION (2026-09-22).** المؤسس تحقَّق مباشرة
+    من صلاحيات القاعدة الحية (خارج هذه الجلسة — Claude Code لم يستعلم القاعدة مباشرة في هذه المهمة؛
+    لا اتصال Postgres مباشر متاح، نفس القيد الموثَّق أعلاه) وأكَّد: `anon` لا يقرأ
+    `inventory.cost_price`؛ `authenticated` لا يقرأ `inventory.cost_price`؛ بقية أعمدة `inventory`
+    المسموحة (`product_id`, `quantity_available`, `updated_at`) تبقى قابلة للقراءة كما هو مقصود؛ لا
+    `SELECT` كامل غير مقيَّد على مستوى الجدول ممنوح لأي من الدورين. هذا يُغلق صراحة الفجوة التي رصدها
+    docs/audits/2026-09-22-post-antigravity-integration-forensic-audit.md §19 Finding 6 ("حالة تنفيذ
+    سكربت REVOKE غير معروفة").
+  - **Remaining caveat.** الفصل الكامل لـcost_price إلى جدول/عرض service_role منفصل (بدل التقييد على
+    مستوى العمود داخل جدول عام) يبقى OPEN عمداً — راجع "Broader Fix Deferred" أعلاه؛ لا يمنع أي تشغيل
+    حالي، ولا يُغيِّر إغلاق SEC-P1-1 نفسه.
+  - **⚠️ ملاحظة استشهاد (غير مُصلَحة هنا، مُسجَّلة فقط):** سطر "Related" أدناه يستشهد بمستند
+    `SALSABIL_BACKEND_ARCHITECTURE_FORENSIC_AUDIT` — هذا المستند غير موجود فعلياً في المستودع أو
+    تاريخ Git (مُكتشَف ومُوثَّق في docs/audits/2026-09-22-post-antigravity-integration-forensic-audit.md
+    §19 Finding 3، وسم `AF-006`). الاستنتاج الجوهري لهذا الإدخال (وجود الثغرة، ثم إغلاقها أعلاه) صحيح
+    ومُتحقَّق منه بشكل مستقل بغض النظر عن هذا الاستشهاد — لكن سلسلة الاستشهاد نفسها مكسورة ولا تُستخدَم
+    كدليل قائم بذاته مستقبلاً.
+Related: SEC-P1-1 (استشهاد أصلي مكسور، راجع الملاحظة أعلاه)، ADR-008، ADR-012، ADR-031،
           docs/DATABASE.md §6، scripts/2026-09-19-fix-inventory-cost-price.sql (التحذير الأصلي غير
-          المُحوَّل وقتها)، DD-005 (Migrations رسمية)
+          المُحوَّل وقتها)، DD-005 (Migrations رسمية)،
+          docs/audits/2026-09-21-inventory-rls-regression-verification.md (تحقق تطبيقي)،
+          docs/audits/2026-09-22-post-antigravity-integration-forensic-audit.md §19 (Findings 3، 6)
 ```
 
 ---
