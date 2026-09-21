@@ -24,10 +24,10 @@ import { ImageOff } from 'lucide-react';
 import { catalogService } from '@/core/modules/catalog/catalog.service';
 import { ordersService } from '@/core/modules/orders/orders.service';
 import { ProductOptions } from '@/components/ProductOptions';
-import { HorizontalShelf } from '@/components/HorizontalShelf';
-import { ProductCard } from '@/components/ProductCard';
 import { getNeighborhoodIdentity } from '@/config/neighborhood-identity-registry';
 import { getVisibleProductPageBlockIds } from '@/config/product-page-blocks-registry';
+import { getCartSummaryIfExistsAction } from '@/app/(reef)/cart/actions';
+import { RealCatalogShelfSDUI } from '@/app/(reef)/RealCatalogShelfSDUI';
 
 const UPSELL_LIMIT = 6;
 
@@ -49,12 +49,26 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   // true — البنية جاهزة لتعطيله من لوحة إدارة مستقبلية بلا لمس هذا الملف). يعيد استخدام إشارة
   // "الأكثر طلباً" الموجودة أصلاً (ordersService.getMostOrderedProductIds، نفس مصدر رف "غالباً ما
   // يُشترى معه" في السلة) بدل اختراع خوارزمية "منتجات ذات صلة" جديدة (AGENTS.md §2).
+  //
+  // VERTICAL-SLICE-4-PRODUCT-DETAIL-UPSELL (2026-09-22): يُعرَض الآن عبر RealCatalogShelfSDUI (نفس
+  // مكوّن الشريحتين 1-2 حرفياً بلا تعديل، مُعاد استخدامه لا مُستنسَخاً — AGENTS.md §2). منتجات بخيار
+  // حجم مُستبعَدة (نفس فلتر page.tsx الرئيسية) لأن ADD_TO_CART المسجَّلة داخل ذلك المكوّن لا تدعم
+  // sizeId. getCartSummaryIfExistsAction لا getCartSummaryAction عمداً — قراءة فقط بلا كتابة كوكي
+  // أثناء عرض RSC (نفس نمط [district]/[category]/page.tsx، راجع تعليق الدالة في cart/actions.ts).
   const showUpsell = getVisibleProductPageBlockIds(product, 'page').includes('upsellShelf');
-  const upsellProducts = showUpsell
-    ? await ordersService
-        .getMostOrderedProductIds([product.id], UPSELL_LIMIT)
-        .then((ids) => (ids.length > 0 ? catalogService.getProductsByIds(ids) : []))
-    : [];
+  const [rawUpsellProducts, upsellCartSummary] = await Promise.all([
+    showUpsell
+      ? ordersService
+          .getMostOrderedProductIds([product.id], UPSELL_LIMIT)
+          .then((ids) => (ids.length > 0 ? catalogService.getProductsByIds(ids) : []))
+      : Promise.resolve([]),
+    showUpsell ? getCartSummaryIfExistsAction() : Promise.resolve(null),
+  ]);
+  const upsellProducts = rawUpsellProducts.filter((p) => !p.options.some((o) => o.type === 'size'));
+  const upsellInitialQuantities: Record<string, number> = {};
+  for (const line of upsellCartSummary?.lines ?? []) {
+    upsellInitialQuantities[line.product.id] = line.item.quantity;
+  }
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-6 md:max-w-4xl">
@@ -117,13 +131,11 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
 
       {upsellProducts.length > 0 && (
         <div className="mt-8">
-          <HorizontalShelf title="منتجات قد تعجبك">
-            {upsellProducts.map((p) => (
-              <div key={p.id} className="w-40 shrink-0">
-                <ProductCard product={p} />
-              </div>
-            ))}
-          </HorizontalShelf>
+          <RealCatalogShelfSDUI
+            title="منتجات قد تعجبك"
+            products={upsellProducts}
+            initialQuantities={upsellInitialQuantities}
+          />
         </div>
       )}
     </main>
