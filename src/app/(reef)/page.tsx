@@ -1,18 +1,50 @@
 import { Suspense } from 'react';
+import { z } from 'zod';
 import { catalogService } from '@/core/modules/catalog/catalog.service';
 import type { Category, District, Product } from '@/core/modules/catalog/types';
 import type { CartSummary } from '@/core/modules/cart/types';
 import { StoryBar } from '@/components/StoryBar';
 import { Feed } from '@/components/Feed';
-import { HorizontalShelf } from '@/components/HorizontalShelf';
-import { ProductCard } from '@/components/ProductCard';
 import { DesktopCategorySidebar } from '@/components/storefront/DesktopCategorySidebar';
 import { DesktopCartSidebar } from '@/components/storefront/DesktopCartSidebar';
 import { CartLoadErrorPanel } from '@/components/storefront/CartLoadErrorPanel';
-import { loadFeedPageAction, loadRealCatalogShelfAction } from './feed-actions';
+import { loadFeedPageAction } from './feed-actions';
 import { getCartSummaryAction } from '@/app/(reef)/cart/actions';
 import { FEED_TAB_KEYS, getPostTypesForTab, type FeedTabKey } from '@/config/content-type-registry';
 import { MobileStorefront } from '@/components/storefront/MobileStorefront';
+import { RealCatalogShelfSDUI } from './RealCatalogShelfSDUI';
+import { QueryRegistry } from '@/sdui/data/QueryRegistry';
+import { DataResolver } from '@/sdui/data/DataResolver';
+import { RealCatalogDataSource } from '@/app/(reef)/data/RealCatalogDataSource';
+import type { SDUIPage } from '@/sdui/schema/page.schema';
+
+// MIGRATE-HOME-REAL-SHELF-TO-SDUI (2026-09-21) — نفس الحد الأقصى الذي كانت تستخدمه
+// loadRealCatalogShelfAction المحذوفة (feed-actions.ts) — سلوك الرف بلا تغيير، فقط مصدر القراءة.
+const REAL_CATALOG_SHELF_LIMIT = 12;
+const realCatalogShelfPageSchema: SDUIPage = {
+  id: 'home_real_catalog_shelf_query',
+  sections: [
+    {
+      id: 'section_real_catalog_shelf',
+      type: 'product_shelf',
+      props: { title: 'منتجات ريف', items: { $bind: 'query.real_products', params: { limit: REAL_CATALOG_SHELF_LIMIT } } },
+      visibility: { enabled: true },
+    },
+  ],
+};
+
+async function resolveRealCatalogShelf(): Promise<Product[]> {
+  const registry = new QueryRegistry();
+  registry.register({
+    id: 'query.real_products',
+    paramSchema: z.object({ limit: z.number().optional() }),
+    resultSchema: z.array(z.unknown()),
+  });
+  const resolver = new DataResolver(registry);
+  resolver.registerSource(new RealCatalogDataSource());
+  const resolved = await resolver.resolvePage(realCatalogShelfPageSchema);
+  return (resolved.sections[0]?.props.items as Product[] | null) ?? [];
+}
 
 function parseFeedTab(tab: string | undefined): FeedTabKey {
   return FEED_TAB_KEYS.includes(tab as FeedTabKey) ? (tab as FeedTabKey) : 'all';
@@ -37,14 +69,16 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   // بدون هذا الفصل لا سبيل للتمييز بين "السلة فارغة فعلياً" و"فشل جلبها" (كلاهما كانا يسقطان معاً في
   // نفس catch واحد، فتُعرَض كأنها فارغة دائماً). راجع TASK-03.
   //
-  // §31 بند 3 — loadRealCatalogShelfAction مضافة هنا (بمعزل عن loadFeedPageAction/بيان تماماً):
-  // رف "منتجات ريف" يعرض الكتالوج القابل للشراء مباشرة، لا يعتمد على وجود منشور مُخصَّص للمنتج.
+  // §31 بند 3، مُهاجَر لخط أنابيب SDUI في MIGRATE-HOME-REAL-SHELF-TO-SDUI (2026-09-21) —
+  // resolveRealCatalogShelf (RealCatalogDataSource → DataResolver) محل loadRealCatalogShelfAction
+  // المحذوفة: رف "منتجات ريف" يعرض الكتالوج القابل للشراء مباشرة، لا يعتمد على وجود منشور مُخصَّص
+  // للمنتج. لا تغيير في المصدر الفعلي (catalogService.listPurchasableProducts نفسه)، فقط مسار القراءة.
   const [catalogFeedResult, cartResult] = await Promise.allSettled([
     Promise.all([
       catalogService.getDistricts(),
       catalogService.listCategories(),
       loadFeedPageAction({ postTypes, offset: 0 }),
-      loadRealCatalogShelfAction(),
+      resolveRealCatalogShelf(),
     ]),
     getCartSummaryAction(),
   ]);
@@ -65,6 +99,17 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     cartLoadFailed = true;
   }
 
+  // MIGRATE-HOME-REAL-SHELF-TO-SDUI — منتجات بخيار حجم (options من نوع 'size') مُستبعَدة من رف
+  // SDUI الجديد فقط: قدرة ADD_TO_CART المسجَّلة في RealCatalogShelfSDUI لا تدعم اختيار حجم (sizeId)،
+  // وإضافتها المباشرة كانت ستفشل عند CatalogService.validateSelection — نفس الحماية القائمة أصلاً في
+  // ProductCard.tsx (hasSizeOptions). الرف المتنقل (MobileStorefront) يبقى على realCatalogProducts
+  // الكاملة بلا فلترة — مساره القديم بلا تغيير، خارج نطاق هذه الدفعة.
+  const desktopShelfProducts = realCatalogProducts.filter((p) => !p.options.some((o) => o.type === 'size'));
+  const initialQuantities: Record<string, number> = {};
+  for (const line of cartSummary?.lines ?? []) {
+    initialQuantities[line.product.id] = line.item.quantity;
+  }
+
   return (
     <div className="bg-background min-h-screen w-full max-w-full overflow-x-hidden">
       <div className="mx-auto max-w-[1340px] w-full lg:max-w-full lg:h-[calc(100vh-3.5rem)] lg:overflow-hidden flex flex-col lg:flex-row justify-between lg:gap-4 p-0 lg:px-4 lg:py-0">
@@ -81,15 +126,14 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             <StoryBar districts={districts} />
           </div>
 
-          {/* §31 بند 3 — رف مستقل عن مسار بيان/المنشورات، يعرض الكتالوج القابل للشراء مباشرة */}
-          {realCatalogProducts.length > 0 && (
-            <HorizontalShelf title="منتجات ريف">
-              {realCatalogProducts.map((p) => (
-                <div key={p.id} className="w-40 shrink-0">
-                  <ProductCard product={p} />
-                </div>
-              ))}
-            </HorizontalShelf>
+          {/* §31 بند 3، عبر SDUI منذ MIGRATE-HOME-REAL-SHELF-TO-SDUI — رف مستقل عن مسار بيان/المنشورات،
+              يعرض الكتالوج القابل للشراء مباشرة عبر RealCatalogDataSource → DataResolver → PageEngine */}
+          {desktopShelfProducts.length > 0 && (
+            <RealCatalogShelfSDUI
+              title="منتجات ريف"
+              products={desktopShelfProducts}
+              initialQuantities={initialQuantities}
+            />
           )}
 
           {/* Section Title */}

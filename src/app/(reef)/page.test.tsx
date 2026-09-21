@@ -20,8 +20,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 vi.mock('@/components/StoryBar', () => ({ StoryBar: () => null }));
 vi.mock('@/components/Feed', () => ({ Feed: () => null }));
-vi.mock('@/components/HorizontalShelf', () => ({ HorizontalShelf: () => null }));
-vi.mock('@/components/ProductCard', () => ({ ProductCard: () => null }));
+vi.mock('./RealCatalogShelfSDUI', () => ({ RealCatalogShelfSDUI: () => null }));
 vi.mock('@/components/storefront/DesktopCategorySidebar', () => ({ DesktopCategorySidebar: () => null }));
 vi.mock('@/components/storefront/MobileStorefront', () => ({ MobileStorefront: () => null }));
 vi.mock('@/components/storefront/DesktopCartSidebar', () => ({
@@ -36,11 +35,13 @@ vi.mock('@/core/modules/catalog/catalog.service', () => ({
   catalogService: {
     listCategories: vi.fn().mockResolvedValue([]),
     getDistricts: vi.fn().mockResolvedValue([]),
+    // RealCatalogDataSource (عبر resolveRealCatalogShelf في page.tsx) يستدعيها الآن مباشرة بدل
+    // loadRealCatalogShelfAction المحذوفة — راجع MIGRATE-HOME-REAL-SHELF-TO-SDUI.
+    listPurchasableProducts: vi.fn().mockResolvedValue([]),
   },
 }));
 vi.mock('./feed-actions', () => ({
   loadFeedPageAction: vi.fn().mockResolvedValue({ posts: [], hasMore: false, products: [] }),
-  loadRealCatalogShelfAction: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('@/app/(reef)/cart/actions', () => ({
   getCartSummaryAction: vi.fn(),

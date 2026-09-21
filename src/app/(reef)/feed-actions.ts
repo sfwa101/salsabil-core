@@ -50,11 +50,9 @@ export async function getDistrictsAction(): Promise<District[]> {
 // §31 بند 3 (REEF_PHASE_1_PRODUCT_COMPLETENESS_AUDIT.md) — رف "منتجات حقيقية" على الرئيسية، مستقل
 // تماماً عن مسار بيان/المنشورات أعلاه (loadFeedPageAction). راجع catalogService.listPurchasableProducts
 // لتفاصيل الاستبعاد (تاجر poultry-test التجريبي).
-const REAL_CATALOG_SHELF_LIMIT = 12;
-
-export async function loadRealCatalogShelfAction(): Promise<Product[]> {
-  return catalogService.listPurchasableProducts(REAL_CATALOG_SHELF_LIMIT);
-}
+// MIGRATE-HOME-REAL-SHELF-TO-SDUI (2026-09-21) — loadRealCatalogShelfAction (كانت هنا) حُذفت: page.tsx
+// يقرأ هذا الرف الآن عبر RealCatalogDataSource → DataResolver مباشرة (نفس catalogService.listPurchasableProducts
+// خلف الكواليس، نفس الحد الأقصى 12) — راجع docs/salsabil-frontend-integration-pattern.md.
 
 // تمريرة رقيقة لـ bayanService.scaleRecipeQuantities (قياس خطي بسيط، اليوم 23) — تُستدعى من العميل
 // عند كل تغيير لعدّاد عدد أفراد العائلة، نفس نمط ProductOptions.tsx الذي يستدعي calculatePriceAction
