@@ -15,40 +15,12 @@ import { getCartSummaryAction } from './actions';
 import { merchantService } from '@/core/modules/merchant/merchant.service';
 import { ordersService } from '@/core/modules/orders/orders.service';
 import { catalogService } from '@/core/modules/catalog/catalog.service';
-import { CartVendorGroup } from '@/components/CartVendorGroup';
 import { HorizontalShelf } from '@/components/HorizontalShelf';
 import { ProductCard } from '@/components/ProductCard';
-import type { CartLineSummary } from '@/core/modules/cart/types';
+import { CartStemView } from './CartStemView';
+import { groupByTenant } from './cart-grouping';
 
 const CROSS_SELL_LIMIT = 6;
-const NO_TENANT_GROUP_KEY = '__no_tenant__';
-const NO_TENANT_LABEL = 'المتجر';
-
-interface VendorGroup {
-  key: string;
-  merchantName: string;
-  lines: CartLineSummary[];
-}
-
-// تجميع بصري حسب التاجر — checkout يدعم فعلياً طلب متعدد التجار منذ ADR-033 (يُقسَّم تلقائياً حسب
-// tenant_id إلى merchant_suborders منفصلة، لا رفض). منتج بلا tenantId (نظرياً حسب types.ts، لا حالة
-// حية اليوم) يُجمَّع تحت تسمية عامة بدل كسر الصفحة.
-function groupByTenant(lines: CartLineSummary[], merchantNameById: Map<string, string>): VendorGroup[] {
-  const groups = new Map<string, VendorGroup>();
-  for (const line of lines) {
-    const tenantId = line.product.tenantId;
-    const key = tenantId ?? NO_TENANT_GROUP_KEY;
-    if (!groups.has(key)) {
-      groups.set(key, {
-        key,
-        merchantName: tenantId ? (merchantNameById.get(tenantId) ?? NO_TENANT_LABEL) : NO_TENANT_LABEL,
-        lines: [],
-      });
-    }
-    groups.get(key)!.lines.push(line);
-  }
-  return [...groups.values()];
-}
 
 export default async function CartPage() {
   const summary = await getCartSummaryAction();
@@ -84,7 +56,6 @@ export default async function CartPage() {
   const merchantNameById = new Map(merchants.map((m) => [m.id, m.businessName]));
 
   const groups = groupByTenant(summary.lines, merchantNameById);
-  const isMultiVendor = groups.length > 1;
 
   // هذه تعتمد على mostOrderedIds فعلياً — تبقى متتابعة بعده، لا يمكن دمجها في Promise.all أعلاه
   const crossSellProducts = mostOrderedIds.length > 0 ? await catalogService.getProductsByIds(mostOrderedIds) : [];
@@ -96,39 +67,16 @@ export default async function CartPage() {
       </Link>
       <h1 className="mb-6 text-2xl font-semibold text-foreground">سلتي</h1>
 
-      {isMultiVendor && (
-        <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm font-medium text-foreground">
-          طلبك يحتوي على منتجات من {groups.length} تجار — سيُقسَّم طلبك تلقائياً حسب كل تاجر، وستصلك
-          الأصناف على استلامات منفصلة، كل واحدة بحالتها الخاصة.
-        </div>
-      )}
-
-      <div className="flex flex-col gap-4">
-        {groups.map((group) => (
-          <CartVendorGroup key={group.key} merchantName={group.merchantName} lines={group.lines} />
-        ))}
-
-        {/* COMPLETE-VISUAL-STENCIL-IMPORT-FULL-BATCH-NO-STOPS (بند 8) — بطاقة ملخّص بدل صندوق
-            مسطَّح واحد، يطابق قسم "Summary" في مرجع Lovable (Cart.tsx) بصرياً — بلا صفوف توصيل/
-            خصم/إكرامية (لا حقول مقابلة في نظامنا، لا تُضاف صفوف بقيمة صفر لميزات غير موجودة). */}
-        <section className="rounded-2xl bg-card p-4 shadow-[var(--sb-shadow-soft)] ring-1 ring-border/50">
-          <div className="my-1 h-px bg-border" />
-          <div className="flex items-baseline justify-between pt-2">
-            <span className="text-base font-bold text-foreground">الإجمالي</span>
-            <span className="text-2xl font-extrabold text-primary">
-              {summary.total} <span className="text-sm font-medium text-muted-foreground">جنيه</span>
-            </span>
-          </div>
-        </section>
-
-        <Link
-          href="/checkout"
-          className="flex items-center justify-between rounded-2xl bg-primary px-4 py-3.5 font-extrabold text-primary-foreground shadow-[var(--sb-shadow-pill)] transition hover:opacity-90"
-        >
-          <span>إتمام الطلب</span>
-          <span className="rounded-xl bg-primary-foreground/15 px-3 py-1.5 text-sm">{summary.total} جنيه</span>
-        </Link>
-      </div>
+      {/* VERTICAL-SLICE-3-CART-INTEGRATION (2026-09-22) — VendorCartGroupStem/CartLineItemStem/
+          CartBreakdownStem (بدل CartVendorGroup + قسم الملخّص المضمَّن القديمين، الملف الأخير لا
+          يزال قائماً بلا استدعاء لغرض التراجع). بانر تعدد التجار/زر إتمام الطلب انتقلا داخل
+          CartStemView أيضاً — كلاهما يعتمدان على groups، الذي أصبح تفاعلياً هناك بعد كل تعديل حقيقي
+          (راجع تعليق CartStemView.tsx للتفصيل). */}
+      <CartStemView
+        initialGroups={groups}
+        initialTotal={summary.total}
+        merchantNames={Object.fromEntries(merchantNameById)}
+      />
 
       {crossSellProducts.length > 0 && (
         <div className="mt-6">
