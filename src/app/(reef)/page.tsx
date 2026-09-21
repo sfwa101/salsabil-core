@@ -99,11 +99,12 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     cartLoadFailed = true;
   }
 
-  // MIGRATE-HOME-REAL-SHELF-TO-SDUI — منتجات بخيار حجم (options من نوع 'size') مُستبعَدة من رف
-  // SDUI الجديد فقط: قدرة ADD_TO_CART المسجَّلة في RealCatalogShelfSDUI لا تدعم اختيار حجم (sizeId)،
-  // وإضافتها المباشرة كانت ستفشل عند CatalogService.validateSelection — نفس الحماية القائمة أصلاً في
-  // ProductCard.tsx (hasSizeOptions). الرف المتنقل (MobileStorefront) يبقى على realCatalogProducts
-  // الكاملة بلا فلترة — مساره القديم بلا تغيير، خارج نطاق هذه الدفعة.
+  // MIGRATE-HOME-REAL-SHELF-TO-SDUI + VERTICAL-SLICE-2-MOBILE-HOME-SHELF-INTEGRATION (2026-09-22) —
+  // منتجات بخيار حجم (options من نوع 'size') مُستبعَدة من كل استهلاك لـRealCatalogShelfSDUI (سطح
+  // المكتب والمتنقل معاً منذ هذه الشريحة): قدرة ADD_TO_CART المسجَّلة داخله لا تدعم اختيار حجم
+  // (sizeId)، وإضافتها المباشرة كانت ستفشل عند CatalogService.validateSelection — نفس الحماية القائمة
+  // أصلاً في ProductCard.tsx (hasSizeOptions). هذا الاسم (desktopShelfProducts) يُمرَّر الآن لكلا
+  // الفرعين (سطح المكتب + المتنقل عبر MobileStorefront أدناه) — لم يعد حصرياً لسطح المكتب رغم اسمه.
   const desktopShelfProducts = realCatalogProducts.filter((p) => !p.options.some((o) => o.type === 'size'));
   const initialQuantities: Record<string, number> = {};
   for (const line of cartSummary?.lines ?? []) {
@@ -159,7 +160,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             posts={firstPage?.posts || []}
             hasMorePosts={firstPage?.hasMore || false}
             cartLines={cartSummary?.lines || []}
-            realCatalogProducts={realCatalogProducts}
+            // VERTICAL-SLICE-2-MOBILE-HOME-SHELF-INTEGRATION (2026-09-22) — desktopShelfProducts
+            // (مُفلترة، بلا خيارات حجم) لا realCatalogProducts الخام — راجع التعليق أعلاه عند تعريفها.
+            realCatalogProducts={desktopShelfProducts}
+            initialQuantities={initialQuantities}
           />
         </div>
 

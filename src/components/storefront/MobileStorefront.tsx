@@ -7,6 +7,7 @@ import { StoryBar } from '@/components/StoryBar';
 import { MobileHeroProductCard } from './MobileHeroProductCard';
 import { MobileSmallProductCard } from './MobileSmallProductCard';
 import { HorizontalShelf } from '@/components/HorizontalShelf';
+import { RealCatalogShelfSDUI } from '@/app/(reef)/RealCatalogShelfSDUI';
 
 interface MobileStorefrontProps {
   feedTab: string;
@@ -20,10 +21,18 @@ interface MobileStorefrontProps {
   posts: PostWithDetails[];
   cartLines: CartLineSummary[];
   hasMorePosts: boolean;
-  // §31 بند 3 (REEF_PHASE_1_PRODUCT_COMPLETENESS_AUDIT.md) — الكتالوج القابل للشراء مباشرة، بمعزل
-  // تام عن `products`/`posts` أعلاه (تلك مصدرها منشورات بيان حصراً). راجع
-  // catalogService.listPurchasableProducts.
+  // VERTICAL-SLICE-2-MOBILE-HOME-SHELF-INTEGRATION (2026-09-22) — كانت تصل هنا غير مُفلترة وتُعرَض عبر
+  // MobileSmallProductCard/HorizontalShelf (المسار القديم). أصبحت الآن مُفلترة مسبقاً في page.tsx بنفس
+  // فلتر رف سطح المكتب (استبعاد أي منتج بخيار حجم 'size' — قدرة ADD_TO_CART المُعاد استخدامها من
+  // RealCatalogShelfSDUI لا تدعم اختيار حجم، راجع تعليق ذلك الملف) وتُعرَض عبر نفس خط أنابيب SDUI
+  // الحقيقي (RealCatalogDataSource → DataResolver → PageEngine → StemProductCard داخل
+  // HorizontalShelfStem) بدل المسار القديم. راجع docs/DECISIONS.md → ADR-035.
   realCatalogProducts: Product[];
+  // نفس initialQuantities المُمرَّرة لرف سطح المكتب (page.tsx) — كميات السلة الحقيقية الحالية لكل
+  // منتج، تُهيِّئ حالة StemProductCard الأولية بدل افتراض صفر دائماً. اختيارية لتفادي كسر
+  // MobileStorefront.test.tsx القائم (لا يمرّرها، لا يختبر هذا القسم أصلاً — realCatalogProducts=[]
+  // هناك).
+  initialQuantities?: Record<string, number>;
 }
 
 export function MobileStorefront({
@@ -35,6 +44,7 @@ export function MobileStorefront({
   cartLines,
   hasMorePosts,
   realCatalogProducts,
+  initialQuantities = {},
 }: MobileStorefrontProps) {
   // TASK-04 — فرع "reel" (كان يعرض <ReelsFeed /> ببيانات MOCK_REELS ثابتة بلا أي علاقة بمنشورات
   // حقيقية — لا عمود فيديو في post_media أصلاً، راجع Header.tsx) أُزيل عمداً. زر التبويب المؤدي لهذه
@@ -49,18 +59,21 @@ export function MobileStorefront({
         <StoryBar districts={districts} />
       </div>
 
-      {/* 1.5. §31 بند 3 — رف الكتالوج القابل للشراء مباشرة، مستقل عن خلاصة بيان أدناه */}
+      {/* 1.5. §31 بند 3 — رف الكتالوج القابل للشراء مباشرة، مستقل عن خلاصة بيان أدناه. عبر SDUI منذ
+          VERTICAL-SLICE-2-MOBILE-HOME-SHELF-INTEGRATION (2026-09-22) — نفس RealCatalogShelfSDUI الذي
+          يُثبِّته رف سطح المكتب فعلياً (RUNTIME-VERIFIED)، مُعاد استخدامه حرفياً بلا تعديل (نفس نمط
+          إعادة استخدام DesktopHeaderStem/MobileHeaderStem في الشريحة السابقة — كلاهما يُركَّب دائماً،
+          الظهور CSS-only فقط عبر hidden lg:flex/block lg:hidden في الحاويتين الأصليتين). تسجيل
+          componentRegistry('product_shelf') يحدث مرة واحدة فقط (مشروط بـ.has() داخل ذلك الملف نفسه)
+          بصرف النظر عن عدد مرات تركيب المكوّن. ApplicationRuntime/CapabilityRegistry الخاصة بهذه
+          النسخة مستقلة عن نسخة سطح المكتب (غير Singleton، مؤكَّد في التدقيق المعماري) — لا تعارض. */}
       {realCatalogProducts.length > 0 && (
         <div className="px-2.5 sm:px-4">
-          <HorizontalShelf title="منتجات ريف">
-            {realCatalogProducts.map((p) => (
-              <MobileSmallProductCard
-                key={p.id}
-                product={p}
-                cartLine={cartLines.find((c) => c.item.productId === p.id)}
-              />
-            ))}
-          </HorizontalShelf>
+          <RealCatalogShelfSDUI
+            title="منتجات ريف"
+            products={realCatalogProducts}
+            initialQuantities={initialQuantities}
+          />
         </div>
       )}
 

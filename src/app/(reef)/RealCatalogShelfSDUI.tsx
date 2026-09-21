@@ -6,15 +6,20 @@
 // راجع docs/salsabil-frontend-integration-pattern.md للقواعد الحاكمة (لا لمس PageEngine/DataResolver/
 // ApplicationRuntime/ActionRouter/CapabilityRegistry، لا سعر من العميل).
 //
-// حدود متعمَّدة لهذه الدفعة (قرار مؤسس صريح أثناء التخطيط):
+// حدود متعمَّدة (قرار مؤسس صريح أثناء التخطيط، سطح المكتب 2026-09-21):
 // - `products` الممرَّرة هنا مُرشَّحة مسبقاً في page.tsx لاستبعاد أي منتج بخيار حجم (`options` من نوع
 //   'size') — قدرة ADD_TO_CART أدناه (مطابقة للـPOC حرفياً) لا تدعم اختيار حجم (`sizeId`)، والإضافة
 //   المباشرة لمنتج بخيار حجم بلا اختيار كانت ستفشل صامتاً عند CatalogService.validateSelection. هذا
-//   يطابق الحماية القائمة أصلاً في ProductCard.tsx (`hasSizeOptions` يعطّل الإضافة السريعة). الرف
-//   المتنقل (MobileStorefront) غير متأثر — يبقى على مساره القديم بلا تغيير، خارج نطاق هذه الدفعة.
+//   يطابق الحماية القائمة أصلاً في ProductCard.tsx (`hasSizeOptions` يعطّل الإضافة السريعة).
 // - publisher.name ثابت "سلسبيل" (نفس حد POC §J.4) — Product الحقيقي لا يحمل اسم تاجر عرض جاهزاً.
 // - تسجيل componentRegistry هنا **مشروط** بـ`.has()` (خلاف POC نفسه الذي سجّل بلا شرط عمداً لصفحة
 //   اختبار معزولة) — إلزامي لأي استهلاك إنتاجي حسب القاعدة الصريحة رقم 4 في وثيقة النمط أعلاه.
+//
+// VERTICAL-SLICE-2-MOBILE-HOME-SHELF-INTEGRATION (2026-09-22) — هذا المكوّن يُستهلَك الآن مرتين: رف
+// سطح المكتب (page.tsx، بلا تغيير) ورف المتنقل (MobileStorefront.tsx، جديد) — نفس المكوّن حرفياً بلا
+// أي تعديل هنا، مُركَّب مرتين، الظهور CSS-only عبر hidden lg:flex/block lg:hidden في الحاويتين
+// الأصليتين (نفس نمط DesktopHeaderStem/MobileHeaderStem في الشريحة الأولى). فلتر خيار الحجم أعلاه
+// يسري الآن على كلا الاستهلاكين معاً (نفس القيمة المُفلترة تصل للفرعين).
 
 import { useMemo, useState } from 'react';
 import { PageEngine } from '@/sdui/engine/PageEngine';
