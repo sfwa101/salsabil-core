@@ -26,8 +26,8 @@ vi.mock('./RealCatalogShelfSDUI', () => ({ RealCatalogShelfSDUI: () => null }));
 vi.mock('@/components/storefront/DesktopCategorySidebar', () => ({ DesktopCategorySidebar: () => null }));
 vi.mock('@/components/storefront/MobileStorefront', () => ({ MobileStorefront: () => null }));
 vi.mock('@/components/storefront/DesktopCartSidebar', () => ({
-  DesktopCartSidebar: ({ items }: { items: unknown[] }) => (
-    <div data-testid="desktop-cart-sidebar" data-item-count={items.length} />
+  DesktopCartSidebar: ({ lines }: { lines: unknown[] }) => (
+    <div data-testid="desktop-cart-sidebar" data-item-count={lines.length} />
   ),
 }));
 vi.mock('@/components/storefront/CartLoadErrorPanel', () => ({

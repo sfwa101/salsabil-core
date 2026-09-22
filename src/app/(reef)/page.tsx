@@ -213,17 +213,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           {cartLoadFailed ? (
             <CartLoadErrorPanel />
           ) : (
-            <DesktopCartSidebar
-              items={cartSummary?.lines?.map((line: any) => ({
-                id: line.product.id,
-                itemId: line.item.id,
-                name: line.product.name,
-                price: line.unitPrice,
-                quantity: line.item.quantity,
-                imageUrl: line.product.imageUrl || undefined
-              })) || []}
-              total={cartSummary?.total || 0}
-            />
+            <DesktopCartSidebar lines={cartSummary?.lines || []} />
           )}
         </div>
 

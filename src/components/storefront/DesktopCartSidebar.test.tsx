@@ -4,6 +4,11 @@
 // audit.md §5/§19#3) — يثبت أن DesktopCartSidebar يستهلك الآن useOptimisticCartLine.ts الحقيقي (لا
 // منطقه الخاص القديم بلا تراجع): فشل updateCartItemAction يُعيد رقم الكمية المعروض على الشاشة
 // للقيمة السابقة فعلياً. نفس نمط تمويه CartCapsule.test.tsx/PostCard.test.tsx.
+//
+// FULL-VISUAL-IMPORT-REMAINING-SURFACES (2026-09-22) — المكوّن الآن يُعيد استخدام CartLineItem.tsx
+// الحقيقي (بدل DesktopCartLineRow المحلي القديم) عبر prop واحد `lines: CartLineSummary[]` بدل
+// `items`/`total` المُبسَّطَين سابقاً — نفس الاختبار السلوكي حرفياً (فشل التحديث يتراجع)، بشكل
+// البيانات الحقيقي فقط.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
@@ -21,6 +26,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/app/(reef)/cart/actions', () => ({
   addToCartAction: vi.fn(),
   updateCartItemAction: vi.fn(),
+  removeCartItemAction: vi.fn(),
 }));
 
 const { DesktopCartSidebar } = await import('./DesktopCartSidebar');
@@ -42,14 +48,22 @@ afterEach(() => {
   container.remove();
 });
 
-const items = [
+const lines = [
   {
-    id: 'product-1', // HomePage يمرّر معرّف المنتج فعلياً هنا رغم الاسم — راجع page.tsx
-    itemId: 'item-1',
-    name: 'طماطم بلدي',
-    price: 10,
-    quantity: 2,
-    imageUrl: undefined,
+    item: { id: 'item-1', cartId: 'cart-1', productId: 'product-1', quantity: 2, selection: {}, createdAt: new Date().toISOString() },
+    product: {
+      id: 'product-1',
+      categoryId: 'cat-1',
+      tenantId: 'tenant-1',
+      name: 'طماطم بلدي',
+      basePrice: 10,
+      unit: 'kg',
+      options: [],
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    },
+    unitPrice: 10,
+    lineTotal: 20,
   },
 ];
 
@@ -57,7 +71,7 @@ async function render() {
   await act(async () => {
     root.render(
       <CartTotalProvider total={20}>
-        <DesktopCartSidebar items={items} total={20} />
+        <DesktopCartSidebar lines={lines} />
       </CartTotalProvider>
     );
   });

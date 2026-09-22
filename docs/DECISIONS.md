@@ -3152,6 +3152,43 @@ Related: `f4eeada` (إضافة القاعدة)، `a37a484` (أول انتهاك 
           Acceptance)
 ```
 
+### DECISION-DEBT-002 — رف "منتجات ريف" (RealCatalogShelfSDUI) لا يُحدِّث CartTotalProvider، فالإجمالي المعروض في الهيدر/الشريط الجانبي يبقى قديماً بعد الإضافة منه
+```
+ماذا وُجد: اكتُشِف أثناء التحقق الوظيفي الحي (Playwright، جلسة نظيفة بلا كوكيز سابقة) لإعادة بناء
+          DesktopCartSidebar.tsx ضمن "Full Visual Import" (2026-09-22): الضغط على "+" في بطاقة منتج
+          داخل رف "منتجات ريف" (RealCatalogShelfSDUI.tsx، مُثبَّت على الإنتاج لكلا العرضين منذ
+          78a0e06/8aa87da) يكتب فعلياً للخادم بنجاح (addToCartAction حقيقي، لا وهمي) لكنه **لا يستدعي
+          applyOptimisticDelta من CartTotalProvider إطلاقاً** — تأكيد مباشر: `grep -n
+          "applyOptimisticDelta\|useCartTotal" src/app/(reef)/RealCatalogShelfSDUI.tsx` يعيد صفر
+          نتائج. النتيجة الحية المُلاحَظة: سلة جلسة فارغة، إضافة أول منتج من هذا الرف تحديداً، الشريط
+          الجانبي (وبنفس المنطق: شارة السلة في MobileHeaderStem على الموبايل، التي تقرأ نفس
+          useCartTotal() عبر ReefHeader.tsx منذ VERTICAL-SLICE-1) يبقيان يعرضان "فارغة"/الإجمالي
+          القديم حتى أول تنقّل/تحديث صفحة كامل — رغم أن الكتابة في قاعدة البيانات صحيحة وفورية. هذا
+          ليس خللاً أدخلته هذه المهمة: DesktopCartSidebar القديم كان يعاني من نفس الفجوة بالضبط (كان
+          يحسب إجماليه محلياً من `items` prop الثابت من التحميل الأول، لا من قراءة حية) — لكنه أصبح
+          أوضح الآن لأن الإجمالي الجديد مصدره سياق مشترك (useCartTotal()) يُفترَض أن يعكس أي تحديث
+          تفاؤلي حقيقي في الصفحة، وهذا الرف تحديداً لا يغذّيه.
+لماذا لم يُصلَح الآن: RealCatalogShelfSDUI.tsx مكوّن سلة/مالي حقيقي (Guardian Matrix DEEP-tier،
+          AGENTS.md §17) — إصلاحه (إضافة applyOptimisticDelta داخل قدرة ADD_TO_CART المسجَّلة فيه)
+          يمسّ منطق تفاؤلي/حالة سلة مشتركة تُستهلَك في كل مكان (الهيدر على الموبايل، والآن الشريط
+          الجانبي على سطح المكتب) — خارج النطاق المُعلَن لمهمة "Full Visual Import" (بصرية بحتة، بلا
+          لمس منطق سلة). يحتاج مراجعة مستقلة (Guardian Review DEEP) واختباراً حياً مستقلاً، لا إصلاحاً
+          ضمنياً هنا.
+الخطر المتبقي: أي مستخدم يضيف أول منتج له من رف "منتجات ريف" تحديداً (الرف الأبرز على الصفحة
+          الرئيسية بكلا العرضين) يرى شارة/شريط سلة تبدو "عالقة" فارغة أو بقيمة قديمة حتى يتنقّل لصفحة
+          أخرى — تجربة مستخدم مربكة، **لا خطر سلامة بيانات** (الكتابة في قاعدة البيانات صحيحة دائماً،
+          الفجوة في العرض التفاؤلي فقط، تُصحَّح تلقائياً عند أي تحميل صفحة جديد).
+Owner: Founder (قرار: إصلاح RealCatalogShelfSDUI.tsx ليستدعي applyOptimisticDelta كباقي مكوّنات
+          السلة، أم دفعة مستقلة مُعلَنة بحجمها أولاً بما أنه مكوّن DEEP-tier)
+Created: 2026-09-22
+Status: OPEN
+Related: `src/app/(reef)/RealCatalogShelfSDUI.tsx`, `src/components/CartTotalProvider.tsx`,
+          `src/components/useOptimisticCartLine.ts`, `src/components/storefront/DesktopCartSidebar.tsx`
+          (هذه المهمة)، `src/app/(reef)/ReefHeader.tsx` (VERTICAL-SLICE-1، نفس الفجوة تصل شارة
+          الموبايل)، AGENTS.md §12 (No Silent Risk Acceptance)، §17 (Guardian Matrix — Financial
+          logic)
+```
+
 ---
 
 ### مراجَع ولم يُحوَّل إلى Decision Debt (مع التبرير)
