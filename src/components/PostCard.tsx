@@ -30,7 +30,7 @@ import { BadgeCheck, Heart, Share2, Plus, ChevronLeft } from 'lucide-react';
 import type { PostMedia, PostType, PostWithDetails } from '@/core/modules/bayan/types';
 import type { Product } from '@/core/modules/catalog/types';
 import { HorizontalShelf } from './HorizontalShelf';
-import { ProductCard } from './ProductCard';
+import { StemProductCardAdapter } from './StemProductCardAdapter';
 import { BottomSheet } from './BottomSheet';
 import { ProductSheetContent } from './ProductSheetContent';
 import { RecipeSheetContent } from './RecipeSheetContent';
@@ -203,7 +203,7 @@ export function PostCard({ post, products }: PostCardProps) {
         <HorizontalShelf title="منتجات هذا المنشور">
           {products.map((product) => (
             <div key={product.id} className="w-36 shrink-0 snap-start md:w-44 xl:w-48">
-              <ProductCard product={product} onOpenSheet={openProductSheet} />
+              <StemProductCardAdapter product={product} onOpenSheet={openProductSheet} />
             </div>
           ))}
         </HorizontalShelf>

@@ -32,15 +32,25 @@ export const CategoryBarStem: React.FC<CategoryBarStemProps> = ({
           {/* Squircle Image/Icon Container (Strict Apple Squircle) */}
           <div className={`relative w-16 h-20 sm:w-20 sm:h-24 rounded-[var(--sb-radius-2xl)] bg-[var(--sb-background)] flex items-center justify-center overflow-hidden shrink-0 shadow-sm border transition-colors ${cat.active ? 'border-primary' : 'border-border/40 group-hover:border-primary/50'}`}>
             {cat.image ? (
-              <Image 
-                src={cat.image} 
-                alt={cat.name} 
+              <Image
+                src={cat.image}
+                alt={cat.name}
                 fill
                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 rounded-[var(--sb-radius-2xl)]"
                 sizes="(max-width: 640px) 4rem, 5rem"
               />
             ) : (
-              <span className="text-[10px] text-muted-foreground">صورة</span>
+              // لا صورة (فئات/أحياء بلا حقل صورة في البيانات، مثال: District) — بديل حرف أول الاسم فوق
+              // تدرّج بتوكنز --sb-primary/--sb-accent (لا Hex حرفي، يعمل صحيحاً عبر أي [data-world]،
+              // يتجنّب مخالفة design-system/no-literal-tailwind-colors — راجع DECISION-DEBT-001).
+              <div
+                className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[var(--sb-primary)] to-[var(--sb-accent)]"
+                aria-hidden="true"
+              >
+                <span className="text-2xl font-black text-[var(--sb-primary-foreground)]">
+                  {cat.name.charAt(0)}
+                </span>
+              </div>
             )}
           </div>
           

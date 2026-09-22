@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { catalogService } from '@/core/modules/catalog/catalog.service';
 import type { Category, District, Product } from '@/core/modules/catalog/types';
 import type { CartSummary } from '@/core/modules/cart/types';
-import { StoryBar } from '@/components/StoryBar';
+import { CategoryBarNav } from './CategoryBarNav';
 import { Feed } from '@/components/Feed';
 import { DesktopCategorySidebar } from '@/components/storefront/DesktopCategorySidebar';
 import { DesktopCartSidebar } from '@/components/storefront/DesktopCartSidebar';
@@ -157,9 +157,13 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
         {/* Center Column (Feed - Desktop Only) */}
         <main className="hidden lg:flex flex-1 min-w-0 h-full overflow-y-auto px-2 py-4 flex-col gap-6">
-          {/* Story Bar */}
+          {/* Story Bar — HOMEPAGE-SHELL-VISUAL-PARITY-PASS: StoryBar (تدرّجات Tailwind حرفية) استُبدِل
+              بـCategoryBarStem عبر نفس محوّل CategoryBarNav المُثبَت أصلاً لتصفح الأحياء (a8c8c0d). */}
           <div className="bg-card rounded-2xl shadow-[var(--sb-shadow-soft)] p-4 border border-border/50">
-            <StoryBar districts={districts} />
+            <CategoryBarNav
+              items={districts.map((d) => ({ id: d.slug, name: d.nameAr }))}
+              basePath=""
+            />
           </div>
 
           {/* §31 بند 3، عبر SDUI منذ MIGRATE-HOME-REAL-SHELF-TO-SDUI — رف مستقل عن مسار بيان/المنشورات،

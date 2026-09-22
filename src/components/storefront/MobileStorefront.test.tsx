@@ -24,9 +24,13 @@ vi.mock('@/components/storefront/MobileHeroProductCard', () => ({
     <div data-testid="hero-card" data-product-id={product.id} />
   ),
 }));
-vi.mock('@/components/storefront/MobileSmallProductCard', () => ({ MobileSmallProductCard: () => null }));
 vi.mock('@/components/HorizontalShelf', () => ({ HorizontalShelf: () => null }));
-vi.mock('@/components/StoryBar', () => ({ StoryBar: () => null }));
+// HOMEPAGE-SHELL-VISUAL-PARITY-PASS (2026-09-22) — StoryBar/MobileSmallProductCard لم يعودا
+// مستوردَين هنا (استُبدِلا بـCategoryBarNav/StemProductCardAdapter). CategoryBarNav يستدعي
+// useRouter() حقيقياً (لا مزوّد App Router في هذا الاختبار jsdom) — يُموَّه بلا شرط، مطابقاً
+// لمعاملة StoryBar القديمة تماماً. StemProductCardAdapter نفسه لا يُختبَر هنا (يقع داخل
+// HorizontalShelf المُموَّه إلى null — أطفاله، ومنها، لا تُعرَض إطلاقاً، نفس ما كان يحدث مسبقاً).
+vi.mock('@/app/(reef)/CategoryBarNav', () => ({ CategoryBarNav: () => null }));
 
 const { MobileStorefront } = await import('./MobileStorefront');
 

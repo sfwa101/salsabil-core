@@ -1,0 +1,88 @@
+'use client';
+// src/components/StemProductCardAdapter.tsx
+// HOMEPAGE-SHELL-VISUAL-PARITY-PASS (2026-09-22) — يوصل StemProductCard (المُثبَت فعلياً على رف
+// "منتجات ريف" عبر RealCatalogShelfSDUI) إلى بقية بطاقات المنتج المبعثرة خارج ذلك الرف (خلاصة بيان في
+// MobileStorefront.tsx وPostCard.tsx) — كانت تُعرَض عبر MobileSmallProductCard/MobileHeroProductCard/
+// ProductCard القديمة (توكنز ظل مختلفة، بلا --sb-bg-glass/--sb-radius-2xl/--sb-shadow-apple-soft).
+//
+// إعادة استخدام كاملة لـuseOptimisticCartLine (نفس الخطاف الحقيقي المُستخدَم في ProductCard.tsx/
+// MobileSmallProductCard.tsx/PostCard.tsx — لا مسار سلة موازٍ) — خلافاً لـRealCatalogShelfSDUI الذي
+// يعيد جلب getCartSummaryAction() بعد كل نقرة (نمط POC الأقدم)، هذا المحوّل يطابق النمط التفاؤلي
+// الأحدث والمُثبَت في بقية الكود.
+//
+// منتج بخيار حجم (size) — نفس حماية ProductCard.tsx/RealCatalogShelfSDUI (لا إضافة سريعة بلا اختيار
+// حجم صريح، تفشل في CatalogService.validateSelection): يُعرَض عبر ProductCard.tsx القديمة حرفياً بلا
+// تعديل بدل StemProductCard (الذي لا يملك أي مفهوم اختيار حجم في عقده) — نفس حد "الاستبعاد المسبق"
+// المُطبَّق فعلياً في page.tsx لرف "منتجات ريف"، هنا مطبَّق داخل المحوّل نفسه لأن منتجات الخلاصة هنا
+// غير مُصفّاة مسبقاً في نقطة واحدة مركزية كصفحة الرف.
+//
+// onOpenSheet اختياري (يطابق عقد ProductCard.tsx الحالي حرفياً): عند تمريره (PostCard.tsx، رف
+// "منتجات هذا المنشور") يفتح BottomSheet المنتج الموجود أصلاً بدل أي معاينة جديدة؛ بلا تمريره
+// (MobileStorefront.tsx) ينتقل لصفحة المنتج الكاملة — نفس ازدواجية السلوك القديمة تماماً، بلا إضافة
+// نافذة ProductQuickViewStem هنا عمداً (خارج نطاق تبديل بصري بحت لهذه الدفعة).
+
+import { useRouter } from 'next/navigation';
+import type { Product } from '@/core/modules/catalog/types';
+import type { CartLineSummary } from '@/core/modules/cart/types';
+import { StemProductCard } from '@/components/ui/StemProductCard';
+import type { UIAction } from '@/sdui/actions/action-contracts';
+import { ProductCard } from '@/components/ProductCard';
+import { useOptimisticCartLine } from '@/components/useOptimisticCartLine';
+import { useCartToast } from '@/components/useCartToast';
+
+function mapProductToStemProps(product: Product) {
+  return {
+    id: product.id,
+    title: product.name,
+    price: product.basePrice,
+    imageUrl: product.imageUrl,
+    publisher: {
+      role: (product.tenantId ? 'merchant' : 'admin') as 'merchant' | 'admin',
+      name: 'سلسبيل',
+      categoryName: product.unit,
+    },
+  };
+}
+
+export function StemProductCardAdapter({
+  product,
+  cartLine,
+  onOpenSheet,
+}: {
+  product: Product;
+  cartLine?: CartLineSummary;
+  onOpenSheet?: (productId: string) => void;
+}) {
+  const router = useRouter();
+  const hasSizeOptions = product.options.some((o) => o.type === 'size');
+  const { showToast, toastNode } = useCartToast();
+  const { quantity, setQuantity } = useOptimisticCartLine(
+    product.id,
+    cartLine?.unitPrice ?? product.basePrice,
+    cartLine ? { itemId: cartLine.item.id, quantity: cartLine.item.quantity } : undefined,
+    showToast
+  );
+
+  if (hasSizeOptions) {
+    return <ProductCard product={product} cartLine={cartLine} onOpenSheet={onOpenSheet} />;
+  }
+
+  function handleAction(action: UIAction) {
+    if (action.type === 'ADD_TO_CART') {
+      if (action.payload.action === 'decrement') setQuantity(Math.max(0, quantity - 1));
+      else setQuantity(quantity + 1);
+      return;
+    }
+    if (action.type === 'OPEN_QUICK_VIEW') {
+      if (onOpenSheet) onOpenSheet(product.id);
+      else router.push(`/product/${product.id}`);
+    }
+  }
+
+  return (
+    <>
+      <StemProductCard {...mapProductToStemProps(product)} quantity={quantity} onAction={handleAction} />
+      {toastNode}
+    </>
+  );
+}

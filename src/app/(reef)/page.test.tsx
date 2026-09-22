@@ -18,7 +18,9 @@ declare global {
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-vi.mock('@/components/StoryBar', () => ({ StoryBar: () => null }));
+// HOMEPAGE-SHELL-VISUAL-PARITY-PASS (2026-09-22) — StoryBar استُبدِل بـCategoryBarNav (يستدعي
+// useRouter() حقيقياً، بلا مزوّد App Router هنا) — نفس معاملة التمويه القديمة لـStoryBar بلا شرط.
+vi.mock('./CategoryBarNav', () => ({ CategoryBarNav: () => null }));
 vi.mock('@/components/Feed', () => ({ Feed: () => null }));
 vi.mock('./RealCatalogShelfSDUI', () => ({ RealCatalogShelfSDUI: () => null }));
 vi.mock('@/components/storefront/DesktopCategorySidebar', () => ({ DesktopCategorySidebar: () => null }));

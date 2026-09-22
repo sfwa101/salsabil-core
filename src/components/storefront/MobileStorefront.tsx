@@ -3,9 +3,13 @@
 import type { Product, Category, District } from '@/core/modules/catalog/types';
 import type { CartLineSummary } from '@/core/modules/cart/types';
 import type { PostWithDetails } from '@/core/modules/bayan/types';
-import { StoryBar } from '@/components/StoryBar';
+import { CategoryBarNav } from '@/app/(reef)/CategoryBarNav';
+import { StemProductCardAdapter } from '@/components/StemProductCardAdapter';
+// MobileHeroProductCard (رف "Hero Cards" أدناه، دورات 0/1/3/4) يبقى كما هو عمداً — HOMEPAGE-SHELL-
+// VISUAL-PARITY-PASS (2026-09-22): بطاقة عرض بملء العرض، بلا نظير Stem مطابق في مكتبة الـ18. StemProductCard
+// مصمَّم بعرض رف ثابت (w-[145px]...shrink-0، مطابق لـ"منتجات ريف"/دورة 2 أدناه بعد التبديل) — إقحامه
+// في حاوية ملء العرض هنا ينتج بطاقة ضيقة داخل مساحة واسعة (تراجع بصري، لا مطابقة). راجع تقرير المهمة.
 import { MobileHeroProductCard } from './MobileHeroProductCard';
-import { MobileSmallProductCard } from './MobileSmallProductCard';
 import { HorizontalShelf } from '@/components/HorizontalShelf';
 import { RealCatalogShelfSDUI } from '@/app/(reef)/RealCatalogShelfSDUI';
 import { ReelsShelfSDUI } from '@/app/(reef)/ReelsShelfSDUI';
@@ -65,9 +69,14 @@ export function MobileStorefront({
 
   return (
     <div className="w-full space-y-4 py-4 bg-background min-h-screen">
-      {/* 1. Story Bar */}
+      {/* 1. Story Bar — HOMEPAGE-SHELL-VISUAL-PARITY-PASS: كان StoryBar (تدرّجات Tailwind حرفية
+          ثابتة)، الآن CategoryBarStem عبر نفس محوّل CategoryBarNav المُثبَت فعلياً لتصفح
+          الأحياء/الأقسام (a8c8c0d) — basePath="" لأن وجهة الحي هنا جذرية (`/${slug}`) لا متداخلة. */}
       <div className="bg-card rounded-[24px] shadow-sm p-3 mx-2.5 sm:mx-4 border border-border/50">
-        <StoryBar districts={districts} />
+        <CategoryBarNav
+          items={districts.map((d) => ({ id: d.slug, name: d.nameAr }))}
+          basePath=""
+        />
       </div>
 
       {/* 1.5. §31 بند 3 — رف الكتالوج القابل للشراء مباشرة، مستقل عن خلاصة بيان أدناه. عبر SDUI منذ
@@ -124,11 +133,12 @@ export function MobileStorefront({
                   <div className="w-full">
                     <HorizontalShelf emptyMessage="لا توجد منتجات">
                       {postProducts.map((p) => (
-                        <MobileSmallProductCard
-                          key={`${post.id}-${p.id}`}
-                          product={p}
-                          cartLine={cartLines.find((c) => c.item.productId === p.id)}
-                        />
+                        <div key={`${post.id}-${p.id}`} className="w-[145px] shrink-0">
+                          <StemProductCardAdapter
+                            product={p}
+                            cartLine={cartLines.find((c) => c.item.productId === p.id)}
+                          />
+                        </div>
                       ))}
                     </HorizontalShelf>
                   </div>
