@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { catalogService } from '@/core/modules/catalog/catalog.service';
 import { getNeighborhoodIdentity } from '@/config/neighborhood-identity-registry';
+import { CategoryBarNav } from '@/app/(reef)/CategoryBarNav';
 
 export default async function DistrictPage({ params }: { params: Promise<{ district: string }> }) {
   const { district: slug } = await params;
@@ -41,23 +42,13 @@ export default async function DistrictPage({ params }: { params: Promise<{ distr
       {categories.length === 0 ? (
         <p className="text-muted-foreground">لا توجد أقسام في هذا الحي حالياً.</p>
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-          {categories.map((category) => (
-            <Link
-              key={category.id}
-              href={`/${district.slug}/${category.slug}`}
-              className="sb-press flex flex-col items-center gap-2 rounded-2xl border border-border bg-card p-5 text-center transition hover:border-primary hover:shadow-[var(--sb-shadow-soft)]"
-            >
-              <span
-                className="animate-sb-scale-pop flex h-14 w-14 items-center justify-center rounded-full border-2 border-primary bg-muted text-lg font-semibold text-primary"
-                style={identity ? { borderColor: identity.accentColor, color: identity.accentColor } : undefined}
-              >
-                {category.nameAr.charAt(0)}
-              </span>
-              <span className="font-medium text-card-foreground">{category.nameAr}</span>
-            </Link>
-          ))}
-        </div>
+        // VISUAL-PARITY-PASS (2026-09-22) — CategoryBarStem يحل محل الشبكة القديمة (نفس بيانات
+        // catalogService.getCategoriesForDistrict الحقيقية، لا image حقيقية على CatalogCategory
+        // اليوم فتُترَك undefined — الـStem يعرض حالته الاحتياطية المبنية أصلاً بدل قيمة وهمية).
+        <CategoryBarNav
+          basePath={`/${district.slug}`}
+          items={categories.map((category) => ({ id: category.slug, name: category.nameAr }))}
+        />
       )}
     </main>
   );

@@ -9,6 +9,7 @@ import { catalogService } from '@/core/modules/catalog/catalog.service';
 import { CategoryProductGrid } from '@/components/CategoryProductGrid';
 import { getNeighborhoodIdentity } from '@/config/neighborhood-identity-registry';
 import { getCartSummaryIfExistsAction } from '@/app/(reef)/cart/actions';
+import { CategoryBarNav } from '@/app/(reef)/CategoryBarNav';
 
 export default async function CatalogCategoryPage({
   params,
@@ -50,16 +51,13 @@ export default async function CatalogCategoryPage({
       </section>
 
       {subcategories.length > 0 && (
-        <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
-          {subcategories.map((sub) => (
-            <Link
-              key={sub.id}
-              href={`/${district.slug}/${category.slug}/${sub.slug}`}
-              className="sb-press shrink-0 rounded-full border border-border bg-card px-4 py-1.5 text-sm font-medium text-foreground shadow-[var(--sb-shadow-soft)] transition hover:border-primary"
-            >
-              {sub.nameAr}
-            </Link>
-          ))}
+        // VISUAL-PARITY-PASS (2026-09-22) — نفس استبدال CategoryBarStem في [district]/page.tsx، بيانات
+        // catalogService.getSubcategoriesForCategory الحقيقية نفسها، لا تغيير بيانات.
+        <div className="mb-6">
+          <CategoryBarNav
+            basePath={`/${district.slug}/${category.slug}`}
+            items={subcategories.map((sub) => ({ id: sub.slug, name: sub.nameAr }))}
+          />
         </div>
       )}
 
