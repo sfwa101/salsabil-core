@@ -3,7 +3,9 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { submitCheckoutAction } from '@/app/(reef)/checkout/actions';
+import { getCartSummaryAction } from '@/app/(reef)/cart/actions';
 import { saveLastOrderId } from '@/lib/last-order';
+import { saveOrderSuccessFlash } from '@/lib/order-success-flash';
 
 export function CheckoutForm() {
   const router = useRouter();
@@ -19,6 +21,12 @@ export function CheckoutForm() {
     e.preventDefault();
     setStatus('submitting');
     setError(null);
+
+    // يُقرَأ قبل submitCheckoutAction مباشرة (لا من عرض الصفحة عند التحميل) — نفس لحظة الحساب التي
+    // يعتمدها ordersService.checkout() لهذه السلة بالذات. المصدر الوحيد للإجمالي الحقيقي هنا: Order
+    // المُعاد من submitCheckoutAction هو نصيب تاجر واحد فقط (merchant_suborder الأول، TASK-13) — لا
+    // يمثّل إجمالي سلة متعددة التجار؛ ملخّص السلة يمثّل الإجمالي الكلي الصحيح في الحالتين.
+    const summary = await getCartSummaryAction();
 
     const result = await submitCheckoutAction({
       customerName,
@@ -36,8 +44,27 @@ export function CheckoutForm() {
     // localStorage فقط، لا حساب عميل حقيقي يُخزَّن الطلب تحته
     saveLastOrderId(result.order.id);
 
-    // صفحة تتبّع الطلب هي مصدر عرض "تأكيد الطلب" الوحيد الآن — رابط دائم قابل للحفظ/المشاركة
-    // (اليوم 14)، بدل حالة محلية تُفقَد عند إعادة تحميل الصفحة
+    // بيانات نجاح الطلب لـOrderSuccessModalStem — sessionStorage تُقرَأ مرة واحدة في صفحة
+    // /order/[id] الحقيقية (راجع order-success-flash.ts). العنوان مصدره مدخلات هذا النموذج بالذات، لا
+    // getOrderForCustomerView (التي تتعمَّد عدم إعادة عنوان التوصيل لأي حامل رابط لاحقاً). tip/change
+    // بلا أي حقل Backend مقابل — 0 دائماً (الـStem يُخفي صف "إضافات" تلقائياً عند صفر، لا تلفيق).
+    //
+    // ملاحظة معمارية (AGENTS.md §13): submitCheckoutAction ينعش مسار التوجيه الحالي تلقائياً بعد
+    // نجاحه (سلوك Server Actions القياسي في Next.js) — عرض نافذة النجاح مباشرة فوق صفحة /checkout
+    // نفسها غير مستقر فعلياً (السلة فارغة الآن → Server Component يُعيد عرض حالة "السلة فارغة" فيُزيل
+    // CheckoutForm بالكامل قبل أن يراها المستخدم، مُتحقَّق منه حياً عبر Playwright). لذلك يبقى التنقّل
+    // الحقيقي لصفحة تتبّع الطلب الدائمة هو المسار، مع لمحة نجاح تُقرَأ محلياً في تلك الصفحة بدل نافذة
+    // على صفحة /checkout نفسها.
+    saveOrderSuccessFlash({
+      orderId: result.order.id,
+      total: summary.total,
+      itemsCount: summary.lines.reduce((sum, l) => sum + l.item.quantity, 0),
+      address: city ? `${line1}، ${city}` : line1,
+      tip: 0,
+      change: 0,
+      items: summary.lines.map((l) => ({ title: l.product.name, quantity: l.item.quantity })),
+    });
+
     router.push(`/order/${result.order.id}`);
   }
 

@@ -17,6 +17,7 @@ import { Check, X } from 'lucide-react';
 import { ordersService } from '@/core/modules/orders/orders.service';
 import { ORDER_STATUS_LABELS_AR, type OrderStatus } from '@/core/modules/orders/types';
 import { uuidSchema } from '@/core/kernel/validation/schemas';
+import { OrderSuccessFlash } from './OrderSuccessFlash';
 
 const FINAL_STATUSES: OrderStatus[] = ['delivered', 'cancelled'];
 
@@ -43,6 +44,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-6">
+      <OrderSuccessFlash orderId={parsed.data} />
       <Link href="/" className="mb-4 inline-block text-sm text-muted-foreground transition hover:text-primary">
         → كل الأحياء
       </Link>
