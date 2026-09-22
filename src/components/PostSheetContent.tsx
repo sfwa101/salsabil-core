@@ -11,7 +11,7 @@ import Image from 'next/image';
 import type { PostWithDetails } from '@/core/modules/bayan/types';
 import type { Product } from '@/core/modules/catalog/types';
 import { HorizontalShelf } from './HorizontalShelf';
-import { ProductCard } from './ProductCard';
+import { StemProductCardAdapter } from './StemProductCardAdapter';
 
 interface PostSheetContentProps {
   post: PostWithDetails;
@@ -65,7 +65,7 @@ export function PostSheetContent({ post, products, onSelectProduct }: PostSheetC
         <HorizontalShelf title="المنتجات المذكورة">
           {products.map((product) => (
             <div key={product.id} className="w-36 shrink-0 snap-start md:w-44 xl:w-48">
-              <ProductCard product={product} onOpenSheet={onSelectProduct} />
+              <StemProductCardAdapter product={product} onOpenSheet={onSelectProduct} />
             </div>
           ))}
         </HorizontalShelf>
