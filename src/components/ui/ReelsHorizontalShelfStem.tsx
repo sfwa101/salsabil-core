@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { DummyReel } from '@/services/dummy-ui-service';
+import type { DummyReel } from '@/services/dummy-ui-service';
 import { Play, Video, ChevronLeft } from 'lucide-react';
 
 export interface ReelsHorizontalShelfStemProps {

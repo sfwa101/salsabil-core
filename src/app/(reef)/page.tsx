@@ -182,6 +182,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             initialHasMore={firstPage?.hasMore || false}
             initialProducts={firstPage?.products || []}
             postTypes={postTypes}
+            reels={reels}
           />
         </main>
 

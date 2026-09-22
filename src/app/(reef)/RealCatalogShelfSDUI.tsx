@@ -27,8 +27,10 @@ import { ApplicationRuntime } from '@/sdui/runtime/ApplicationRuntime';
 import { componentRegistry } from '@/sdui/registry/component-registry';
 import { SDUIComponent } from '@/sdui/contracts/component-contracts';
 import type { SDUIPage } from '@/sdui/schema/page.schema';
+import type { QuickViewProductSnapshot } from '@/sdui/actions/action-contracts';
 import { StemProductCard } from '@/components/ui/StemProductCard';
 import { HorizontalShelfStem } from '@/components/ui/HorizontalShelfStem';
+import { ProductQuickViewStem } from '@/components/ui/ProductQuickViewStem';
 import type { ProductCardStemProps } from '@/types/ui-contracts';
 import type { Product } from '@/core/modules/catalog/types';
 import {
@@ -73,9 +75,21 @@ interface RealCatalogShelfSDUIProps {
 
 export function RealCatalogShelfSDUI({ title, products, initialQuantities }: RealCatalogShelfSDUIProps) {
   const [quantities, setQuantities] = useState<Record<string, number>>(initialQuantities);
+  // VISUAL-PARITY-PASS (2026-09-22) — OPEN_QUICK_VIEW كان يُرسَل من StemProductCard.tsx منذ وصله
+  // الأول (Slice 2) بلا أي capability مسجَّلة تستقبله — ActionRouter.dispatch يتجاهل أي action بلا
+  // handler صامتاً (no-op حقيقي في الإنتاج، console.warn في التطوير فقط)، فكل ضغطة على بطاقة منتج على
+  // الموقع الحي كانت (ولا تزال حتى هذا التعديل) بلا أثر ظاهر. هذا يصلح الخلل الموجود فعلاً، لا يضيف
+  // ميزة جديدة – reuse كامل لبيانات id/title/price/imageUrl/publisher الموجودة أصلاً في StemProductCard
+  // (لا description/unit — StemProductCard لا يحملهما في حمولته، فيظهران فارغين في المعاينة السريعة
+  // بدل قيمة مُختلَقة؛ الـStem نفسه يُخفي قسم الوصف كاملاً عند غيابه بعد إصلاح هذه المهمة).
+  const [quickViewProduct, setQuickViewProduct] = useState<QuickViewProductSnapshot | null>(null);
 
   const runtime = useMemo(() => {
     const appRuntime = new ApplicationRuntime();
+
+    appRuntime.registerCapability('OPEN_QUICK_VIEW', (action) => {
+      setQuickViewProduct(action.payload.product);
+    });
 
     appRuntime.registerCapability('ADD_TO_CART', (action) => {
       const { id: productId, action: qtyAction, amount } = action.payload;
@@ -135,5 +149,16 @@ export function RealCatalogShelfSDUI({ title, products, initialQuantities }: Rea
     [title, products, quantities]
   );
 
-  return <PageEngine pageData={page} onAction={runtime.dispatch} />;
+  return (
+    <>
+      <PageEngine pageData={page} onAction={runtime.dispatch} />
+      {quickViewProduct && (
+        <ProductQuickViewStem
+          product={quickViewProduct}
+          onClose={() => setQuickViewProduct(null)}
+          onAction={runtime.dispatch}
+        />
+      )}
+    </>
+  );
 }

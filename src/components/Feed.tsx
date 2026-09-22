@@ -3,15 +3,22 @@
 // مُنسِّق خلاصة بيان الرئيسية (اليوم 27، BAYAN-HOME-FEED-001) — يستقبل الصفحة الأولى مُصيَّرة من
 // الخادم (page.tsx)، ثم يحمّل صفحات إضافية عبر loadFeedPageAction (feed-actions.ts) كلما وصل عنصر
 // "الحارس" (sentinel) الفارغ أسفل القائمة إلى منطقة الرؤية — IntersectionObserver، أول استخدام له في
-// هذا المستودع، بدل مستمع scroll يدوي. رفوف الريلز النائبة (ReelsShelfPlaceholder) تتخلل القائمة كل
-// REEL_SHELF_INTERVAL منشورات — رقم بصري تعسّفي، لا مصدر بيانات حقيقي وراءه.
+// هذا المستودع، بدل مستمع scroll يدوي. رف الريلز يتخلل القائمة كل REEL_SHELF_INTERVAL منشورات — رقم
+// بصري تعسّفي، لا علاقة له بعدد الريلز الفعلي.
+//
+// VISUAL-PARITY-PASS (2026-09-22) — ReelsShelfPlaceholder (نائب بصري بحت، "قريباً") استُبدِل بـ
+// ReelsShelfSDUI الحقيقي — DD-024 بنى Backend فعلياً لـpost_type='reel' بعد أن كُتب هذا الملف، فبقي
+// النائب هنا بلا داعٍ (نفس بيانات reels المُمرَّرة أصلاً للجوال في MobileStorefront). يُعرَض مرة واحدة
+// فقط (أول فرصة تخلّل)، لا عند كل REEL_SHELF_INTERVAL — نفس منطق "لا تكرار نفس الرف" المُطبَّق في
+// MobileStorefront.tsx.
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PostWithDetails, PostType } from '@/core/modules/bayan/types';
 import type { Product } from '@/core/modules/catalog/types';
 import { loadFeedPageAction } from '@/app/(reef)/feed-actions';
 import { PostCard } from './PostCard';
-import { ReelsShelfPlaceholder } from './ReelsShelfPlaceholder';
+import { ReelsShelfSDUI } from '@/app/(reef)/ReelsShelfSDUI';
+import type { RealReelSnapshot } from '@/app/(reef)/data/ReelsDataSource';
 
 const REEL_SHELF_INTERVAL = 4;
 
@@ -20,9 +27,10 @@ interface FeedProps {
   initialHasMore: boolean;
   initialProducts: Product[];
   postTypes?: PostType[];
+  reels?: RealReelSnapshot[];
 }
 
-export function Feed({ initialPosts, initialHasMore, initialProducts, postTypes }: FeedProps) {
+export function Feed({ initialPosts, initialHasMore, initialProducts, postTypes, reels = [] }: FeedProps) {
   const [posts, setPosts] = useState(initialPosts);
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [products, setProducts] = useState(initialProducts);
@@ -91,9 +99,9 @@ export function Feed({ initialPosts, initialHasMore, initialProducts, postTypes 
                 .filter((p): p is Product => Boolean(p))}
             />
           </div>
-          {(index + 1) % REEL_SHELF_INTERVAL === 0 && (
+          {index === REEL_SHELF_INTERVAL - 1 && reels.length > 0 && (
             <div className="col-span-full">
-              <ReelsShelfPlaceholder />
+              <ReelsShelfSDUI reels={reels} />
             </div>
           )}
         </Fragment>

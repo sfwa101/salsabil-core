@@ -3101,6 +3101,44 @@ Related: AGENTS.md §5، §6، §14 (Capability Levels)، §17 (Guardian Matrix 
           نص مهمة "Fast-Track Execution: Complete Remaining Backlog" (2026-09-22/23)
 ```
 
+### DECISION-DEBT-001 — `design-system/no-literal-tailwind-colors` غير مُطبَّق آلياً على أي بوابة Git
+```
+ماذا وُجد: قاعدة ESLint `design-system/no-literal-tailwind-colors` (أُضيفت `f4eeada`، 2026-09-20، مع
+          إصلاح 41 مخالفة قائمة وقتها) **لا تُشغَّل في أي خطاف Git** — `.husky/pre-commit` يُشغِّل فقط
+          typecheck/arch:check/test:unit، و`.husky/pre-push` يُشغِّل فقط test الكامل — لا واحد منهما
+          يستدعي `npm run lint` إطلاقاً. النتيجة الفعلية: مكتبة الـ16 Stem كاملة (`a37a484`،
+          2026-09-21، **يوم واحد بعد** إضافة القاعدة) دخلت المستودع بعشرات المخالفات لكل ملف تقريباً —
+          مؤكَّد بالتشغيل المباشر لـ`npx eslint` أثناء "Visual Parity Pass" (2026-09-22) على عيّنة من
+          6 ملفات: `StemHeroFeedCard.tsx` (26 مخالفة، أُصلِحت هذه المهمة)، `ProductQuickViewStem.tsx`
+          (31 مخالفة، أُصلِحت كلياً هذه المهمة)، `OrderSuccessModalStem.tsx` (20 مخالفة — **مُنشَر
+          فعلياً على staging.reefam.com اليوم**، لم يُصلَح)، `AddressModalStem.tsx` (4 مخالفات، غير
+          موصول أصلاً)، `ReelsEmbedModalStem.tsx` (9 مخالفات) وReelsHorizontalShelfStem.tsx (16
+          مخالفة) — كلاهما مُوصَّل فعلياً على الإنتاج (DD-024)، فُحِصا عمداً بعمق أكبر ولم يُصلَحا: كل
+          مخالفاتهما داخل عناصر "scrim فوق وسائط" (تدرّج تعتيم/شارة/زر تشغيل فوق صورة/فيديو مصغَّر) لا
+          "شاشة تطبيق عادية" — استبدالها الميكانيكي بتوكنز `--sb-foreground`/`--sb-background` (نفس
+          نمط StemHeroFeedCard/ProductQuickViewStem) كان سيكسر فعلياً في الوضع الداكن: هذه التوكنز
+          تنعكس بين الفاتح/الداكن حسب الثيم، بينما شاشة الفيديو تحتاج تبايناً ثابتاً بصرف النظر عن ثيم
+          الموقع (نفس منطق أي مشغّل فيديو) — إصلاحها الصحيح يحتاج مجموعة توكنز "ثابتة لا تتأثر بالثيم"
+          غير موجودة اليوم في `globals.css`، لا استبدالاً سطحياً. لم تُفحَص بقية الـ8 Stems المتبقية —
+          العدد الحقيقي الكامل عبر المستودع **غير معروف**.
+لماذا لم يُصلَح الآن: نطاق "Visual Parity Pass" هذا محدَّد بإصلاح الملفات المُوصَّلة/المُعدَّلة فعلياً
+          ضمنه فقط (نفس مبدأ §17 من موجّه المهمة: "fix it if it's a small, safe, in-scope fix consistent
+          with what you're already doing to that file"). فحص/إصلاح شامل لكل الـ16 (أو أكثر) Stem يتجاوز
+          هذا بكثير — تغيير حجمه غير معروف بدقة قبل فحص كل ملف فعلياً، ويستحق دفعة مستقلة مُعلَنة
+          بحجمها المتوقَّع (`AGENTS.md §4`) بدل تنفيذه ضمنياً هنا.
+الخطر المتبقي: أي ملف Stem جديد أو مُعدَّل مستقبلاً قد يحمل ألوان حرفية دون أن يوقفه أي خطاف — القاعدة
+          تُصبح "توثيقاً بلا إنفاذ" عملياً. `OrderSuccessModalStem.tsx` تحديداً حي على الإنتاج بمخالفات
+          غير مُصلَحة، رغم كونه لا يمثّل خطراً أمنياً/مالياً (تناقض بصري فقط) — يزيد الانحراف البصري عن
+          `/test-ui` (نفس الفجوة التي أطلقت "Visual Parity Pass" أصلاً) كلما وُصِلت Stems إضافية بلا فحص.
+Owner: Founder (قرار أولوية: إصلاح شامل الآن، أم دفعة لاحقة مستقلة، أم إضافة `npm run lint` لخطاف
+          pre-commit/pre-push أولاً لمنع التكرار المستقبلي قبل التنظيف الرجعي)
+Created: 2026-09-22
+Status: OPEN
+Related: `f4eeada` (إضافة القاعدة)، `a37a484` (أول انتهاك جماعي)، `.husky/pre-commit`,
+          `.husky/pre-push`, `src/app/globals.css` (تعريف التوكنز)، AGENTS.md §12 (No Silent Risk
+          Acceptance)
+```
+
 ---
 
 ### مراجَع ولم يُحوَّل إلى Decision Debt (مع التبرير)
