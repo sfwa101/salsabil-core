@@ -47,6 +47,8 @@ export default async function EditPostPage({ params }: { params: Promise<{ id: s
             .sort((a, b) => a.displayOrder - b.displayOrder)
             .map((m) => ({ imageUrl: m.imageUrl, link: m.link })),
           productIds,
+          videoUrl: post.videoUrl,
+          videoSource: post.videoSource,
         }}
       />
     </main>

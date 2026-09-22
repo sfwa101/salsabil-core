@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { getAdminSession } from '@/core/modules/admin/admin-session';
 import { bayanService } from '@/core/modules/bayan/bayan.service';
-import { POST_TYPES } from '@/core/modules/bayan/types';
+import { POST_TYPES, VIDEO_SOURCES } from '@/core/modules/bayan/types';
 import { uuidSchema } from '@/core/kernel/validation/schemas';
 
 type ActionResult<T = undefined> = { success: true; data?: T } | { error: string };
@@ -36,17 +36,31 @@ const postMediaRowSchema = z.object({
   link: postMediaLinkSchema,
 });
 
-const postFieldsSchema = z.object({
-  categoryId: uuidSchema,
-  postType: z.enum(POST_TYPES),
-  caption: z.string().trim().optional(),
-  priority: z.number().int('الأولوية يجب أن تكون رقماً صحيحاً'),
-  isPublished: z.boolean(),
-  media: z.array(postMediaRowSchema),
-  // الرف الأفقي (post_products) — مستقل تماماً عن روابط الصور الفردية أعلاه (media[].link.type
-  // === 'product'). بالترتيب المُختار.
-  productIds: z.array(uuidSchema),
-});
+// DD-024 — videoUrl/videoSource مطلوبان معاً فقط لـpostType==='reel' (superRefine أدناه)، بلا قيمة
+// لكل نوع آخر — نفس نمط التحقق الشرطي المُستخدَم أصلاً لـproductId/recipe داخل postMediaLinkSchema
+// (discriminatedUnion)، هنا على مستوى حقلي postType/video مباشرة بدل union كامل لتفادي إعادة تشكيل
+// postFieldsSchema بالكامل لأجل نوع واحد فقط من الخمسة.
+const postFieldsSchema = z
+  .object({
+    categoryId: uuidSchema,
+    postType: z.enum(POST_TYPES),
+    caption: z.string().trim().optional(),
+    priority: z.number().int('الأولوية يجب أن تكون رقماً صحيحاً'),
+    isPublished: z.boolean(),
+    media: z.array(postMediaRowSchema),
+    // الرف الأفقي (post_products) — مستقل تماماً عن روابط الصور الفردية أعلاه (media[].link.type
+    // === 'product'). بالترتيب المُختار. DD-024 — نفس الحقل يُستخدَم أيضاً لأشكال "مقالة + منتج
+    // واحد"/"مقالة + مجموعة منتجات" (postType==='article') — تمييزهما بالعدد وحده (1 مقابل 2+)، لا
+    // حقل/جدول منفصل (راجع DD-024 → Risk للمبرر الكامل).
+    productIds: z.array(uuidSchema),
+    videoUrl: z.url('رابط فيديو غير صحيح').optional(),
+    videoSource: z.enum(VIDEO_SOURCES).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.postType === 'reel' && (!data.videoUrl || !data.videoSource)) {
+      ctx.addIssue({ code: 'custom', path: ['videoUrl'], message: 'منشور من نوع "ريل" يحتاج رابط فيديو ومنصة' });
+    }
+  });
 
 export type PostFormInput = z.infer<typeof postFieldsSchema>;
 
@@ -76,6 +90,8 @@ export async function createPostAction(input: PostFormInput): Promise<ActionResu
       postType: parsed.data.postType,
       caption: parsed.data.caption || undefined,
       priority: parsed.data.priority,
+      videoUrl: parsed.data.videoUrl,
+      videoSource: parsed.data.videoSource,
     });
 
     if (parsed.data.media.length > 0) {
@@ -118,6 +134,8 @@ export async function updatePostAction(postId: string, input: PostFormInput): Pr
       caption: parsed.data.caption || undefined,
       priority: parsed.data.priority,
       isPublished: parsed.data.isPublished,
+      videoUrl: parsed.data.videoUrl,
+      videoSource: parsed.data.videoSource,
     });
     await bayanService.replacePostMedia(idParsed.data, parsed.data.media);
     await bayanService.setPostProducts(idParsed.data, parsed.data.productIds);

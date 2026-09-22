@@ -8,6 +8,8 @@ import { MobileHeroProductCard } from './MobileHeroProductCard';
 import { MobileSmallProductCard } from './MobileSmallProductCard';
 import { HorizontalShelf } from '@/components/HorizontalShelf';
 import { RealCatalogShelfSDUI } from '@/app/(reef)/RealCatalogShelfSDUI';
+import { ReelsShelfSDUI } from '@/app/(reef)/ReelsShelfSDUI';
+import type { RealReelSnapshot } from '@/app/(reef)/data/ReelsDataSource';
 
 interface MobileStorefrontProps {
   feedTab: string;
@@ -33,6 +35,10 @@ interface MobileStorefrontProps {
   // MobileStorefront.test.tsx القائم (لا يمرّرها، لا يختبر هذا القسم أصلاً — realCatalogProducts=[]
   // هناك).
   initialQuantities?: Record<string, number>;
+  // DD-024 — ريلز حقيقية (post_type='reel')، مستقلة تماماً عن posts أعلاه (منشورات بيان العادية).
+  // اختيارية بلا افتراض [] هنا (بل في الاستخدام أدناه) لنفس سبب initialQuantities — لا تكسر
+  // MobileStorefront.test.tsx القائم.
+  reels?: RealReelSnapshot[];
 }
 
 export function MobileStorefront({
@@ -45,12 +51,17 @@ export function MobileStorefront({
   hasMorePosts,
   realCatalogProducts,
   initialQuantities = {},
+  reels = [],
 }: MobileStorefrontProps) {
   // TASK-04 — فرع "reel" (كان يعرض <ReelsFeed /> ببيانات MOCK_REELS ثابتة بلا أي علاقة بمنشورات
   // حقيقية — لا عمود فيديو في post_media أصلاً، راجع Header.tsx) أُزيل عمداً. زر التبويب المؤدي لهذه
   // القيمة أُزيل من Header.tsx أيضاً؛ حتى عبر رابط ?tab=reel يدوي، feedTab غير مستخدَم في أي مكان آخر
-  // بهذا المكوّن — القيمة تسقط تلقائياً إلى نفس الخلاصة العادية أدناه بدل عرض بيانات وهمية، بنفس منطق
-  // "Cycle 5: Mini Reels Bar (Disabled until real data is available)" الموجود أصلاً أسفل هذا الملف.
+  // بهذا المكوّن — القيمة تسقط تلقائياً إلى نفس الخلاصة العادية أدناه.
+  //
+  // DD-024 — "Cycle 5: Mini Reels Bar" (أدناه) لم يعد مُعطَّلاً: يعرض الآن ReelsShelfSDUI ببيانات
+  // reel حقيقية. reels مصدر بيانات مستقل عن posts (page-level، لا لكل منشور) — يُعرَض مرة واحدة فقط
+  // عند أول فرصة (index % 6 === 5) في التسلسل، لا عند كل تكرار لاحق (تفادياً لتكرار نفس الرف).
+  const firstReelsSlotIndex = reels.length > 0 ? posts.findIndex((_, i) => i % 6 === 5) : -1;
 
   return (
     <div className="w-full space-y-4 py-4 bg-background min-h-screen">
@@ -81,14 +92,20 @@ export function MobileStorefront({
       {posts.length > 0 && (
         <div className="flex flex-col gap-5 pt-2">
           {posts.map((post, index) => {
+            const cycleIndex = index % 6;
+
+            // DD-024 — يُفحَص قبل فلتر postProducts أدناه عمداً: reels بيانات على مستوى الصفحة، لا
+            // لكل منشور، فلا يصح إسقاط فرصة عرضها لمجرد أن منشور posts[index] نفسه بلا منتجات.
+            if (cycleIndex === 5 && index === firstReelsSlotIndex) {
+              return <ReelsShelfSDUI key="reels-shelf" reels={reels} />;
+            }
+
             const postCategory = categories.find((c) => c.id === post.categoryId);
             const postProducts = post.productIds
               .map((id) => products.find((p) => p.id === id))
               .filter(Boolean) as Product[];
 
             if (postProducts.length === 0) return null;
-
-            const cycleIndex = index % 6;
 
             // Cycle 2: Horizontal Shelf
             if (cycleIndex === 2) {
@@ -119,7 +136,8 @@ export function MobileStorefront({
               );
             }
 
-            // Cycle 5: Mini Reels Bar (Disabled until real data is available)
+            // Cycle 5 (تكرارات لاحقة بعد firstReelsSlotIndex): لا رف ريلز ثانٍ مكرَّر بنفس المحتوى —
+            // يبقى بلا عرض، نفس سلوك ما قبل DD-024.
             if (cycleIndex === 5) {
               return null;
             }

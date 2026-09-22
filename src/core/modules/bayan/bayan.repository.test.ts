@@ -214,6 +214,8 @@ describe('BayanRepository.createPost', () => {
       post_type: 'post',
       caption: null,
       priority: 0,
+      video_url: null,
+      video_source: null,
     });
   });
 });

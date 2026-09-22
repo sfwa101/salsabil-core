@@ -34,11 +34,16 @@ export interface ContentTypeConfig {
 
 // تجميع "منتجات" = product_highlight + offer معاً (قرار مؤسس صريح، لا تبويب "عروض" منفصل) —
 // راجع docs/design/CONTENT_MODEL.md للتبرير الكامل.
+//
+// DD-024 — 'article' مُضافة تحت تبويب "منشورات" (posts) نفسه: مفهومياً أقرب لـ'post' العادي (نص +
+// صور، قد يرتبط بمنتج/مجموعة عبر post_products الموجود أصلاً) من 'product_highlight'/'offer' — لا
+// تبويب جديد مطلوب، نفس مبدأ عدم إضافة بنية تحتية بلا حاجة فعلية (§4 أعلاه).
 export const CONTENT_TYPE_REGISTRY: ContentTypeConfig[] = [
   { key: 'post', enabled: true, labelAr: 'منشور', feedTab: 'posts' },
   { key: 'reel', enabled: true, labelAr: 'ريل', feedTab: 'reel' },
   { key: 'product_highlight', enabled: true, labelAr: 'إبراز منتج', feedTab: 'products' },
   { key: 'offer', enabled: true, labelAr: 'عرض', feedTab: 'products' },
+  { key: 'article', enabled: true, labelAr: 'مقالة', feedTab: 'posts' },
 ];
 
 export function getEnabledContentTypes(): ContentTypeConfig[] {

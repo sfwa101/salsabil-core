@@ -16,6 +16,7 @@ import { RealCatalogShelfSDUI } from './RealCatalogShelfSDUI';
 import { QueryRegistry } from '@/sdui/data/QueryRegistry';
 import { DataResolver } from '@/sdui/data/DataResolver';
 import { RealCatalogDataSource } from '@/app/(reef)/data/RealCatalogDataSource';
+import { ReelsDataSource, type RealReelSnapshot } from '@/app/(reef)/data/ReelsDataSource';
 import type { SDUIPage } from '@/sdui/schema/page.schema';
 
 // MIGRATE-HOME-REAL-SHELF-TO-SDUI (2026-09-21) — نفس الحد الأقصى الذي كانت تستخدمه
@@ -46,6 +47,35 @@ async function resolveRealCatalogShelf(): Promise<Product[]> {
   return (resolved.sections[0]?.props.items as Product[] | null) ?? [];
 }
 
+// DD-024 — نفس نمط resolveRealCatalogShelf حرفياً، مصدر بيانات مستقل (post_type='reel' فقط) لا علاقة
+// له بخلاصة بيان الرئيسية (loadFeedPageAction) — ReelsDataSource يجلب categories بنفسه (راجع تعليقه)
+// فيبقى هذا الاستدعاء مستقلاً بالكامل، قابلاً للتشغيل بالتوازي مع بقية Promise.all أدناه.
+const REELS_SHELF_LIMIT = 10;
+const reelsShelfPageSchema: SDUIPage = {
+  id: 'home_reels_shelf_query',
+  sections: [
+    {
+      id: 'section_reels_shelf_query',
+      type: 'reels_shelf',
+      props: { items: { $bind: 'query.reels_feed', params: { limit: REELS_SHELF_LIMIT } } },
+      visibility: { enabled: true },
+    },
+  ],
+};
+
+async function resolveReelsFeed(): Promise<RealReelSnapshot[]> {
+  const registry = new QueryRegistry();
+  registry.register({
+    id: 'query.reels_feed',
+    paramSchema: z.object({ limit: z.number().optional() }),
+    resultSchema: z.array(z.unknown()),
+  });
+  const resolver = new DataResolver(registry);
+  resolver.registerSource(new ReelsDataSource());
+  const resolved = await resolver.resolvePage(reelsShelfPageSchema);
+  return (resolved.sections[0]?.props.items as RealReelSnapshot[] | null) ?? [];
+}
+
 function parseFeedTab(tab: string | undefined): FeedTabKey {
   return FEED_TAB_KEYS.includes(tab as FeedTabKey) ? (tab as FeedTabKey) : 'all';
 }
@@ -62,6 +92,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   let categories: Category[] = [];
   let firstPage: any = { posts: [], hasMore: false, products: [] };
   let realCatalogProducts: Product[] = [];
+  let reels: RealReelSnapshot[] = [];
   let cartSummary: CartSummary | null = null;
   let cartLoadFailed = false;
 
@@ -79,6 +110,9 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       catalogService.listCategories(),
       loadFeedPageAction({ postTypes, offset: 0 }),
       resolveRealCatalogShelf(),
+      // DD-024 — مستقل تماماً عن باقي هذه القائمة (لا يشارك districts/categories/firstPage)، يُشغَّل
+      // بالتوازي فقط لأنه ضمن نفس Promise.all، لا لأنه يعتمد على أي منها.
+      resolveReelsFeed(),
     ]),
     getCartSummaryAction(),
   ]);
@@ -88,6 +122,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     categories = catalogFeedResult.value[1] || [];
     firstPage = catalogFeedResult.value[2] || { posts: [], hasMore: false, products: [] };
     realCatalogProducts = catalogFeedResult.value[3] || [];
+    reels = catalogFeedResult.value[4] || [];
   } else {
     console.error('Failed to load storefront data:', catalogFeedResult.reason);
   }
@@ -164,6 +199,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             // (مُفلترة، بلا خيارات حجم) لا realCatalogProducts الخام — راجع التعليق أعلاه عند تعريفها.
             realCatalogProducts={desktopShelfProducts}
             initialQuantities={initialQuantities}
+            reels={reels}
           />
         </div>
 

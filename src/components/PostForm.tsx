@@ -5,8 +5,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { PostType, PostMediaLink } from '@/core/modules/bayan/types';
-import { POST_TYPES, POST_TYPE_LABELS_AR } from '@/core/modules/bayan/types';
+import type { PostType, PostMediaLink, VideoSource } from '@/core/modules/bayan/types';
+import { POST_TYPES, POST_TYPE_LABELS_AR, VIDEO_SOURCES, VIDEO_SOURCE_LABELS_AR } from '@/core/modules/bayan/types';
 import { createPostAction, updatePostAction, type PostFormInput } from '@/app/admin/posts/actions';
 
 interface CategoryOption {
@@ -37,6 +37,9 @@ interface PostFormInitial {
   isPublished: boolean;
   media: { imageUrl: string; link: PostMediaLink }[];
   productIds: string[]; // الرف الأفقي (post_products) — مستقل عن روابط الصور الفردية أعلاه
+  // DD-024 — تُستخدَم فقط لـpostType==='reel'
+  videoUrl?: string;
+  videoSource?: VideoSource;
 }
 
 interface PostFormProps {
@@ -83,6 +86,8 @@ export function PostForm({ mode, postId, categories, products, initial }: PostFo
   );
   const [productIds, setProductIds] = useState<string[]>(initial?.productIds ?? []);
   const [productToAdd, setProductToAdd] = useState('');
+  const [videoUrl, setVideoUrl] = useState(initial?.videoUrl ?? '');
+  const [videoSource, setVideoSource] = useState<VideoSource | ''>(initial?.videoSource ?? '');
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
 
@@ -160,6 +165,8 @@ export function PostForm({ mode, postId, categories, products, initial }: PostFo
       isPublished,
       media: media.map((row) => ({ imageUrl: row.imageUrl, link: buildLink(row) })),
       productIds,
+      videoUrl: postType === 'reel' ? videoUrl.trim() || undefined : undefined,
+      videoSource: postType === 'reel' ? videoSource || undefined : undefined,
     };
 
     const result = mode === 'create' ? await createPostAction(input) : await updatePostAction(postId!, input);
@@ -205,6 +212,45 @@ export function PostForm({ mode, postId, categories, products, initial }: PostFo
           ))}
         </select>
       </div>
+
+      {/* DD-024 — تظهر فقط لنوع "ريل": رابط فيديو خارجي (يستورد، لا يُرفَع) + المنصة. راجع
+          reel-embed.ts لكيفية تحويلهما لرابط تضمين فعلي عند عرض الريل في الخلاصة. */}
+      {postType === 'reel' && (
+        <div className="flex flex-col gap-4 rounded-2xl border border-border p-4">
+          <h3 className="font-medium text-foreground">بيانات الريل (فيديو مستورَد برابط خارجي)</h3>
+
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-muted-foreground">رابط الفيديو</label>
+            <input
+              required
+              type="url"
+              value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)}
+              placeholder="https://www.youtube.com/watch?v=..."
+              className="rounded-xl border border-border bg-card p-3 text-foreground"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-muted-foreground">المنصة</label>
+            <select
+              required
+              value={videoSource}
+              onChange={(e) => setVideoSource(e.target.value as VideoSource)}
+              className="rounded-xl border border-border bg-card p-3 text-foreground"
+            >
+              <option value="" disabled>
+                اختر منصة
+              </option>
+              {VIDEO_SOURCES.map((s) => (
+                <option key={s} value={s}>
+                  {VIDEO_SOURCE_LABELS_AR[s]}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2">
         <label className="text-sm font-medium text-muted-foreground">الوصف (اختياري)</label>

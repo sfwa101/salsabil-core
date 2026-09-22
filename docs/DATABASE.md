@@ -454,6 +454,40 @@ Supabase SQL Editor (`scripts/day23-bayan-schema.sql`، نفس قيد عدم و�
 - **`world_scope uuid references worlds(id)`** — FK حقيقي، لا نص/enum حر كما ورد حرفياً في الموجّه
   الأصلي؛ انحراف طفيف موثَّق صراحة في `ADR-021`، يطابق سابقة `user_personas.world_id`.
 
+### `posts` — امتداد DD-024 (2026-09-22/23، `video_url`/`video_source` + `post_type='article'`) — Evidence: `MIGRATION WRITTEN, NOT YET APPLIED`
+
+```sql
+-- scripts/2026-09-22-dd024-bayan-post-shapes.sql
+alter table posts drop constraint if exists posts_post_type_check;
+alter table posts add constraint posts_post_type_check
+  check (post_type in ('post', 'reel', 'product_highlight', 'offer', 'article'));
+
+alter table posts add column if not exists video_url text;
+alter table posts add column if not exists video_source text;
+```
+
+**الحالة: `MIGRATION WRITTEN, NOT YET APPLIED`** — نفس قيد كل Migration سابقة في هذا المشروع (لا اتصال
+Postgres مباشر لـClaude Code، راجع رأس `scripts/2026-09-22-dd024-bayan-post-shapes.sql`) — السكربت
+جاهز، يحتاج تنفيذاً يدوياً من المؤسس عبر Supabase SQL Editor (dev أولاً) قبل أن تعمل أي كتابة/قراءة
+فعلية لأشكال reel/article الجديدة على بيانات حية. الكود (repository/service/UI) مكتوب ومُختبَر وحدياً
+بافتراض هذا المخطط، لكن **لم يُتحقَّق منه حياً بعد** — لا ادعاء PASS على تحقق حي في تقرير هذه المهمة.
+
+**قرارات تصميم (`DD-024`، `docs/DECISIONS.md`):**
+- **لا جدول `product_groups` جديد** — "مجموعة منتجات" (شكل 6 من الستة) تُمثَّل بإعادة استخدام
+  `post_products` الموجود أصلاً (N صف بدل 1) تماماً كما "معرض صور" (شكل 3) يُمثَّل بـN صف `post_media`
+  بدل 1 — كلتاهما قدرة "N عنصر مرتَّب مرتبط بمنشور" موجودة فعلاً، لا مسؤولية جديدة تبرر جدولاً مخصَّصاً
+  (`AGENTS.md §2`).
+- **`video_url`/`video_source` نصّان NULLABLE بلا DEFAULT** — تُستخدَمان فقط لـ`post_type='reel'`،
+  `NULL` لكل الأنواع الأخرى دائماً؛ 100% متوافقة عكسياً (لا صف/كود حالي يتأثر).
+- **`video_source` بلا `CHECK` قاعدة بيانات** — نفس فلسفة `post_media.link` أعلاه (Discriminated Union
+  مفروض TypeScript فقط عبر `VIDEO_SOURCES`/`VideoSource` في `bayan/types.ts`) — يسمح بإضافة منصة
+  فيديو جديدة مستقبلاً بلا Migration.
+- **تضمين الفيديو (embed) عبر أنماط iframe عامة معروفة لكل منصة** (`src/core/modules/bayan/reel-
+  embed.ts`) — لا `react-player`، لا Meta Graph API oEmbed (يحتاج App Token غير متاح لهذه الجلسة). خطر
+  متبقٍ مُسجَّل صراحة في تعليق ذلك الملف: لو غيّرت منصة بنية رابط iframe العام مستقبلاً، الريل يُستبعَد
+  بصمت من الخلاصة (لا خطأ حي) — مقبول لمحتوى عرض لا معاملة مالية، غير مسجَّل كـ`DECISION-DEBT` (خطر
+  تافه بمعيار `AGENTS.md §12` البند 4، لا يحتاج قراراً بشرياً منفصلاً اليوم).
+
 ---
 
 ## 3.1 الجدول المركزي الموسَّع — كل جدول `IMPLEMENTED` عبر ثمانية أبعاد

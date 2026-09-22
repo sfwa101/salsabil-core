@@ -10,7 +10,10 @@ import type { Product } from '../catalog/types';
 
 // نفس نمط ORDER_STATUSES/ORDER_STATUS_LABELS_AR في src/core/modules/orders/types.ts —
 // مصدر واحد للقيم المسموحة (يطابق posts_post_type_check في قاعدة البيانات) وتسمياتها العربية
-export const POST_TYPES = ['post', 'reel', 'product_highlight', 'offer'] as const;
+//
+// DD-024 (2026-09-22/23) — أضافت 'article' + عرَّفت 'reel' رسمياً كفيديو مستورَد برابط خارجي (كان
+// يُعرَض كصورة عادية قبل هذا). راجع scripts/2026-09-22-dd024-bayan-post-shapes.sql للـMigration.
+export const POST_TYPES = ['post', 'reel', 'product_highlight', 'offer', 'article'] as const;
 export type PostType = (typeof POST_TYPES)[number];
 
 export const POST_TYPE_LABELS_AR: Record<PostType, string> = {
@@ -18,6 +21,21 @@ export const POST_TYPE_LABELS_AR: Record<PostType, string> = {
   reel: 'ريل',
   product_highlight: 'إبراز منتج',
   offer: 'عرض',
+  article: 'مقالة',
+};
+
+// DD-024 — منصات الفيديو المدعومة لتضمين حقيقي (embed) — راجع reel-embed.ts. بلا قيد قاعدة بيانات
+// عمداً (نفس فلسفة PostMediaLink أدناه) — 'other' تغطي أي منصة غير مُعرَّفة هنا صراحة (بلا تضمين
+// حقيقي ممكن لها اليوم، تُستبعَد من الخلاصة بدل عرض iframe مكسور — راجع ReelsDataSource).
+export const VIDEO_SOURCES = ['youtube', 'tiktok', 'instagram', 'facebook', 'other'] as const;
+export type VideoSource = (typeof VIDEO_SOURCES)[number];
+
+export const VIDEO_SOURCE_LABELS_AR: Record<VideoSource, string> = {
+  youtube: 'يوتيوب',
+  tiktok: 'تيك توك',
+  instagram: 'إنستجرام',
+  facebook: 'فيسبوك',
+  other: 'أخرى',
 };
 
 // خيار خيارات ربط الصورة — نفس نمط ProductOption (SizeOption | AddonOption) من اليوم 3
@@ -52,6 +70,9 @@ export interface Post {
   caption?: string;
   isPublished: boolean;
   priority: number; // ترتيب يدوي من الأدمن — نفس نمط categories.displayOrder
+  // DD-024 — تُستخدَم فقط لـpostType==='reel'، undefined لكل الأنواع الأخرى دائماً.
+  videoUrl?: string;
+  videoSource?: VideoSource;
   createdAt: string;
   updatedAt: string;
 }
@@ -84,6 +105,8 @@ export interface CreatePostInput {
   postType: PostType;
   caption?: string;
   priority?: number;
+  videoUrl?: string;
+  videoSource?: VideoSource;
 }
 
 export interface UpdatePostInput {
@@ -92,6 +115,8 @@ export interface UpdatePostInput {
   caption?: string;
   priority?: number;
   isPublished?: boolean;
+  videoUrl?: string;
+  videoSource?: VideoSource;
 }
 
 export interface CreatePostMediaInput {

@@ -14,11 +14,20 @@ source_of_truth: src/core/modules/bayan/types.ts (القيم المسموحة، 
 القيم المسموحة لـ`posts.post_type` مُعرَّفة في مكانين يجب أن يبقيا متطابقين دائماً:
 
 - **قاعدة البيانات:** قيد `posts_post_type_check` (SQL، غير قابل للتعديل من هذا المستند)
-- **الكود:** `POST_TYPES` في `src/core/modules/bayan/types.ts` — أربعة قيم: `post`, `reel`,
-  `product_highlight`, `offer`
+- **الكود:** `POST_TYPES` في `src/core/modules/bayan/types.ts` — خمس قيم: `post`, `reel`,
+  `product_highlight`, `offer`, `article`
 
 هذا الملف **لا يعيد تعريف** هذه القيم — أي تغيير عليها (إضافة/حذف نوع) خارج نطاق هذه الدفعة، يتطلب
 Migration جديدة على قاعدة البيانات (`docs/DATABASE.md`) وإعلاناً صريحاً حسب `AGENTS.md §13`.
+
+**تحديث `DD-024` (2026-09-22/23):** أضافت `article` (Migration:
+`scripts/2026-09-22-dd024-bayan-post-shapes.sql`، `docs/DATABASE.md` §3) وعرَّفت `reel` رسمياً كفيديو
+مستورَد برابط خارجي (`video_url`/`video_source` على `posts`) — كان يُعرَض قبلها كصورة عادية بلا فرق عن
+`post`. أشكال المحتوى الستة المُعرَّفة في `DD-024` (`docs/DECISIONS.md`): (1) reel، (2) صورة مفردة
+(`post`/`product_highlight`/`offer` بصورة `post_media` واحدة)، (3) معرض صور (نفس الأنواع بعدة صفوف
+`post_media`)، (4) مقالة بلا منتج (`article` بلا `post_products`)، (5) مقالة + منتج واحد (`article` +
+صف `post_products` واحد)، (6) مقالة + مجموعة منتجات (`article` + صفَّا `post_products` فأكثر — لا جدول
+`product_groups` منفصل، راجع `docs/DATABASE.md` للمبرر الكامل).
 
 ## 2. سجل التخصيص — `src/config/content-type-registry.ts`
 
@@ -42,10 +51,10 @@ Migration جديدة على قاعدة البيانات (`docs/DATABASE.md`) و�
 تغيير على `POST_TYPES` أو قاعدة البيانات:
 
 ```
-all      → بلا فلتر (كل الأنواع الأربعة)
+all      → بلا فلتر (كل الأنواع الخمسة)
 reel     → reel
 products → product_highlight + offer
-posts    → post
+posts    → post + article  (DD-024 — راجع §1 أعلاه)
 ```
 
 تبويب يختفي تلقائياً من `FeedTabBar` إن عُطِّلت كل الأنواع الواقعة تحته (`getVisibleFeedTabs()`) —

@@ -13,6 +13,7 @@ import type {
   PostProductLink,
   PostMediaLink,
   PostType,
+  VideoSource,
   CreatePostInput,
   UpdatePostInput,
   CreatePostMediaInput,
@@ -28,6 +29,9 @@ interface PostRow {
   caption: string | null;
   is_published: boolean;
   priority: number;
+  // DD-024 — scripts/2026-09-22-dd024-bayan-post-shapes.sql
+  video_url: string | null;
+  video_source: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -79,6 +83,11 @@ function toPost(row: PostRow): Post {
     caption: row.caption ?? undefined,
     isPublished: row.is_published,
     priority: row.priority,
+    // video_source بلا CHECK قاعدة بيانات (راجع تعليق Migration) — يُوثَق بالقيمة الخام دون تحقق هنا،
+    // نفس فلسفة PostMediaLink (jsonb) أدناه. مستهلكوه (ReelsDataSource) يتعاملون مع قيمة غير متوقَّعة
+    // بالاستبعاد الآمن، لا بافتراض صحتها.
+    videoUrl: row.video_url ?? undefined,
+    videoSource: (row.video_source as VideoSource | null) ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -208,6 +217,8 @@ export class BayanRepository {
         post_type: input.postType,
         caption: input.caption ?? null,
         priority: input.priority ?? 0,
+        video_url: input.videoUrl ?? null,
+        video_source: input.videoSource ?? null,
       })
       .select('*')
       .single();
@@ -222,6 +233,8 @@ export class BayanRepository {
     if (input.caption !== undefined) patch.caption = input.caption;
     if (input.priority !== undefined) patch.priority = input.priority;
     if (input.isPublished !== undefined) patch.is_published = input.isPublished;
+    if (input.videoUrl !== undefined) patch.video_url = input.videoUrl;
+    if (input.videoSource !== undefined) patch.video_source = input.videoSource;
 
     const { data, error } = await supabaseAdmin.from('posts').update(patch).eq('id', id).select('*').single();
     if (error) throw error;
