@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { Heart, Share2, ImageOff, ShoppingCart, ChevronLeft } from 'lucide-react';
+import { Heart, Share2, ImageOff, ShoppingCart, ChevronLeft, BadgeCheck } from 'lucide-react';
 import type { Product, Category } from '@/core/modules/catalog/types';
 import type { CartLineSummary } from '@/core/modules/cart/types';
 import { QuantityStepper } from '@/components/QuantityStepper';
@@ -27,10 +27,10 @@ export function MobileHeroProductCard({
   );
 
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-card shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-border/50">
+    <div className="relative overflow-hidden rounded-3xl sb-glass shadow-sm">
       {/* Social Header (Publisher) */}
       {category && (
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border/40">
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center shrink-0 border border-border overflow-hidden">
               <span className="text-sm font-bold text-muted-foreground">{category.name.substring(0, 1)}</span>
@@ -38,7 +38,7 @@ export function MobileHeroProductCard({
             <div className="flex flex-col">
               <span className="text-[13px] font-bold text-card-foreground flex items-center gap-1">
                 {category.name}
-                <span className="text-primary text-[10px]">✓</span>
+                <BadgeCheck size={14} className="text-primary fill-primary/10" />
               </span>
               <span className="text-[11px] text-muted-foreground font-medium">
                 {category.name}
@@ -59,10 +59,10 @@ export function MobileHeroProductCard({
 
         {/* Top Action Buttons (Left side) */}
         <div className="absolute left-3 top-3 z-10 flex flex-col gap-2 pointer-events-auto">
-          <button className="flex h-9 w-9 items-center justify-center rounded-full bg-card/90 text-muted-foreground shadow-[0_2px_8px_rgba(0,0,0,0.08)] backdrop-blur-md transition hover:text-destructive active:scale-95">
+          <button className="flex h-9 w-9 items-center justify-center rounded-full bg-card/80 text-muted-foreground shadow-[var(--sb-shadow-soft)] backdrop-blur-md transition hover:text-destructive active:scale-95">
             <Heart size={18} />
           </button>
-          <button className="flex h-9 w-9 items-center justify-center rounded-full bg-card/90 text-muted-foreground shadow-[0_2px_8px_rgba(0,0,0,0.08)] backdrop-blur-md transition hover:text-primary active:scale-95">
+          <button className="flex h-9 w-9 items-center justify-center rounded-full bg-card/80 text-muted-foreground shadow-[var(--sb-shadow-soft)] backdrop-blur-md transition hover:text-primary active:scale-95">
             <Share2 size={18} />
           </button>
         </div>

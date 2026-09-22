@@ -101,103 +101,110 @@ export function PostCard({ post, products }: PostCardProps) {
 
   return (
     <article className="flex flex-col gap-3">
-      {/* 1. Mobile Publisher Header (lg:hidden) */}
-      <div className="flex items-center justify-between px-2 lg:hidden mb-1">
-        <div className="flex items-center gap-2">
-          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-lg leading-none">ر</span>
-          </div>
-          <div className="flex flex-col">
-            <div className="flex items-center gap-1">
-              <span className="font-bold text-foreground text-[13px]">ريف المدينة</span>
-              <BadgeCheck className="text-primary" size={14} />
+      {/* FULL-VISUAL-IMPORT-REMAINING-SURFACES (2026-09-22) — غلاف واحد sb-glass/rounded-3xl يجمع
+          الأقسام 1-4 (كان بلا حاوية بصرية إطلاقاً، عناصر عائمة داخل خلية الشبكة مباشرة) — يطابق
+          لغة StemHeroFeedCard البصرية (/test-ui) بلا استيراد المكوّن نفسه (عقده لا يحتمل carousel
+          مُتعدِّد الصور/توجيه BottomSheet حسب postType/حارس خيار الحجم — كلها منطق حقيقي هنا، راجع
+          تقرير المهمة). الرف (قسم 6) وBottomSheet يبقيان خارج الغلاف — وحدتان بصريتان منفصلتان فعلاً. */}
+      <div className="rounded-3xl sb-glass overflow-hidden">
+        {/* 1. Mobile Publisher Header (lg:hidden) */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-2 lg:hidden">
+          <div className="flex items-center gap-2">
+            <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-primary/10 flex items-center justify-center">
+              <span className="text-primary font-bold text-lg leading-none">ر</span>
             </div>
-            <span className="text-[11px] text-muted-foreground">الخضار والفواكه · طازج اليوم</span>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-1">
+                <span className="font-bold text-foreground text-[13px]">ريف المدينة</span>
+                <BadgeCheck className="text-primary fill-primary/10" size={14} />
+              </div>
+              <span className="text-[11px] text-muted-foreground">الخضار والفواكه · طازج اليوم</span>
+            </div>
           </div>
+          <button className="flex items-center text-[11px] font-bold text-primary bg-primary/5 hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors">
+            القسم <ChevronLeft size={12} className="mr-0.5" />
+          </button>
         </div>
-        <button className="flex items-center text-[11px] font-bold text-primary bg-primary/10 px-3 py-1.5 rounded-full">
-          القسم <ChevronLeft size={12} className="mr-0.5" />
-        </button>
-      </div>
 
-      {/* 2. Hero Image */}
-      {post.media.length > 0 && (
-        <div className="relative">
-          <div
-            ref={scrollRef}
-            onScroll={handleScroll}
-            className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth rounded-2xl mx-1"
-          >
-            {post.media.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => handleMediaClick(m)}
-                className="relative aspect-square w-full shrink-0 snap-center"
-              >
-                <Image src={m.imageUrl} alt="" fill loading="lazy" sizes="100vw" className="object-contain" />
-              </button>
-            ))}
-          </div>
-
-          {/* Action Buttons Overlay - Mobile Only */}
-          <div className="absolute top-3 left-4 flex flex-col gap-2 lg:hidden">
-            <button className="flex h-9 w-9 items-center justify-center rounded-full bg-card/90 text-foreground shadow-sm backdrop-blur-sm hover:bg-card">
-              <Heart size={18} />
-            </button>
-            <button className="flex h-9 w-9 items-center justify-center rounded-full bg-card/90 text-foreground shadow-sm backdrop-blur-sm hover:bg-card">
-              <Share2 size={18} />
-            </button>
-          </div>
-
-          {post.media.length > 1 && (
-            <div className="absolute inset-x-0 bottom-2 flex justify-center gap-1.5">
-              {post.media.map((_, i) => (
-                <span
-                  key={i}
-                  className={`h-1.5 w-1.5 rounded-full transition ${
-                    i === activeIndex ? 'bg-primary' : 'bg-background/70'
-                  }`}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 3. Hero Product Details - Mobile Only */}
-      {products.length > 0 && (
-        <div className="flex flex-col gap-1 px-3 lg:hidden">
-          <h3 className="text-lg font-bold text-foreground">{products[0].name}</h3>
-          {post.caption && <p className="text-sm text-muted-foreground line-clamp-2">{post.caption}</p>}
-          <div className="mt-2 flex items-center justify-between">
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-extrabold leading-none text-foreground">{products[0].basePrice}</span>
-              <span className="text-sm font-medium text-muted-foreground">جنيه</span>
-            </div>
-            {!heroHasSizeOptions &&
-              (heroQuantity > 0 ? (
-                <QuantityStepper
-                  variant="pill"
-                  quantity={heroQuantity}
-                  onDecrement={() => setHeroQuantity(heroQuantity - 1)}
-                  onIncrement={() => setHeroQuantity(heroQuantity + 1)}
-                />
-              ) : (
+        {/* 2. Hero Image */}
+        {post.media.length > 0 && (
+          <div className="relative">
+            <div
+              ref={scrollRef}
+              onScroll={handleScroll}
+              className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth"
+            >
+              {post.media.map((m) => (
                 <button
+                  key={m.id}
                   type="button"
-                  onClick={() => setHeroQuantity(1)}
-                  className="flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-sm font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+                  onClick={() => handleMediaClick(m)}
+                  className="relative aspect-square w-full shrink-0 snap-center bg-muted"
                 >
-                  <Plus size={16} strokeWidth={3} /> أضف إلى السلة
+                  <Image src={m.imageUrl} alt="" fill loading="lazy" sizes="100vw" className="object-contain" />
                 </button>
               ))}
-          </div>
-        </div>
-      )}
+            </div>
 
-      {/* 4. Desktop Caption */}
-      {post.caption && <p className="hidden px-2 text-sm text-foreground lg:block">{post.caption}</p>}
+            {/* Action Buttons Overlay - Mobile Only */}
+            <div className="absolute top-3 left-4 flex flex-col gap-2 lg:hidden">
+              <button className="flex h-9 w-9 items-center justify-center rounded-full bg-card/80 text-muted-foreground shadow-[var(--sb-shadow-soft)] backdrop-blur-md transition hover:text-destructive active:scale-95">
+                <Heart size={18} />
+              </button>
+              <button className="flex h-9 w-9 items-center justify-center rounded-full bg-card/80 text-muted-foreground shadow-[var(--sb-shadow-soft)] backdrop-blur-md transition hover:text-primary active:scale-95">
+                <Share2 size={18} />
+              </button>
+            </div>
+
+            {post.media.length > 1 && (
+              <div className="absolute inset-x-0 bottom-2 flex justify-center gap-1.5">
+                {post.media.map((_, i) => (
+                  <span
+                    key={i}
+                    className={`h-1.5 w-1.5 rounded-full transition ${
+                      i === activeIndex ? 'bg-primary' : 'bg-background/70'
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 3. Hero Product Details - Mobile Only */}
+        {products.length > 0 && (
+          <div className="flex flex-col gap-1 px-4 pt-3 pb-4 lg:hidden">
+            <h3 className="text-lg font-bold text-foreground">{products[0].name}</h3>
+            {post.caption && <p className="text-sm text-muted-foreground line-clamp-2">{post.caption}</p>}
+            <div className="mt-2 flex items-center justify-between">
+              <div className="flex items-baseline gap-1">
+                <span className="text-2xl font-extrabold leading-none text-foreground">{products[0].basePrice}</span>
+                <span className="text-sm font-medium text-muted-foreground">جنيه</span>
+              </div>
+              {!heroHasSizeOptions &&
+                (heroQuantity > 0 ? (
+                  <QuantityStepper
+                    variant="pill"
+                    quantity={heroQuantity}
+                    onDecrement={() => setHeroQuantity(heroQuantity - 1)}
+                    onIncrement={() => setHeroQuantity(heroQuantity + 1)}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setHeroQuantity(1)}
+                    className="flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-sm font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+                  >
+                    <Plus size={16} strokeWidth={3} /> أضف إلى السلة
+                  </button>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {/* 4. Desktop Caption */}
+        {post.caption && <p className="hidden px-4 py-4 text-sm text-foreground lg:block">{post.caption}</p>}
+      </div>
 
       {products.length > 0 && (
         <HorizontalShelf title="منتجات هذا المنشور">
