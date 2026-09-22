@@ -3060,6 +3060,19 @@ Status: OPEN — لم يُبنَ أي دفتر عناوين هذه الجلسة�
 Related: docs/DATABASE.md:234، ADR-035 (بند 5)، AGENTS.md §2 (Capability Before Creation)، §17
           (Guardian Matrix — DB Schema)، src/components/ui/AddressModalStem.tsx، docs/DECISIONS.md
           ADR-009/ADR-033 (نموذج customer_orders/merchant_suborders الحالي)
+
+توسيع نطاق (2026-09-22، Homepage & Global Shell Visual Parity Pass): نفس الفجوة الجذرية (لا Backend
+          حقيقي لدفتر عناوين) لها ظهور ثانٍ حي على الإنتاج، مستقل عن AddressModalStem/Checkout أعلاه:
+          src/app/(reef)/ReefHeader.tsx (سطور 33-43، مُثبَّتة فعلياً منذ VERTICAL-SLICE-1-HEADER-
+          BOTTOMNAV-INTEGRATION، edc243a) يعرض منتقي عنوان تفاعلي في هيدر الموبايل بثلاثة عناوين
+          FAKE_ADDRESSES مُختلَقة بالكامل (القاهرة/الجيزة/الإسكندرية) — لا واحد منها حتى في مدينة
+          الخدمة الفعلية (المدينة المنورة). الملف يُفصِح عن هذا صراحة في تعليقه الخاص كاستمرار لنمط
+          FAKE_ADDRESSES القائم أصلاً في DeliveryAddressButton.tsx/HeaderSearchBar.tsx — ليس مخالفة
+          جديدة أُدخِلت في تلك الشريحة، لكنه ظهور حي إضافي لنفس القرار المفتوح أعلاه، اكتُشِف أثناء
+          فحص الواجهة الرئيسية لمهمة منفصلة (Homepage & Global Shell Visual Parity Pass، لم يُعدَّل
+          ضمنها — خارج نطاقها المُعلَن). يُضاف كمرشَّح صريح لطابور Backend (Fast-Track) عند استئناف
+          العمل على دفتر عناوين حقيقي — عندها يُحل كلا الظهورين (AddressModalStem وReefHeader) معاً
+          بنفس القدرة، لا بإصلاحين منفصلين.
 ```
 
 ### DD-024
