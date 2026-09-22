@@ -3027,6 +3027,41 @@ Related: SEC-P1-1 (استشهاد أصلي مكسور، راجع الملاحظ�
           docs/audits/2026-09-22-post-antigravity-integration-forensic-audit.md §19 (Findings 3، 6)
 ```
 
+### DD-023
+```
+Decision: هل تُبنى ميزة "دفتر عناوين" حقيقية (عناوين محفوظة متعددة لكل عميل، إضافة/اختيار/تعيين افتراضي)
+          كقدرة Backend جديدة (جدول + CRUD)، أم يبقى التصميم الحالي (عنوان توصيل واحد لكل طلب، JSONB على
+          customer_orders نفسه) هو المتعمَّد نهائياً؟
+Reason: مهمة "Vertical Slice: Checkout Address" (2026-09-22، جزء من إكمال P1 المتبقية بعد Slices 1-4)
+          تطلَّبت وصل AddressModalStem (src/components/ui/AddressModalStem.tsx) بمسار الدفع الحقيقي.
+          عقد الـStem الفعلي يفترض دفتر عناوين كامل (AddressItem[] — title/area/details/phone/isDefault،
+          قائمة اختيار، نموذج "إضافة عنوان جديد") — لا يوجد أي Backend لهذا المفهوم، بقرار توثيقي صريح
+          سابق (docs/DATABASE.md:234: "لا جدول عناوين منفصل قابل لإعادة الاستخدام، عمداً، خارج نطاق
+          Vertical Slice"). الـStem نفسه يُعوِّض الغياب بتخزين ذاتي كامل عبر localStorage (مفتاح
+          sb_saved_addresses_v1، مع عنوانين وهميين مبدئيين مضروبين) — أي وصل له كما صُمِّم يعني إما (أ)
+          شحن هذا التخزين الوهمي في مسار إنتاجي فعلي (يخالف ADR-035 بند 5 — "لا بنية إنتاج مزيَّفة
+          موازية") أو (ب) تعديل داخليات الـStem لتجريدها من القائمة/الإضافة/localStorage (يخالف قاعدة
+          "الـStems تُؤخَذ كما بُنيت — لا إعادة تصميم، فقط إصلاحات وظيفية مُفصَح عنها" المتَّبعة في كل
+          الشرائح السابقة). لا مسار ثالث عبر props وحدها — عقد الـStem (isOpen/onClose/
+          currentAddressTitle/onSelectAddress فقط) لا يملك أي وسيلة لقمع القائمة/النموذج الداخليين.
+          النموذج الحالي (Checkout يجمع عنواناً واحداً نصياً — line1/city/notes — يُخزَّن كـJSONB داخل
+          customer_orders نفسه) تُرك بلا تغيير، وهو المسار الحقيقي الوحيد العامل اليوم.
+Risk: بلا قرار: ميزة Checkout Address تبقى غير مكتملة مقارنة بتصميم الـStem الأصلي (لا سبيل لحفظ عنوان
+          لزيارة تالية، تجربة أقل سلاسة من منافس بدفتر عناوين حقيقي). مع قرار "نعم" بلا تنفيذ فوري:
+          يبقى فرق واضح بين ما يعرضه الـStem تصميمياً وما هو متاح فعلياً حتى يُبنى الـBackend. لا خطر
+          أمني/مالي مباشر — القرار منتج/تجربة استخدام، لا سلامة بيانات.
+Owner: Founder
+Created: 2026-09-22
+Review by: قبل أي محاولة مستقبلية لوصل AddressModalStem، أو عند أي مراجعة لتجربة Checkout الكاملة
+Blocking: NO — لا يمنع عمل Checkout الحالي (يعمل بعنوان واحد لكل طلب كما هو اليوم)؛ YES لإكمال هذه
+          الشريحة بالذات بالشكل المصمَّم أصلاً للـStem
+Status: OPEN — لم يُبنَ أي دفتر عناوين هذه الجلسة، بقرار مقصود (راجع Reason أعلاه)؛ Order Success
+          (الشريحة الأخرى من نفس المهمة) اكتملت ووُصلت ببيانات حقيقية بلا هذه العقبة
+Related: docs/DATABASE.md:234، ADR-035 (بند 5)، AGENTS.md §2 (Capability Before Creation)، §17
+          (Guardian Matrix — DB Schema)، src/components/ui/AddressModalStem.tsx، docs/DECISIONS.md
+          ADR-009/ADR-033 (نموذج customer_orders/merchant_suborders الحالي)
+```
+
 ---
 
 ### مراجَع ولم يُحوَّل إلى Decision Debt (مع التبرير)
