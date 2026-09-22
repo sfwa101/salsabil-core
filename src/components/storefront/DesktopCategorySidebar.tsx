@@ -1,10 +1,14 @@
 'use client';
 // TASK-18: كانت Category[] من جدول categories القديم — الآن District[] من catalog_districts
 // (catalogService.getDistricts()، 19 حياً حقيقياً مستورَداً TASK-17).
-import { useState } from 'react';
+//
+// FULL-VISUAL-IMPORT-REMAINING-SURFACES (2026-09-22) — غلاف زجاجي (--sb-bg-glass/--sb-radius-3xl/
+// --sb-shadow-apple-soft، نفس توكنز DesktopCartSidebar المجاورة له على نفس الصفحة) بدل bg-card
+// المسطَّحة القديمة، وأفاتار حرف أول بتدرّج --sb-primary/--sb-accent (نفس أسلوب الفallback الذي
+// أُضيف لـCategoryBarStem في الشريحة السابقة لنفس السبب: لا حقل صورة على District) بدل أيقونات
+// lucide الثابتة (Store/Leaf/...) التي لا علاقة لها بمحتوى الحي فعلياً. زر العنوان يبقى غير تفاعلي
+// كما كان (raison: منصة أحادية المدينة فعلياً — راجع تقرير المهمة، القرار نفسه من الشريحة السابقة).
 import Link from 'next/link';
-import { BottomSheet } from '@/components/BottomSheet';
-import { ChevronDown, Store, Leaf, Grape, Beef, Milk, Pill } from 'lucide-react';
 import type { District } from '@/core/modules/catalog/types';
 
 interface DesktopCategorySidebarProps {
@@ -12,19 +16,12 @@ interface DesktopCategorySidebarProps {
   customerAddress?: string;
 }
 
-function getCategoryIcon(index: number) {
-  const icons = [Store, Leaf, Grape, Beef, Milk, Pill];
-  const Icon = icons[index % icons.length];
-  return <Icon size={20} className="text-muted-foreground group-hover:text-primary transition-colors" />;
-}
-
 export function DesktopCategorySidebar({ districts = [], customerAddress }: DesktopCategorySidebarProps) {
-
   return (
-    <aside className="sticky top-16 h-[calc(100vh-4.5rem)] flex flex-col overflow-hidden bg-card rounded-2xl border border-border shadow-[var(--sb-shadow-soft)] hidden lg:flex">
+    <aside className="sticky top-16 h-[calc(100vh-4.5rem)] flex flex-col overflow-hidden bg-[var(--sb-bg-glass)] [backdrop-filter:var(--sb-blur-lg)] rounded-[var(--sb-radius-3xl)] border border-border/40 shadow-[var(--sb-shadow-apple-soft)] hidden lg:flex">
       {/* Delivery Address Selector */}
-      <button 
-        className="p-4 border-b border-border bg-muted/20 hover:bg-muted/50 transition-colors flex items-center justify-between group text-start w-full cursor-default"
+      <button
+        className="p-4 border-b border-border/40 bg-muted/10 flex items-center justify-between group text-start w-full cursor-default"
       >
         <div className="flex flex-col gap-1">
           <span className="text-xs text-muted-foreground font-medium">التوصيل إلى</span>
@@ -39,14 +36,16 @@ export function DesktopCategorySidebar({ districts = [], customerAddress }: Desk
             جاري التحميل...
           </div>
         ) : (
-          districts.map((district, index) => (
+          districts.map((district) => (
             <Link
               key={district.id}
               href={`/${district.slug}`}
-              className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors group"
+              className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors group"
             >
-              <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center group-hover:bg-primary/10 transition-colors">
-                {getCategoryIcon(index)}
+              <div className="w-9 h-9 shrink-0 rounded-[var(--sb-radius-2xl)] flex items-center justify-center bg-gradient-to-br from-[var(--sb-primary)] to-[var(--sb-accent)] overflow-hidden">
+                <span className="text-sm font-black text-[var(--sb-primary-foreground)]">
+                  {district.nameAr.charAt(0)}
+                </span>
               </div>
               <span className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
                 {district.nameAr}

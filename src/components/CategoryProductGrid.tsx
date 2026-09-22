@@ -19,7 +19,7 @@
 // يُصفَّر عند فتح منتج جديد كي لا يظهر اسم المنتج السابق للحظة قبل اكتمال الجلب.
 
 import { useState } from 'react';
-import { ProductCard } from '@/components/ProductCard';
+import { StemProductCardAdapter } from '@/components/StemProductCardAdapter';
 import { BottomSheet } from '@/components/BottomSheet';
 import { ProductSheetContent } from '@/components/ProductSheetContent';
 import type { Product } from '@/core/modules/catalog/types';
@@ -39,7 +39,7 @@ export function CategoryProductGrid({ products, cartLines }: { products: Product
     <>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
         {products.map((product) => (
-          <ProductCard
+          <StemProductCardAdapter
             key={product.id}
             product={product}
             cartLine={cartLineByProductId.get(product.id)}
