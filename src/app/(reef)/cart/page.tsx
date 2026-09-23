@@ -2,7 +2,7 @@
 // REBUILD-CART-CHECKOUT-FROM-LOVABLE-REFERENCE دفعة 1: إعادة بناء بصرية/بنيوية فوق قدرات
 // حقيقية موجودة فعلاً — تجميع حسب التاجر (product.tenantId → merchant.businessName)، بطاقات
 // منتج غنية بالصور (CartLineItem.tsx)، ورف "غالباً ما يُشترى معه" (ordersService الجديدة
-// getMostOrderedProductIds + catalogService.getProductsByIds القائمة، عبر ProductCard.tsx نفسه —
+// getMostOrderedProductIds + catalogService.getProductsByIds القائمة، عبر StemProductCardAdapter —
 // لا مكوّن جديد للبطاقة الفردية). لا صفحة/جدول جديد — كل هذا فوق Schema قائم بالكامل.
 //
 // مُستبعَد صراحة (لا بنية بيانات له في هذا المشروع بعد — فجوة موثَّقة، لا اختراع):
@@ -15,8 +15,8 @@ import { getCartSummaryAction } from './actions';
 import { merchantService } from '@/core/modules/merchant/merchant.service';
 import { ordersService } from '@/core/modules/orders/orders.service';
 import { catalogService } from '@/core/modules/catalog/catalog.service';
-import { HorizontalShelf } from '@/components/HorizontalShelf';
-import { ProductCard } from '@/components/ProductCard';
+import { HorizontalShelfStem } from '@/components/ui/HorizontalShelfStem';
+import { StemProductCardAdapter } from '@/components/StemProductCardAdapter';
 import { CartStemView } from './CartStemView';
 import { groupByTenant } from './cart-grouping';
 
@@ -72,21 +72,18 @@ export default async function CartPage() {
           يزال قائماً بلا استدعاء لغرض التراجع). بانر تعدد التجار/زر إتمام الطلب انتقلا داخل
           CartStemView أيضاً — كلاهما يعتمدان على groups، الذي أصبح تفاعلياً هناك بعد كل تعديل حقيقي
           (راجع تعليق CartStemView.tsx للتفصيل). */}
-      <CartStemView
-        initialGroups={groups}
-        initialTotal={summary.total}
-        merchantNames={Object.fromEntries(merchantNameById)}
-      />
+      <CartStemView initialGroups={groups} />
 
       {crossSellProducts.length > 0 && (
         <div className="mt-6">
-          <HorizontalShelf title="غالباً ما يُشترى معه">
-            {crossSellProducts.map((product) => (
+          <HorizontalShelfStem
+            title="غالباً ما يُشترى معه"
+            items={crossSellProducts.map((product) => (
               <div key={product.id} className="w-40 shrink-0">
-                <ProductCard product={product} />
+                <StemProductCardAdapter product={product} />
               </div>
             ))}
-          </HorizontalShelf>
+          />
         </div>
       )}
     </main>

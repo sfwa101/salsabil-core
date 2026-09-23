@@ -5,6 +5,8 @@ export interface QuickViewProductSnapshot {
   imageUrl?: string;
   description?: string;
   unit?: string;
+  currentQuantity?: number;
+  requiresConfiguration?: boolean;
   publisher?: {
     name: string;
   };
@@ -25,6 +27,7 @@ export type UIAction =
   // §D). هوية المنتج + دلتا/قيمة الكمية المطلوبة فقط — السعر الفعلي يُحسَب دائماً من الخادم عبر
   // AddItemInput (لا حقل سعر فيه أصلاً، core/modules/cart/types.ts).
   | { type: 'ADD_TO_CART'; payload: { id: string; amount?: number; action?: 'increment' | 'decrement' | 'set' } }
+  | { type: 'OPEN_CONFIGURATION'; payload: { id: string } }
   | { type: 'OPEN_QUICK_VIEW'; payload: { product: QuickViewProductSnapshot } }
   | { type: 'OPEN_REEL'; payload: ReelSnapshot }
   | { type: 'NAVIGATE'; payload: { destination: string } }

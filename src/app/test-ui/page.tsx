@@ -23,6 +23,7 @@ import { WorldsTrayStem } from '@/components/ui/WorldsTrayStem';
 import { MobileCartSheetStem } from '@/components/ui/MobileCartSheetStem';
 import { DesktopHeaderStem } from '@/components/ui/DesktopHeaderStem';
 import { DummyCartProvider, useDummyCart } from '@/context/DummyCartContext';
+import { CartTotalProvider } from '@/components/CartTotalProvider';
 import Image from 'next/image';
 
 import { Wallet, MapPin, ChevronDown, Plus, Search, Loader2, ShoppingCart, ChevronLeft } from 'lucide-react';
@@ -208,7 +209,7 @@ function DesktopCartSidebar({ products }: { products: any[] }) {
   };
 
   return (
-    <aside className="w-[380px] shrink-0 sticky top-24 h-[calc(100vh-7rem)] flex flex-col bg-white/40 backdrop-blur-xl rounded-3xl p-4 border border-white/50 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden">
+    <aside className="w-[380px] shrink-0 sticky top-24 h-[calc(100vh-7rem)] flex flex-col bg-card/40 backdrop-blur-xl rounded-3xl p-4 border border-border/50 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden">
         <h2 className="font-bold text-lg text-foreground mb-4 shrink-0">سلة المشتريات</h2>
         {totalItems === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center gap-3">
@@ -221,7 +222,17 @@ function DesktopCartSidebar({ products }: { products: any[] }) {
               <CartUpgradeBannerStem currentTotal={safeTotalPrice} />
               
               {Object.entries(vendorGroups).map(([vendorId, group]) => (
-                <VendorCartGroupStem key={vendorId} vendorId={vendorId} vendorName={group.vendorName} items={group.items} onUpdateQuantity={updateQuantity} />
+                <VendorCartGroupStem
+                  key={vendorId}
+                  vendorId={vendorId}
+                  vendorName={group.vendorName}
+                  lines={group.items.map(item => ({
+                    item: { id: item.id, cartId: 'dummy', productId: item.id, quantity: item.quantity, selection: {}, createdAt: '' },
+                    product: { id: item.id, name: item.title, basePrice: item.price, unit: item.unit || 'حبة', tenantId: vendorId, imageUrl: item.imageUrl, categoryId: null, options: [], isActive: true, createdAt: '' },
+                    unitPrice: item.price,
+                    lineTotal: item.price * item.quantity
+                  })) as any[]}
+                />
               ))}
               
               <div className="text-center text-[11px] text-muted-foreground py-1">
@@ -254,7 +265,7 @@ function DesktopCartSidebar({ products }: { products: any[] }) {
               <CartBreakdownStem subtotal={safeTotalPrice} tipAmount={safeTipAmount} walletAmount={safeWalletAmount} finalTotal={finalTotal} />
             </div>
             
-            <div className="pt-3 border-t border-slate-100/80 bg-white/40 backdrop-blur-sm shrink-0">
+            <div className="pt-3 border-t border-border/80 bg-card/40 backdrop-blur-sm shrink-0">
               <button onClick={handleCheckout} className="w-full h-12 rounded-xl bg-primary hover:opacity-90 text-primary-foreground font-bold flex items-center justify-between px-4 shadow-md transition-all active:scale-[0.98]">
                 <span>إتمام الطلب</span>
                 <span>{finalTotal} ج.م</span>
@@ -493,12 +504,12 @@ export function TestUIContent() {
   }, [resolvedPage, activeFeedTab]);
 
   const renderEmptyState = () => (
-    <div className="w-full flex flex-col items-center justify-center py-16 px-4 bg-white/40 backdrop-blur-md rounded-3xl border border-white/50 shadow-sm mt-4">
-      <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 mb-4">
+    <div className="w-full flex flex-col items-center justify-center py-16 px-4 bg-card/40 backdrop-blur-md rounded-3xl border border-border/50 shadow-sm mt-4">
+      <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center text-muted-foreground mb-4">
         <Search size={32} />
       </div>
-      <h3 className="text-lg font-bold text-slate-700 mb-2">لا توجد نتائج مطابقة لبحثك</h3>
-      <p className="text-sm text-slate-500 mb-6 max-w-sm text-center">جرب استخدام كلمات مختلفة أو تصفح الأقسام للعثور على ما تبحث عنه.</p>
+      <h3 className="text-lg font-bold text-foreground mb-2">لا توجد نتائج مطابقة لبحثك</h3>
+      <p className="text-sm text-muted-foreground mb-6 max-w-sm text-center">جرب استخدام كلمات مختلفة أو تصفح الأقسام للعثور على ما تبحث عنه.</p>
       <button 
         onClick={() => { setSearchQuery(''); handleCategorySelect('all'); }} 
         className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-sm hover:opacity-90 active:scale-95 transition-all"
@@ -541,11 +552,18 @@ export function TestUIContent() {
         <MobileCartSheetStem 
           isOpen={isCartOpen} 
           onClose={() => setIsCartOpen(false)} 
-          products={products}
-          items={items}
+          lines={Object.entries(items).map(([id, item]) => {
+            const product = products.find(p => p.id === id);
+            if (!product) return null;
+            return {
+              item: { id, cartId: 'dummy', productId: id, quantity: item.quantity, selection: {}, createdAt: '' },
+              product: { id, name: product.title, basePrice: product.price, unit: product.publisher?.categoryName || 'حبة', tenantId: null, imageUrl: product.imageUrl, categoryId: null, options: [], isActive: true, createdAt: '' },
+              unitPrice: item.price ?? product.price,
+              lineTotal: (item.price ?? product.price) * item.quantity
+            };
+          }).filter(Boolean) as any[]}
           totalItems={totalItems}
           totalPrice={totalPrice}
-          onAction={runtime.dispatch}
         />
         
         <section className="mt-2 flex flex-col gap-6 pb-28">
@@ -566,7 +584,7 @@ export function TestUIContent() {
               
               {/* Infinite Scroll Loader Stub */}
               <div className="w-full flex items-center justify-center py-8">
-                <div className="w-10 h-10 rounded-full bg-white/60 shadow-sm flex items-center justify-center border border-white">
+                <div className="w-10 h-10 rounded-full bg-card/60 shadow-sm flex items-center justify-center border border-border">
                   <Loader2 className="animate-spin text-primary" size={20} />
                 </div>
               </div>
@@ -588,34 +606,34 @@ export function TestUIContent() {
       <div className="hidden lg:flex flex-row w-full max-w-[1400px] mx-auto px-6 py-6 gap-6 items-start">
         
         {/* العمود الأيمن (1): شريط الأقسام الجانبي الثابت */}
-        <aside className="w-60 shrink-0 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto scrollbar-none bg-white/40 backdrop-blur-xl rounded-3xl p-4 border border-white/50 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col gap-4">
+        <aside className="w-60 shrink-0 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto scrollbar-none bg-card/40 backdrop-blur-xl rounded-3xl p-4 border border-border/50 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col gap-4">
           
           {/* محدد العناوين */}
           <div className="relative z-20">
             <button 
               onClick={() => setIsAddressModalOpen(true)}
-              className="w-full flex items-center justify-between bg-white/80 border border-slate-200/50 p-2.5 rounded-xl hover:bg-white transition-colors text-right"
+              className="w-full flex items-center justify-between bg-card/80 border border-border/50 p-2.5 rounded-xl hover:bg-card transition-colors text-right"
             >
               <div className="flex items-center gap-2 overflow-hidden">
                 <MapPin size={16} className="text-primary shrink-0" />
-                <span className="text-xs font-semibold text-slate-700 truncate">{selectedAddress}</span>
+                <span className="text-xs font-semibold text-foreground truncate">{selectedAddress}</span>
               </div>
-              <ChevronDown size={14} className="text-slate-400 shrink-0" />
+              <ChevronDown size={14} className="text-muted-foreground shrink-0" />
             </button>
           </div>
 
           <div>
-            <h3 className="font-bold text-sm text-slate-800 mb-3 px-2">الأقسام</h3>
+            <h3 className="font-bold text-sm text-foreground mb-3 px-2">الأقسام</h3>
             <div className="flex flex-col gap-1.5">
               {categories.map((cat) => (
                 <button
                   key={cat.id}
                   onClick={() => handleCategorySelect(cat.id)}
                   className={`flex items-center gap-3 p-2 rounded-xl text-xs font-semibold transition-all ${
-                    cat.active ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'
+                    cat.active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
                   }`}
                 >
-                  <div className="w-8 h-8 rounded-lg bg-slate-100 overflow-hidden relative shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-muted overflow-hidden relative shrink-0">
                     {cat.image && <Image alt={cat.name} className="object-cover" fill src={cat.image}/>}
                   </div>
                   <span>{cat.name}</span>
@@ -646,7 +664,7 @@ export function TestUIContent() {
                 
                 {/* Infinite Scroll Loader Stub */}
                 <div className="w-full flex items-center justify-center py-8">
-                  <div className="w-10 h-10 rounded-full bg-white/60 shadow-sm flex items-center justify-center border border-white">
+                  <div className="w-10 h-10 rounded-full bg-card/60 shadow-sm flex items-center justify-center border border-border">
                     <Loader2 size={20} className="text-primary animate-spin" />
                   </div>
                 </div>
@@ -684,10 +702,17 @@ export function TestUIContent() {
   );
 }
 
+function CartTotalAdapter({ children }: { children: React.ReactNode }) {
+  const { totalPrice, totalItems } = useDummyCart();
+  return <CartTotalProvider total={totalPrice} itemCount={totalItems}>{children}</CartTotalProvider>;
+}
+
 export default function TestUIPage() {
   return (
     <DummyCartProvider>
-      <TestUIContent />
+      <CartTotalAdapter>
+        <TestUIContent />
+      </CartTotalAdapter>
     </DummyCartProvider>
   );
 }

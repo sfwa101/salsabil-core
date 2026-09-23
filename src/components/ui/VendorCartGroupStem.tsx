@@ -2,33 +2,19 @@
 
 import React from 'react';
 import { Store } from 'lucide-react';
-import { CartLineItemStem } from './CartLineItemStem';
+import { CartLineItem } from '@/components/CartLineItem';
+import type { CartLineSummary } from '@/core/modules/cart/types';
 
 export interface VendorGroupProps {
   vendorId: string;
   vendorName: string;
-  items: {
-    id: string;
-    title: string;
-    price: number;
-    quantity: number;
-    imageUrl?: string;
-    unit?: string;
-  }[];
-  onUpdateQuantity: (id: string, price: number, newQuantity: number) => void;
+  lines: CartLineSummary[];
 }
 
 export const VendorCartGroupStem: React.FC<VendorGroupProps> = ({
   vendorName,
-  items,
-  onUpdateQuantity
+  lines,
 }) => {
-  const groupTotal = items.reduce((acc, item) => {
-    const safePrice = Number(item.price) || 0;
-    const safeQty = Number(item.quantity) || 0;
-    return acc + safePrice * safeQty;
-  }, 0);
-
   return (
     <div className="mb-6 flex flex-col gap-2">
       {/* Vendor Header */}
@@ -39,19 +25,17 @@ export const VendorCartGroupStem: React.FC<VendorGroupProps> = ({
           </div>
           <span className="text-sm font-bold text-foreground">{vendorName}</span>
           <span className="text-[10px] font-bold text-muted-foreground bg-[var(--sb-muted)] px-1.5 py-0.5 rounded-md">
-            {items.length} منتجات
+            {lines.length} منتجات
           </span>
         </div>
-        <span className="text-xs font-bold text-foreground">{groupTotal} ج.م</span>
       </div>
 
       {/* Group Items */}
       <div className="flex flex-col gap-2">
-        {items.map(item => (
-          <CartLineItemStem 
-            key={item.id}
-            {...item}
-            onUpdateQuantity={onUpdateQuantity}
+        {lines.map(line => (
+          <CartLineItem
+            key={line.item.id}
+            line={line}
           />
         ))}
       </div>

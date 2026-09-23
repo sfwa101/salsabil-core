@@ -21,6 +21,7 @@ import { SDUIComponent } from '@/sdui/contracts/component-contracts';
 import type { SDUIPage } from '@/sdui/schema/page.schema';
 import { StemProductCard } from '@/components/ui/StemProductCard';
 import { HorizontalShelfStem } from '@/components/ui/HorizontalShelfStem';
+import { toProductCardPresentation } from '@/components/product-presentation';
 import type { ProductCardStemProps } from '@/types/ui-contracts';
 import type { Product } from '@/core/modules/catalog/types';
 import {
@@ -33,16 +34,12 @@ import {
 // --- Product View Model Adapter (§7) — Product حقيقي → ProductCardStemProps الذي يحتاجه Stem ---
 function mapProductToStemProps(product: Product, quantity: number): ProductCardStemProps {
   return {
-    id: product.id,
-    title: product.name,
-    price: product.basePrice,
-    imageUrl: product.imageUrl,
+    ...toProductCardPresentation(product, quantity),
     publisher: {
       role: product.tenantId ? 'merchant' : 'admin',
       name: 'سلسبيل',
       categoryName: product.unit,
     },
-    quantity,
   };
 }
 

@@ -8,6 +8,7 @@
 // أُضيف لـCategoryBarStem في الشريحة السابقة لنفس السبب: لا حقل صورة على District) بدل أيقونات
 // lucide الثابتة (Store/Leaf/...) التي لا علاقة لها بمحتوى الحي فعلياً. زر العنوان يبقى غير تفاعلي
 // كما كان (raison: منصة أحادية المدينة فعلياً — راجع تقرير المهمة، القرار نفسه من الشريحة السابقة).
+import { MapPin, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import type { District } from '@/core/modules/catalog/types';
 
@@ -18,16 +19,19 @@ interface DesktopCategorySidebarProps {
 
 export function DesktopCategorySidebar({ districts = [], customerAddress }: DesktopCategorySidebarProps) {
   return (
-    <aside className="sticky top-16 h-[calc(100vh-4.5rem)] flex flex-col overflow-hidden bg-[var(--sb-bg-glass)] [backdrop-filter:var(--sb-blur-lg)] rounded-[var(--sb-radius-3xl)] border border-border/40 shadow-[var(--sb-shadow-apple-soft)] hidden lg:flex">
+    <aside className="sticky top-20 h-[calc(100vh-6.5rem)] flex flex-col gap-4 overflow-hidden bg-[var(--sb-bg-glass)] [backdrop-filter:var(--sb-blur-lg)] rounded-[var(--sb-radius-3xl)] border border-border/40 shadow-[var(--sb-shadow-apple-soft)] hidden lg:flex p-4">
       {/* Delivery Address Selector */}
-      <button
-        className="p-4 border-b border-border/40 bg-muted/10 flex items-center justify-between group text-start w-full cursor-default"
-      >
-        <div className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground font-medium">التوصيل إلى</span>
-          <span className="font-bold text-sm text-foreground truncate max-w-[150px]">{customerAddress || 'المدينة المنورة'}</span>
-        </div>
-      </button>
+      <div className="relative z-20 shrink-0">
+        <button
+          className="w-full flex items-center justify-between bg-background border border-border/50 p-2.5 rounded-xl hover:bg-muted/50 transition-colors text-right cursor-default"
+        >
+          <div className="flex items-center gap-2 overflow-hidden">
+            <MapPin size={16} className="text-primary shrink-0" />
+            <span className="text-xs font-semibold text-foreground truncate">{customerAddress || 'المدينة المنورة'}</span>
+          </div>
+          <ChevronDown size={14} className="text-muted-foreground shrink-0" />
+        </button>
+      </div>
 
       {/* District List */}
       <div className="flex-1 overflow-y-auto py-2 flex flex-col">

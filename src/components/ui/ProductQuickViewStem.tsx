@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { X, Minus, Plus, ShoppingCart } from 'lucide-react';
+import { X, Minus, Plus, ShoppingCart, SlidersHorizontal } from 'lucide-react';
 import { UIAction, QuickViewProductSnapshot } from '@/sdui/actions/action-contracts';
 
 export interface ProductQuickViewProps {
@@ -10,7 +10,7 @@ export interface ProductQuickViewProps {
 }
 
 export const ProductQuickViewStem: React.FC<ProductQuickViewProps> = ({ product, onClose, onAction }) => {
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState(Math.max(1, product.currentQuantity ?? 1));
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -24,6 +24,11 @@ export const ProductQuickViewStem: React.FC<ProductQuickViewProps> = ({ product,
   if (!product) return null;
 
   const handleAddToCart = () => {
+    if (product.requiresConfiguration) {
+      onAction?.({ type: 'OPEN_CONFIGURATION', payload: { id: product.id } });
+      onClose();
+      return;
+    }
     onAction?.({ type: 'ADD_TO_CART', payload: { id: product.id, amount: quantity, action: 'set' } });
     onClose();
   };
@@ -70,7 +75,9 @@ export const ProductQuickViewStem: React.FC<ProductQuickViewProps> = ({ product,
 
             {/* Price Badge over image for mobile */}
             <div className="absolute bottom-4 left-4 lg:hidden bg-card/90 backdrop-blur-md px-3 py-1.5 rounded-2xl shadow-lg">
-              <span className="font-extrabold text-primary text-lg">{product.price} ج.م</span>
+              <span className="font-extrabold text-primary text-lg">
+                {product.requiresConfiguration ? 'يبدأ من ' : ''}{product.price} ج.م
+              </span>
             </div>
           </div>
 
@@ -90,7 +97,9 @@ export const ProductQuickViewStem: React.FC<ProductQuickViewProps> = ({ product,
 
             {/* Price (Desktop) */}
             <div className="hidden lg:block">
-              <span className="text-3xl font-extrabold text-primary">{product.price} ج.م</span>
+              <span className="text-3xl font-extrabold text-primary">
+                {product.requiresConfiguration ? 'يبدأ من ' : ''}{product.price} ج.م
+              </span>
             </div>
 
             {/* VISUAL-PARITY-PASS (2026-09-22) — استبدال fallback نصي كان يدّعي صفات تسويقية غير
@@ -106,7 +115,7 @@ export const ProductQuickViewStem: React.FC<ProductQuickViewProps> = ({ product,
             {/* Quantity and Add to Cart */}
             <div className="mt-auto pt-6 flex flex-col gap-4">
               
-              <div className="flex items-center justify-between bg-muted p-2 rounded-2xl border border-border">
+              {!product.requiresConfiguration && <div className="flex items-center justify-between bg-muted p-2 rounded-2xl border border-border">
                 <span className="font-bold text-foreground px-3">الكمية</span>
                 <div className="flex items-center gap-4 bg-card rounded-xl shadow-sm border border-border p-1">
                   <button
@@ -123,14 +132,14 @@ export const ProductQuickViewStem: React.FC<ProductQuickViewProps> = ({ product,
                     <Plus size={20} strokeWidth={2.5} />
                   </button>
                 </div>
-              </div>
+              </div>}
 
               <button
                 onClick={handleAddToCart}
                 className="w-full h-14 bg-primary hover:opacity-90 active:scale-[0.98] text-primary-foreground rounded-2xl flex items-center justify-center gap-3 shadow-lg transition-all"
               >
-                <ShoppingCart size={22} strokeWidth={2.5} />
-                <span className="font-bold text-lg">أضف للسلة - {(product.price || 0) * quantity} ج.م</span>
+                {product.requiresConfiguration ? <SlidersHorizontal size={22} strokeWidth={2.5} /> : <ShoppingCart size={22} strokeWidth={2.5} />}
+                <span className="font-bold text-lg">{product.requiresConfiguration ? 'اختر الخيارات' : 'أضف للسلة'}</span>
               </button>
             </div>
 

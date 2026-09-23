@@ -18,29 +18,20 @@
 // (يبقى بالكامل في الكود، غير مُستدعى من أي مكان حالياً) — قرار عرض منتج (تبسيط تفاعل السلة في
 // الهيدر مقابل نافذة معاينة سريعة)، لا قيداً تقنياً. راجع تقرير هذه المهمة للتفصيل الكامل.
 //
-// عنوان التوصيل (FAKE_ADDRESSES) والبحث (توست "قريباً") بيانات/سلوك وهمية بحتة — نفس القيد المُصرَّح
-// به صراحة أصلاً في DeliveryAddressButton.tsx/HeaderSearchBar.tsx (لا نطاق عناوين حقيقي، لا محرك بحث
-// حقيقي بعد)، مُعاد إنتاجهما هنا بنفس الآلية بالضبط لأن MobileHeaderStem/DesktopHeaderStem يعرضان
-// عنصري العنوان/البحث بأنفسهما (لا يستضيفان DeliveryAddressButton/HeaderSearchBar كمكوّنين فرعيين).
+// لا نطاق عناوين أو بحث حقيقي بعد. لذلك يعرض العنوان حالة "غير محدد" غير تفاعلية، والبحث يعلن
+// صراحة أنه قريباً؛ لا تُحقن بيانات عنوان وهمية في مسار الإنتاج.
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DesktopHeaderStem } from '@/components/ui/DesktopHeaderStem';
 import { MobileHeaderStem } from '@/components/ui/MobileHeaderStem';
-import { BottomSheet } from '@/components/BottomSheet';
 import { useCartTotal } from '@/components/CartTotalProvider';
-
-interface FakeAddress {
-  id: string;
-  label: string;
-  detail: string;
-}
-
-const FAKE_ADDRESSES: FakeAddress[] = [
-  { id: '1', label: 'المنزل', detail: 'شارع النموذج 12، القاهرة' },
-  { id: '2', label: 'العمل', detail: 'برج التجربة، الجيزة' },
-  { id: '3', label: 'عنوان آخر', detail: 'ميدان الاختبار، الإسكندرية' },
-];
+import { useCartToast } from '@/components/useCartToast';
+import { awaitPendingCartMutations } from '@/components/cartMutationGate';
+import { getCartSummaryAction } from '@/app/(reef)/cart/actions';
+import { useScrollDirection } from '@/hooks/useScrollDirection';
+import { MobileCartSheetStem } from '@/components/ui/MobileCartSheetStem';
+import type { CartLineSummary } from '@/core/modules/cart/types';
 
 const FEED_TAB_HREF: Record<string, string> = {
   all: '/?tab=all',
@@ -50,17 +41,21 @@ const FEED_TAB_HREF: Record<string, string> = {
 
 const SEARCH_TOAST_MS = 2000;
 
-export function ReefHeader({ cartItemCount }: { cartItemCount: number }) {
+export function ReefHeader({ lines }: { lines: CartLineSummary[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { total } = useCartTotal();
+  const { total, itemCount, synchronizeFromServer } = useCartTotal();
+  const { showToast, toastNode } = useCartToast();
 
-  const [addressOpen, setAddressOpen] = useState(false);
-  const [selectedAddressId, setSelectedAddressId] = useState(FAKE_ADDRESSES[0].id);
+  const showBars = useScrollDirection();
+
   const [searchToast, setSearchToast] = useState(false);
+  const [cartSheetOpen, setCartSheetOpen] = useState(false);
+  const [cartSheetLines, setCartSheetLines] = useState(lines);
 
-  const selectedAddress = FAKE_ADDRESSES.find((a) => a.id === selectedAddressId) ?? FAKE_ADDRESSES[0];
   const activeFeedTab = searchParams.get('tab') ?? 'all';
+
+  useEffect(() => setCartSheetLines(lines), [lines]);
 
   function handleSearch() {
     setSearchToast(true);
@@ -72,19 +67,40 @@ export function ReefHeader({ cartItemCount }: { cartItemCount: number }) {
     if (href) router.push(href);
   }
 
+  async function handleOpenCart() {
+    try {
+      await awaitPendingCartMutations();
+      const summary = await getCartSummaryAction();
+      const confirmedItemCount = summary.lines.reduce((sum, line) => sum + line.item.quantity, 0);
+      synchronizeFromServer(summary.total, confirmedItemCount);
+      setCartSheetLines(summary.lines);
+      setCartSheetOpen(true);
+    } catch {
+      showToast('تعذّر تحميل السلة، حاول مرة أخرى');
+    }
+  }
+
   return (
     <>
       <DesktopHeaderStem storeName="ريف المدينة" onSearch={handleSearch} />
       <MobileHeaderStem
         storeName="ريف المدينة"
-        currentAddress={`${selectedAddress.label} — ${selectedAddress.detail}`}
+        currentAddress="العنوان غير محدد"
         onToggleWorlds={() => router.push('/')}
-        onOpenCart={() => router.push('/cart')}
-        onAddressClick={() => setAddressOpen(true)}
+        onOpenCart={() => void handleOpenCart()}
         onSearch={handleSearch}
         activeFeedTab={activeFeedTab}
         onFeedTabChange={handleFeedTabChange}
-        totalItems={cartItemCount}
+        totalItems={itemCount}
+        totalPrice={total}
+        showBars={showBars}
+      />
+
+      <MobileCartSheetStem
+        isOpen={cartSheetOpen}
+        onClose={() => setCartSheetOpen(false)}
+        lines={cartSheetLines}
+        totalItems={itemCount}
         totalPrice={total}
       />
 
@@ -96,27 +112,7 @@ export function ReefHeader({ cartItemCount }: { cartItemCount: number }) {
         </div>
       )}
 
-      <BottomSheet open={addressOpen} onClose={() => setAddressOpen(false)} title="اختر العنوان">
-        <ul className="flex flex-col gap-2">
-          {FAKE_ADDRESSES.map((address) => (
-            <li key={address.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedAddressId(address.id);
-                  setAddressOpen(false);
-                }}
-                className={`flex w-full flex-col items-start gap-1 rounded-xl border p-3 text-start transition ${
-                  address.id === selectedAddressId ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'
-                }`}
-              >
-                <span className="font-medium text-foreground">{address.label}</span>
-                <span className="text-sm text-muted-foreground">{address.detail}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </BottomSheet>
+      {toastNode}
     </>
   );
 }

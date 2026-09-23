@@ -4,13 +4,16 @@ import React from 'react';
 import { ProductCardStemProps } from '@/types/ui-contracts';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Plus, Minus } from 'lucide-react';
+import { Plus, Minus, SlidersHorizontal } from 'lucide-react';
 
 export const StemProductCard: React.FC<ProductCardStemProps> = ({
   id,
   title,
   price,
   imageUrl,
+  description,
+  unit,
+  requiresConfiguration,
   badge,
   publisher,
   quantity = 0,
@@ -34,11 +37,31 @@ export const StemProductCard: React.FC<ProductCardStemProps> = ({
     }
   };
 
+  const handleConfiguration = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onAction?.({ type: 'OPEN_CONFIGURATION', payload: { id } });
+  };
+
   return (
     <div 
       dir="rtl"
       className="w-[145px] sm:w-[165px] md:w-[180px] shrink-0 bg-[var(--sb-bg-glass)] [backdrop-filter:var(--sb-blur-md)] rounded-[var(--sb-radius-2xl)] shadow-[var(--sb-shadow-apple-soft)] hover:shadow-md transition-shadow p-0 overflow-hidden flex flex-col justify-between cursor-pointer group border border-border/40"
-      onClick={() => onAction && onAction({ type: 'OPEN_QUICK_VIEW', payload: { product: { id, title, price, imageUrl, publisher } } })}
+      onClick={() => onAction && onAction({
+        type: 'OPEN_QUICK_VIEW',
+        payload: {
+          product: {
+            id,
+            title,
+            price,
+            imageUrl,
+            description,
+            unit,
+            currentQuantity: requiresConfiguration ? undefined : quantity,
+            requiresConfiguration,
+            publisher,
+          },
+        },
+      })}
     >
       {/* Image Container */}
       <div className="aspect-square w-full rounded-none overflow-hidden bg-[var(--sb-muted)] relative flex items-center justify-center shrink-0">
@@ -69,7 +92,7 @@ export const StemProductCard: React.FC<ProductCardStemProps> = ({
       {/* Body Details Container */}
       <div className="p-3 flex flex-col justify-between flex-1">
         <div className="flex flex-col text-right">
-          {publisher.role === 'admin' ? (
+          {publisher?.role === 'admin' ? (
             <div className="flex items-center gap-1 justify-start">
               <span className="text-[11px] text-muted-foreground font-normal">{publisher.name}</span>
               <span className="text-[11px] text-muted-foreground font-normal">•</span>
@@ -81,11 +104,13 @@ export const StemProductCard: React.FC<ProductCardStemProps> = ({
                 {publisher.categoryName}
               </Link>
             </div>
-          ) : (
+          ) : publisher ? (
             <span className="text-[11px] text-muted-foreground font-normal">
               {publisher.name} • {publisher.categoryName}
             </span>
-          )}
+          ) : unit ? (
+            <span className="text-[11px] text-muted-foreground font-normal">{unit}</span>
+          ) : null}
           
           <h3 className="font-bold text-sm text-foreground line-clamp-1 mt-1">
             {title}
@@ -95,12 +120,23 @@ export const StemProductCard: React.FC<ProductCardStemProps> = ({
         {/* Bottom Bar */}
         <div className="flex items-center justify-between mt-3 pt-2 border-t border-border/20">
           <div className="text-base font-extrabold text-foreground">
+            {requiresConfiguration && <span className="ml-1 text-[10px] font-medium text-muted-foreground">يبدأ من</span>}
             {price} <span className="text-xs font-bold text-muted-foreground">ج.م</span>
           </div>
           
           {/* Interactive Quantity Stepper */}
           <div className="relative flex items-center h-8">
-            {quantity === 0 ? (
+            {requiresConfiguration ? (
+              <button
+                type="button"
+                onClick={handleConfiguration}
+                className="flex h-8 items-center justify-center gap-1 rounded-full bg-primary px-2.5 text-primary-foreground shadow-sm transition-all hover:scale-105 active:scale-95"
+                aria-label={`اختر خيارات ${title}`}
+              >
+                <SlidersHorizontal size={14} strokeWidth={2.5} />
+                <span className="text-[11px] font-bold">الخيارات</span>
+              </button>
+            ) : quantity === 0 ? (
               <button 
                 onClick={handleIncrement}
                 className="w-8 h-8 rounded-full flex items-center justify-center text-primary-foreground bg-primary hover:scale-105 active:scale-95 transition-all duration-200 ease-in-out shadow-sm"
@@ -112,7 +148,7 @@ export const StemProductCard: React.FC<ProductCardStemProps> = ({
               <div className="flex items-center justify-between px-1 h-8 rounded-full bg-primary text-primary-foreground shadow-sm min-w-[5.5rem] transition-all duration-200 ease-in-out flex-row">
                 <button 
                   onClick={handleDecrement}
-                  className="w-6 h-6 flex items-center justify-center hover:bg-black/20 rounded-full transition-colors active:scale-95"
+                  className="w-6 h-6 flex items-center justify-center hover:bg-primary-foreground/20 rounded-full transition-colors active:scale-95"
                   aria-label="إنقاص الكمية"
                 >
                   <Minus size={14} strokeWidth={2.5} />
@@ -124,7 +160,7 @@ export const StemProductCard: React.FC<ProductCardStemProps> = ({
 
                 <button 
                   onClick={handleIncrement}
-                  className="w-6 h-6 flex items-center justify-center hover:bg-black/20 rounded-full transition-colors active:scale-95"
+                  className="w-6 h-6 flex items-center justify-center hover:bg-primary-foreground/20 rounded-full transition-colors active:scale-95"
                   aria-label="زيادة الكمية"
                 >
                   <Plus size={14} strokeWidth={2.5} />

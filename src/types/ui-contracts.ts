@@ -1,17 +1,23 @@
 import { UIAction } from '@/sdui/actions/action-contracts';
 
-export interface ProductCardStemProps {
+export interface ProductCardPresentationModel {
   id: string;
   title: string;
   price: number;
   imageUrl?: string;
+  description?: string;
+  unit?: string;
+  quantity?: number;
+  requiresConfiguration: boolean;
   badge?: 'new' | 'trending' | 'best';
-  publisher: { 
+  publisher?: {
     role: 'admin' | 'merchant';
     name: string;
     categoryName: string;
   };
+}
+
+export interface ProductCardStemProps extends ProductCardPresentationModel {
   onAddToCart?: (id: string) => void;
-  quantity?: number;
   onAction?: (action: UIAction) => void;
 }

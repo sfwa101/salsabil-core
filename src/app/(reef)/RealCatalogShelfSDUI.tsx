@@ -6,11 +6,9 @@
 // راجع docs/salsabil-frontend-integration-pattern.md للقواعد الحاكمة (لا لمس PageEngine/DataResolver/
 // ApplicationRuntime/ActionRouter/CapabilityRegistry، لا سعر من العميل).
 //
-// حدود متعمَّدة (قرار مؤسس صريح أثناء التخطيط، سطح المكتب 2026-09-21):
-// - `products` الممرَّرة هنا مُرشَّحة مسبقاً في page.tsx لاستبعاد أي منتج بخيار حجم (`options` من نوع
-//   'size') — قدرة ADD_TO_CART أدناه (مطابقة للـPOC حرفياً) لا تدعم اختيار حجم (`sizeId`)، والإضافة
-//   المباشرة لمنتج بخيار حجم بلا اختيار كانت ستفشل صامتاً عند CatalogService.validateSelection. هذا
-//   يطابق الحماية القائمة أصلاً في ProductCard.tsx (`hasSizeOptions` يعطّل الإضافة السريعة).
+// حدود متعمَّدة:
+// - منتجات size/addon تبقى في الرف، لكن العرض يرسلها إلى مسار التهيئة فقط. الحاجز الدفاعي داخل
+//   ADD_TO_CART يمنع وصولها إلى أي cart mutation حتى لو أرسل مستهلك action غير صحيح.
 // - publisher.name ثابت "سلسبيل" (نفس حد POC §J.4) — Product الحقيقي لا يحمل اسم تاجر عرض جاهزاً.
 // - تسجيل componentRegistry هنا **مشروط** بـ`.has()` (خلاف POC نفسه الذي سجّل بلا شرط عمداً لصفحة
 //   اختبار معزولة) — إلزامي لأي استهلاك إنتاجي حسب القاعدة الصريحة رقم 4 في وثيقة النمط أعلاه.
@@ -18,10 +16,11 @@
 // VERTICAL-SLICE-2-MOBILE-HOME-SHELF-INTEGRATION (2026-09-22) — هذا المكوّن يُستهلَك الآن مرتين: رف
 // سطح المكتب (page.tsx، بلا تغيير) ورف المتنقل (MobileStorefront.tsx، جديد) — نفس المكوّن حرفياً بلا
 // أي تعديل هنا، مُركَّب مرتين، الظهور CSS-only عبر hidden lg:flex/block lg:hidden في الحاويتين
-// الأصليتين (نفس نمط DesktopHeaderStem/MobileHeaderStem في الشريحة الأولى). فلتر خيار الحجم أعلاه
-// يسري الآن على كلا الاستهلاكين معاً (نفس القيمة المُفلترة تصل للفرعين).
+// الأصليتين (نفس نمط DesktopHeaderStem/MobileHeaderStem في الشريحة الأولى). بيانات الكتالوج نفسها
+// تصل إلى الفرعين، ويُحسم مسار الإجراء من presentation model المشترك.
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { PageEngine } from '@/sdui/engine/PageEngine';
 import { ApplicationRuntime } from '@/sdui/runtime/ApplicationRuntime';
 import { componentRegistry } from '@/sdui/registry/component-registry';
@@ -31,8 +30,10 @@ import type { QuickViewProductSnapshot } from '@/sdui/actions/action-contracts';
 import { StemProductCard } from '@/components/ui/StemProductCard';
 import { HorizontalShelfStem } from '@/components/ui/HorizontalShelfStem';
 import { ProductQuickViewStem } from '@/components/ui/ProductQuickViewStem';
-import type { ProductCardStemProps } from '@/types/ui-contracts';
 import type { Product } from '@/core/modules/catalog/types';
+import { trackCartMutation } from '@/components/cartMutationGate';
+import { useCartToast } from '@/components/useCartToast';
+import { productRequiresConfiguration, toProductCardPresentation } from '@/components/product-presentation';
 import {
   addToCartAction,
   getCartSummaryAction,
@@ -40,25 +41,10 @@ import {
   removeCartItemAction,
 } from '@/app/(reef)/cart/actions';
 
-function mapProductToStemProps(product: Product, quantity: number): ProductCardStemProps {
-  return {
-    id: product.id,
-    title: product.name,
-    price: product.basePrice,
-    imageUrl: product.imageUrl,
-    publisher: {
-      role: product.tenantId ? 'merchant' : 'admin',
-      name: 'سلسبيل',
-      categoryName: product.unit,
-    },
-    quantity,
-  };
-}
-
 const RealCatalogShelf: SDUIComponent = ({ props, onAction }) => {
   const items = Array.isArray(props.items) ? (props.items as Array<Product & { quantity?: number }>) : [];
   const mapped = items.map((product) => (
-    <StemProductCard key={product.id} {...mapProductToStemProps(product, product.quantity ?? 0)} onAction={onAction} />
+    <StemProductCard key={product.id} {...toProductCardPresentation(product, product.quantity)} onAction={onAction} />
   ));
   return <HorizontalShelfStem title={props.title as string} items={mapped} />;
 };
@@ -75,6 +61,8 @@ interface RealCatalogShelfSDUIProps {
 
 export function RealCatalogShelfSDUI({ title, products, initialQuantities }: RealCatalogShelfSDUIProps) {
   const [quantities, setQuantities] = useState<Record<string, number>>(initialQuantities);
+  const router = useRouter();
+  const { showToast, toastNode } = useCartToast();
   // VISUAL-PARITY-PASS (2026-09-22) — OPEN_QUICK_VIEW كان يُرسَل من StemProductCard.tsx منذ وصله
   // الأول (Slice 2) بلا أي capability مسجَّلة تستقبله — ActionRouter.dispatch يتجاهل أي action بلا
   // handler صامتاً (no-op حقيقي في الإنتاج، console.warn في التطوير فقط)، فكل ضغطة على بطاقة منتج على
@@ -91,45 +79,57 @@ export function RealCatalogShelfSDUI({ title, products, initialQuantities }: Rea
       setQuickViewProduct(action.payload.product);
     });
 
+    appRuntime.registerCapability('OPEN_CONFIGURATION', (action) => {
+      setQuickViewProduct(null);
+      router.push(`/product/${action.payload.id}`);
+    });
+
     appRuntime.registerCapability('ADD_TO_CART', (action) => {
       const { id: productId, action: qtyAction, amount } = action.payload;
-      void (async () => {
-        try {
-          const summary = await getCartSummaryAction();
-          const existingLine = summary.lines.find((l) => l.product.id === productId);
-          const currentQty = existingLine?.item.quantity ?? 0;
+      const product = products.find((candidate) => candidate.id === productId);
+      if (product && productRequiresConfiguration(product)) {
+        router.push(`/product/${productId}`);
+        return;
+      }
+      void trackCartMutation(async () => {
+        const beforeMutation = await getCartSummaryAction();
+        const existingLine = beforeMutation.lines.find((line) => line.product.id === productId);
+        const currentQty = existingLine?.item.quantity ?? 0;
 
-          let desiredQty: number;
-          if (qtyAction === 'decrement') desiredQty = Math.max(0, currentQty - 1);
-          else if (qtyAction === 'set' && amount !== undefined) desiredQty = Math.max(0, amount);
-          else desiredQty = currentQty + 1;
+        let desiredQty: number;
+        if (qtyAction === 'decrement') desiredQty = Math.max(0, currentQty - 1);
+        else if (qtyAction === 'set' && amount !== undefined) desiredQty = Math.max(0, amount);
+        else desiredQty = currentQty + 1;
 
-          let result;
-          if (existingLine) {
-            result =
-              desiredQty <= 0
-                ? await removeCartItemAction(existingLine.item.id)
-                : await updateCartItemAction(existingLine.item.id, desiredQty);
-          } else if (desiredQty > 0) {
-            result = await addToCartAction({ productId, quantity: desiredQty });
-          } else {
-            return;
-          }
+        if (desiredQty === currentQty) return null;
 
-          if ('error' in result) return;
+        const result = existingLine
+          ? desiredQty <= 0
+            ? await removeCartItemAction(existingLine.item.id)
+            : await updateCartItemAction(existingLine.item.id, desiredQty)
+          : await addToCartAction({ productId, quantity: desiredQty });
 
-          const line = result.summary.lines.find((l) => l.product.id === productId);
-          setQuantities((prev) => ({ ...prev, [productId]: line?.item.quantity ?? 0 }));
-        } catch {
-          // بلا معالجة إضافية هنا — نفس حدود POC (لا Action Log إنتاجي)؛ toast/معالجة أخطاء مستخدم
-          // نهائي خارج نطاق هذه الدفعة (ProductCard.tsx الحالي لديه useCartToast، غير مُستنسَخ هنا عمداً
-          // لإبقاء الشريحة صغيرة وقابلة للمراجعة — راجع Outstanding risks في تقرير المهمة).
-        }
-      })();
+        if ('error' in result) throw new Error(result.error);
+
+        // لا نعتمد على ملخص mutation كعقد تأكيد ضمني. القراءة اللاحقة داخل نفس
+        // بوابة التسلسل هي مصدر الحقيقة الذي يُحدّث منه سطح Stem.
+        return getCartSummaryAction();
+      })
+        .then((confirmedSummary) => {
+          if (!confirmedSummary) return;
+          const confirmedLine = confirmedSummary.lines.find((line) => line.product.id === productId);
+          setQuantities((prev) => ({ ...prev, [productId]: confirmedLine?.item.quantity ?? 0 }));
+          // CartTotalProvider لا يملك setter مؤكداً، وعداد القطع Server prop؛ refresh يعيد
+          // مزامنة هذين السطحين بعد أن ثبّتت القراءة أعلاه حقيقة السلة للبطاقة.
+          router.refresh();
+        })
+        .catch((error: unknown) => {
+          showToast(error instanceof Error ? error.message : 'تعذر تحديث السلة');
+        });
     });
 
     return appRuntime;
-  }, []);
+  }, [products, router, showToast]);
 
   const page = useMemo<SDUIPage>(
     () => ({
@@ -159,6 +159,7 @@ export function RealCatalogShelfSDUI({ title, products, initialQuantities }: Rea
           onAction={runtime.dispatch}
         />
       )}
+      {toastNode}
     </>
   );
 }

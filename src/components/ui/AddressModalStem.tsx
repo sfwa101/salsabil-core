@@ -108,11 +108,11 @@ export const AddressModalStem: React.FC<AddressModalStemProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[75] flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl">
+    <div className="fixed inset-0 bg-scrim/40 backdrop-blur-sm z-[75] flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl">
       {/* Backdrop click to close */}
       <div className="absolute inset-0" onClick={onClose} />
       
-      <div className="relative bg-white sm:bg-white/95 sm:backdrop-blur-xl w-full sm:max-w-md max-h-[85vh] sm:max-h-[90vh] rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col sm:border border-white/40 overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
+      <div className="relative bg-card sm:bg-card/95 sm:backdrop-blur-xl w-full sm:max-w-md max-h-[85vh] sm:max-h-[90vh] rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col sm:border border-border/40 overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
         
         {/* Header */}
         <div className="flex items-center justify-between mb-4 shrink-0">

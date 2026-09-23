@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import * as LucideIcons from 'lucide-react';
 import { getBottomNavConfig } from '@/services/dynamic-nav-config';
+import { useScrollDirection } from '@/hooks/useScrollDirection';
 
 export interface BottomNavStemProps {
   showBars?: boolean;
@@ -19,7 +20,9 @@ export interface BottomNavStemProps {
 
 const TOAST_DURATION_MS = 2000;
 
-export const BottomNavStem: React.FC<BottomNavStemProps> = ({ showBars = true }) => {
+export const BottomNavStem: React.FC<BottomNavStemProps> = ({ showBars: showBarsProp }) => {
+  const scrollBars = useScrollDirection();
+  const showBars = showBarsProp ?? scrollBars;
   const items = getBottomNavConfig();
   const pathname = usePathname();
   const [toast, setToast] = useState(false);
@@ -38,7 +41,7 @@ export const BottomNavStem: React.FC<BottomNavStemProps> = ({ showBars = true })
   return (
     <div className={`fixed bottom-5 inset-x-0 z-40 flex justify-center pointer-events-none transition-all duration-300 ease-out lg:hidden ${!showBars ? 'translate-y-24 opacity-0' : 'translate-y-0 opacity-100'}`} dir="rtl">
       <nav
-        className="pointer-events-auto h-14 w-full max-w-[360px] sm:max-w-sm rounded-full bg-white/80 backdrop-blur-2xl border border-white/60 shadow-xl flex items-center justify-between px-2"
+        className="pointer-events-auto h-14 w-full max-w-[360px] sm:max-w-sm rounded-full bg-card/80 backdrop-blur-2xl border border-border/60 shadow-xl flex items-center justify-between px-2"
       >
         {items.map((item) => {
           const Icon = (LucideIcons as any)[item.icon] || LucideIcons.HelpCircle;
@@ -49,7 +52,7 @@ export const BottomNavStem: React.FC<BottomNavStemProps> = ({ showBars = true })
               <Link
                 key={item.id}
                 href={item.href ?? '#'}
-                className={`-mt-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 transition-transform hover:scale-105 active:scale-95 ${isActive ? 'scale-105' : ''}`}
+                className={`-mt-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform hover:scale-105 active:scale-95 ${isActive ? 'scale-105' : ''}`}
               >
                 <Icon size={24} strokeWidth={2.5} />
               </Link>
@@ -76,7 +79,7 @@ export const BottomNavStem: React.FC<BottomNavStemProps> = ({ showBars = true })
               key={item.id}
               href={item.href}
               className={`flex flex-col items-center justify-center gap-1 w-16 h-10 rounded-xl transition-colors active:scale-95 ${
-                isActive ? 'bg-emerald-500/10 text-emerald-600' : 'text-muted-foreground hover:text-foreground'
+                isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />

@@ -86,7 +86,7 @@ afterEach(() => {
 async function render() {
   await act(async () => {
     root.render(
-      <CartTotalProvider total={0}>
+      <CartTotalProvider total={0} itemCount={0}>
         <CartCapsule />
       </CartTotalProvider>
     );

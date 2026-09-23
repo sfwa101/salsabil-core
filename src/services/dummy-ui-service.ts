@@ -7,6 +7,7 @@ export function getDummyProducts(): ProductCardStemProps[] {
       id: 'prod-1',
       title: 'تمر عجوة المدينة',
       price: 120,
+      requiresConfiguration: false,
       badge: 'best',
       imageUrl: 'https://images.unsplash.com/photo-1589309736404-2e142a2acdf0?w=500&q=80',
       publisher: {
@@ -19,6 +20,7 @@ export function getDummyProducts(): ProductCardStemProps[] {
       id: 'prod-2',
       title: 'عسل سدر بلدي',
       price: 350,
+      requiresConfiguration: false,
       badge: 'trending',
       imageUrl: 'https://images.unsplash.com/photo-1587049352847-4d4b126a71e1?w=500&q=80',
       publisher: {
@@ -31,6 +33,7 @@ export function getDummyProducts(): ProductCardStemProps[] {
       id: 'prod-3',
       title: 'زيت زيتون بكر',
       price: 85,
+      requiresConfiguration: false,
       imageUrl: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=500&q=80',
       publisher: {
         role: 'merchant',
@@ -42,6 +45,7 @@ export function getDummyProducts(): ProductCardStemProps[] {
       id: 'prod-4',
       title: 'قهوة عربية محمصة',
       price: 45,
+      requiresConfiguration: false,
       badge: 'new',
       imageUrl: 'https://images.unsplash.com/photo-1559525839-b184a4d698c7?w=500&q=80',
       publisher: {

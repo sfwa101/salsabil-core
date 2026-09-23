@@ -1,5 +1,7 @@
 'use client';
 
+import { Fragment } from 'react';
+
 import type { Product, Category, District } from '@/core/modules/catalog/types';
 import type { CartLineSummary } from '@/core/modules/cart/types';
 import type { PostWithDetails } from '@/core/modules/bayan/types';
@@ -10,7 +12,7 @@ import { StemProductCardAdapter } from '@/components/StemProductCardAdapter';
 // مصمَّم بعرض رف ثابت (w-[145px]...shrink-0، مطابق لـ"منتجات ريف"/دورة 2 أدناه بعد التبديل) — إقحامه
 // في حاوية ملء العرض هنا ينتج بطاقة ضيقة داخل مساحة واسعة (تراجع بصري، لا مطابقة). راجع تقرير المهمة.
 import { MobileHeroProductCard } from './MobileHeroProductCard';
-import { HorizontalShelf } from '@/components/HorizontalShelf';
+import { HorizontalShelfStem } from '@/components/ui/HorizontalShelfStem';
 import { RealCatalogShelfSDUI } from '@/app/(reef)/RealCatalogShelfSDUI';
 import { ReelsShelfSDUI } from '@/app/(reef)/ReelsShelfSDUI';
 import type { RealReelSnapshot } from '@/app/(reef)/data/ReelsDataSource';
@@ -27,17 +29,15 @@ interface MobileStorefrontProps {
   posts: PostWithDetails[];
   cartLines: CartLineSummary[];
   hasMorePosts: boolean;
-  // VERTICAL-SLICE-2-MOBILE-HOME-SHELF-INTEGRATION (2026-09-22) — كانت تصل هنا غير مُفلترة وتُعرَض عبر
-  // MobileSmallProductCard/HorizontalShelf (المسار القديم). أصبحت الآن مُفلترة مسبقاً في page.tsx بنفس
-  // فلتر رف سطح المكتب (استبعاد أي منتج بخيار حجم 'size' — قدرة ADD_TO_CART المُعاد استخدامها من
-  // RealCatalogShelfSDUI لا تدعم اختيار حجم، راجع تعليق ذلك الملف) وتُعرَض عبر نفس خط أنابيب SDUI
-  // الحقيقي (RealCatalogDataSource → DataResolver → PageEngine → StemProductCard داخل
+  // VERTICAL-SLICE-2-MOBILE-HOME-SHELF-INTEGRATION (2026-09-22) — كانت تُعرَض عبر
+  // MobileSmallProductCard/HorizontalShelf (المسار القديم). تُعرَض الآن عبر نفس خط أنابيب SDUI
+  // الحقيقي بلا استبعاد لمنتجات الخيارات؛ هذه تنتقل للتهيئة ولا تصل إلى cart mutation
+  // (RealCatalogDataSource → DataResolver → PageEngine → StemProductCard داخل
   // HorizontalShelfStem) بدل المسار القديم. راجع docs/DECISIONS.md → ADR-035.
   realCatalogProducts: Product[];
   // نفس initialQuantities المُمرَّرة لرف سطح المكتب (page.tsx) — كميات السلة الحقيقية الحالية لكل
   // منتج، تُهيِّئ حالة StemProductCard الأولية بدل افتراض صفر دائماً. اختيارية لتفادي كسر
-  // MobileStorefront.test.tsx القائم (لا يمرّرها، لا يختبر هذا القسم أصلاً — realCatalogProducts=[]
-  // هناك).
+  // المستهلكين الأقدم الذين لا يمرّرونها.
   initialQuantities?: Record<string, number>;
   // DD-024 — ريلز حقيقية (post_type='reel')، مستقلة تماماً عن posts أعلاه (منشورات بيان العادية).
   // اختيارية بلا افتراض [] هنا (بل في الاستخدام أدناه) لنفس سبب initialQuantities — لا تكسر
@@ -68,25 +68,40 @@ export function MobileStorefront({
   const firstReelsSlotIndex = reels.length > 0 ? posts.findIndex((_, i) => i % 6 === 5) : -1;
 
   return (
-    <div className="w-full space-y-4 py-4 bg-background min-h-screen">
+    <div className="w-full space-y-4 pt-44 pb-28 bg-[var(--sb-muted)] min-h-screen">
       {/* 1. Story Bar — HOMEPAGE-SHELL-VISUAL-PARITY-PASS: كان StoryBar (تدرّجات Tailwind حرفية
           ثابتة)، الآن CategoryBarStem عبر نفس محوّل CategoryBarNav المُثبَت فعلياً لتصفح
           الأحياء/الأقسام (a8c8c0d) — basePath="" لأن وجهة الحي هنا جذرية (`/${slug}`) لا متداخلة. */}
-      <div className="bg-card rounded-[24px] shadow-sm p-3 mx-2.5 sm:mx-4 border border-border/50">
-        <CategoryBarNav
-          items={districts.map((d) => ({ id: d.slug, name: d.nameAr }))}
-          basePath=""
-        />
-      </div>
+      <CategoryBarNav
+        items={districts.map((d) => ({ id: d.slug, name: d.nameAr }))}
+        basePath=""
+      />
 
-      {/* 1.5. §31 بند 3 — رف الكتالوج القابل للشراء مباشرة، مستقل عن خلاصة بيان أدناه. عبر SDUI منذ
-          VERTICAL-SLICE-2-MOBILE-HOME-SHELF-INTEGRATION (2026-09-22) — نفس RealCatalogShelfSDUI الذي
-          يُثبِّته رف سطح المكتب فعلياً (RUNTIME-VERIFIED)، مُعاد استخدامه حرفياً بلا تعديل (نفس نمط
-          إعادة استخدام DesktopHeaderStem/MobileHeaderStem في الشريحة السابقة — كلاهما يُركَّب دائماً،
-          الظهور CSS-only فقط عبر hidden lg:flex/block lg:hidden في الحاويتين الأصليتين). تسجيل
-          componentRegistry('product_shelf') يحدث مرة واحدة فقط (مشروط بـ.has() داخل ذلك الملف نفسه)
-          بصرف النظر عن عدد مرات تركيب المكوّن. ApplicationRuntime/CapabilityRegistry الخاصة بهذه
-          النسخة مستقلة عن نسخة سطح المكتب (غير Singleton، مؤكَّد في التدقيق المعماري) — لا تعارض. */}
+      {/* 2. First Hero Item (If available) */}
+      {posts.length > 0 && (() => {
+        const firstPost = posts[0];
+        const postCategory = categories.find((c) => c.id === firstPost.categoryId);
+        const postProducts = firstPost.productIds
+          .map((id) => products.find((p) => p.id === id))
+          .filter(Boolean) as Product[];
+
+        if (postProducts.length === 0) return null;
+        return (
+          <div className="flex flex-col gap-5 pt-2">
+            {postProducts.map((p) => (
+              <div key={`hero-${firstPost.id}-${p.id}`} className="px-2.5 sm:px-4">
+                <MobileHeroProductCard
+                  product={p}
+                  category={postCategory}
+                  cartLine={cartLines.find((c) => c.item.productId === p.id)}
+                />
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
+      {/* 1.5. §31 بند 3 — رف الكتالوج القابل للشراء مباشرة */}
       {realCatalogProducts.length > 0 && (
         <div className="px-2.5 sm:px-4">
           <RealCatalogShelfSDUI
@@ -97,16 +112,35 @@ export function MobileStorefront({
         </div>
       )}
 
-      {/* 2. Feed Interleaving Engine */}
-      {posts.length > 0 && (
+      {/* 3. Feed Interleaving Engine (Rest of posts) */}
+      {posts.length > 1 && (
         <div className="flex flex-col gap-5 pt-2">
-          {posts.map((post, index) => {
+          {posts.slice(1).map((post, sliceIndex) => {
+            const index = sliceIndex + 1; // Actual index in original array
             const cycleIndex = index % 6;
 
-            // DD-024 — يُفحَص قبل فلتر postProducts أدناه عمداً: reels بيانات على مستوى الصفحة، لا
-            // لكل منشور، فلا يصح إسقاط فرصة عرضها لمجرد أن منشور posts[index] نفسه بلا منتجات.
+            // DD-024 — Reels
             if (cycleIndex === 5 && index === firstReelsSlotIndex) {
-              return <ReelsShelfSDUI key="reels-shelf" reels={reels} />;
+              const reelSlotCategory = categories.find((category) => category.id === post.categoryId);
+              const reelSlotProducts = post.productIds
+                .map((id) => products.find((product) => product.id === id))
+                .filter(Boolean) as Product[];
+              return (
+                <Fragment key={post.id}>
+                  <div className="py-2 pb-6">
+                    <ReelsShelfSDUI reels={reels} />
+                  </div>
+                  {reelSlotProducts.map((product) => (
+                    <div key={`${post.id}-${product.id}`} className="px-2.5 sm:px-4">
+                      <MobileHeroProductCard
+                        product={product}
+                        category={reelSlotCategory}
+                        cartLine={cartLines.find((line) => line.item.productId === product.id)}
+                      />
+                    </div>
+                  ))}
+                </Fragment>
+              );
             }
 
             const postCategory = categories.find((c) => c.id === post.categoryId);
@@ -120,19 +154,10 @@ export function MobileStorefront({
             if (cycleIndex === 2) {
               return (
                 <div key={post.id} className="py-2">
-                  <div className="flex items-center justify-between mb-3 px-1.5">
-                    <h2 className="text-lg font-extrabold text-foreground">
-                      {postCategory?.name || 'أحدث المنتجات'}
-                    </h2>
-                    {/* TASK-18: كان الرابط يؤدي لـ /${postCategory.slug} (مسار قسم المنشور القديم،
-                        categories). ذلك المسار حُذف مع نقل تصفح الكتالوج للأحياء الجديدة
-                        (/[district])، ولا صفحة مكافئة لأقسام المنشورات القديمة اليوم — رابط "عرض
-                        الكل" أُزيل لتفادي 404 حي بدل اختراع وجهة غير موجودة؛ العنوان النصي بقي كما
-                        هو (تصنيف المنشور، خارج نطاق هذا التاسك). */}
-                  </div>
                   <div className="w-full">
-                    <HorizontalShelf emptyMessage="لا توجد منتجات">
-                      {postProducts.map((p) => (
+                    <HorizontalShelfStem
+                      title={postCategory?.name || 'أحدث المنتجات'}
+                      items={postProducts.map((p) => (
                         <div key={`${post.id}-${p.id}`} className="w-[145px] shrink-0">
                           <StemProductCardAdapter
                             product={p}
@@ -140,16 +165,10 @@ export function MobileStorefront({
                           />
                         </div>
                       ))}
-                    </HorizontalShelf>
+                    />
                   </div>
                 </div>
               );
-            }
-
-            // Cycle 5 (تكرارات لاحقة بعد firstReelsSlotIndex): لا رف ريلز ثانٍ مكرَّر بنفس المحتوى —
-            // يبقى بلا عرض، نفس سلوك ما قبل DD-024.
-            if (cycleIndex === 5) {
-              return null;
             }
 
             // Cycles 0, 1, 3, 4: Hero Cards
@@ -163,6 +182,14 @@ export function MobileStorefront({
               </div>
             ));
           })}
+        </div>
+      )}
+
+      {hasMorePosts && (
+        <div className="w-full flex items-center justify-center py-8">
+            <div className="w-10 h-10 rounded-full bg-card/60 shadow-sm flex items-center justify-center border border-border">
+            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
         </div>
       )}
     </div>

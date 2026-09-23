@@ -16,7 +16,9 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import type { PostWithDetails, PostType } from '@/core/modules/bayan/types';
 import type { Product } from '@/core/modules/catalog/types';
 import { loadFeedPageAction } from '@/app/(reef)/feed-actions';
-import { PostCard } from './PostCard';
+import { MobileHeroProductCard } from '@/components/storefront/MobileHeroProductCard';
+import { HorizontalShelfStem } from '@/components/ui/HorizontalShelfStem';
+import { StemProductCardAdapter } from '@/components/StemProductCardAdapter';
 import { ReelsShelfSDUI } from '@/app/(reef)/ReelsShelfSDUI';
 import type { RealReelSnapshot } from '@/app/(reef)/data/ReelsDataSource';
 
@@ -36,6 +38,8 @@ export function Feed({ initialPosts, initialHasMore, initialProducts, postTypes,
   const [products, setProducts] = useState(initialProducts);
   const loadingRef = useRef(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const firstReelsSlotIndex = reels.length > 0 ? posts.findIndex((_, i) => i % 6 === 5) : -1;
 
   // page.tsx يعيد التصيير بصفحة أولى جديدة كاملة عند تغيّر التبويب (?tab=، رابط مختلف) — هذا
   // التزامن يستبدل حالة الخلاصة القديمة بدل تراكمها فوق تبويب سابق.
@@ -88,25 +92,58 @@ export function Feed({ initialPosts, initialHasMore, initialProducts, postTypes,
     // col-span-full (صف كامل العرض بصرف النظر عن عدد الأعمدة) — لا يصح أن يقع الريلز داخل عمود واحد
     // وسط شبكة متعددة الأعمدة. خط الفاصل بين المنشورات (border-b) يفترض ترتيباً عمودياً واحداً
     // فيُزال من md فصاعداً، تعتمد المسافة البصرية بين البطاقات على gap-8 فقط.
-    <div className="grid grid-cols-1 gap-6 px-4 py-4 md:grid-cols-2 md:gap-8 xl:grid-cols-3">
-      {posts.map((post, index) => (
-        <Fragment key={post.id}>
-          <div className="flex flex-col gap-6 border-b border-border pb-6 last:border-0 md:border-0 md:pb-0">
-            <PostCard
-              post={post}
-              products={post.productIds
-                .map((id) => productsById.get(id))
-                .filter((p): p is Product => Boolean(p))}
-            />
-          </div>
-          {index === REEL_SHELF_INTERVAL - 1 && reels.length > 0 && (
-            <div className="col-span-full">
-              <ReelsShelfSDUI reels={reels} />
+    <div className="flex flex-col gap-5 pt-2 w-full pb-8">
+      {posts.map((post, index) => {
+        const cycleIndex = index % 6;
+
+        if (cycleIndex === 5 && index === firstReelsSlotIndex) {
+          const reelSlotProducts = post.productIds
+            .map((id) => productsById.get(id))
+            .filter((product): product is Product => Boolean(product));
+          return (
+            <Fragment key={post.id}>
+              <div className="py-2 pb-6">
+                <ReelsShelfSDUI reels={reels} />
+              </div>
+              {reelSlotProducts.map((product) => (
+                <div key={`${post.id}-${product.id}`} className="px-0 sm:px-2">
+                  <MobileHeroProductCard product={product} />
+                </div>
+              ))}
+            </Fragment>
+          );
+        }
+
+        const postProducts = post.productIds
+          .map((id) => productsById.get(id))
+          .filter((p): p is Product => Boolean(p));
+
+        if (postProducts.length === 0) return null;
+
+        if (cycleIndex === 2) {
+          return (
+            <div key={post.id} className="py-2">
+              <div className="w-full">
+                <HorizontalShelfStem
+                  title="أحدث المنتجات"
+                  items={postProducts.map((p) => (
+                    <div key={`${post.id}-${p.id}`} className="w-[145px] shrink-0">
+                      <StemProductCardAdapter product={p} />
+                    </div>
+                  ))}
+                />
+              </div>
             </div>
-          )}
-        </Fragment>
-      ))}
-      {hasMore && <div ref={sentinelRef} aria-hidden className="col-span-full h-px" />}
+          );
+        }
+
+        return postProducts.map((p) => (
+          <div key={`${post.id}-${p.id}`} className="px-0 sm:px-2">
+            <MobileHeroProductCard product={p} />
+          </div>
+        ));
+      })}
+      {hasMore && <div ref={sentinelRef} aria-hidden className="w-full h-px" />}
     </div>
   );
 }

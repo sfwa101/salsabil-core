@@ -9,20 +9,90 @@
 // ProductOptions.tsx **داخل نفس transition** الذي يُحدِّث الحالة المحلية للبند نفسه — فكلاهما يظهر
 // فوراً ويتراجعان معاً تلقائياً عند فشل نادر، لا مصدرا حقيقة منفصلان يمكن أن يتعارضا.
 
-import { createContext, useContext, useOptimistic, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+
+interface PendingCartDelta {
+  id: number;
+  priceDelta: number;
+  countDelta: number;
+}
+
+interface CartTotalState {
+  confirmedTotal: number;
+  confirmedItemCount: number;
+  pending: PendingCartDelta[];
+}
 
 interface CartTotalContextValue {
   total: number;
-  applyOptimisticDelta: (delta: number) => void;
+  itemCount: number;
+  applyOptimisticDelta: (priceDelta: number, countDelta: number) => number;
+  confirmOptimisticDelta: (id: number, total: number, itemCount: number) => void;
+  rollbackOptimisticDelta: (id: number) => void;
+  synchronizeFromServer: (total: number, itemCount: number) => void;
 }
 
 const CartTotalContext = createContext<CartTotalContextValue | null>(null);
 
-export function CartTotalProvider({ total, children }: { total: number; children: ReactNode }) {
-  const [optimisticTotal, applyOptimisticDelta] = useOptimistic(total, (state: number, delta: number) => state + delta);
+export function CartTotalProvider({ total, itemCount, children }: { total: number; itemCount: number; children: ReactNode }) {
+  const nextDeltaId = useRef(0);
+  const [state, setState] = useState<CartTotalState>({
+    confirmedTotal: total,
+    confirmedItemCount: itemCount,
+    pending: [],
+  });
+
+  useEffect(() => {
+    setState((current) =>
+      current.pending.length === 0
+        ? { confirmedTotal: total, confirmedItemCount: itemCount, pending: [] }
+        : current
+    );
+  }, [total, itemCount]);
+
+  const applyOptimisticDelta = useCallback((priceDelta: number, countDelta: number) => {
+    const id = ++nextDeltaId.current;
+    setState((current) => ({
+      ...current,
+      pending: [...current.pending, { id, priceDelta, countDelta }],
+    }));
+    return id;
+  }, []);
+
+  const confirmOptimisticDelta = useCallback((id: number, confirmedTotal: number, confirmedItemCount: number) => {
+    setState((current) => ({
+      confirmedTotal,
+      confirmedItemCount,
+      pending: current.pending.filter((delta) => delta.id !== id),
+    }));
+  }, []);
+
+  const rollbackOptimisticDelta = useCallback((id: number) => {
+    setState((current) => ({
+      ...current,
+      pending: current.pending.filter((delta) => delta.id !== id),
+    }));
+  }, []);
+
+  const synchronizeFromServer = useCallback((confirmedTotal: number, confirmedItemCount: number) => {
+    setState((current) => ({ ...current, confirmedTotal, confirmedItemCount }));
+  }, []);
+
+  const contextValue = useMemo<CartTotalContextValue>(() => {
+    const optimisticTotal = state.pending.reduce((sum, delta) => sum + delta.priceDelta, state.confirmedTotal);
+    const optimisticItemCount = state.pending.reduce((sum, delta) => sum + delta.countDelta, state.confirmedItemCount);
+    return {
+      total: Math.max(0, optimisticTotal),
+      itemCount: Math.max(0, optimisticItemCount),
+      applyOptimisticDelta,
+      confirmOptimisticDelta,
+      rollbackOptimisticDelta,
+      synchronizeFromServer,
+    };
+  }, [applyOptimisticDelta, confirmOptimisticDelta, rollbackOptimisticDelta, state, synchronizeFromServer]);
 
   return (
-    <CartTotalContext.Provider value={{ total: optimisticTotal, applyOptimisticDelta }}>
+    <CartTotalContext.Provider value={contextValue}>
       {children}
     </CartTotalContext.Provider>
   );

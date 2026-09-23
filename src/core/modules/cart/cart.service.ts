@@ -5,6 +5,7 @@
 import { cartRepository } from './cart.repository';
 import { catalogService } from '../catalog/catalog.service';
 import { inventoryService } from '../inventory/inventory.service';
+import { roundToCents } from '../../kernel/money';
 import type { ProductSelection } from '../catalog/types';
 import type { AddItemInput, Cart, CartIdentity, CartSummary } from './types';
 
@@ -104,10 +105,10 @@ export class CartService {
     const itemsWithProducts = await cartRepository.findItemsWithProducts(cart.id);
     const lines = itemsWithProducts.map(({ item, product }) => {
       const unitPrice = catalogService.calculatePrice(product, item.selection);
-      return { item, product, unitPrice, lineTotal: unitPrice * item.quantity };
+      return { item, product, unitPrice, lineTotal: roundToCents(unitPrice * item.quantity) };
     });
 
-    return { cart, lines, total: lines.reduce((sum, line) => sum + line.lineTotal, 0) };
+    return { cart, lines, total: roundToCents(lines.reduce((sum, line) => sum + line.lineTotal, 0)) };
   }
 
   async addItem(cartId: string, input: AddItemInput): Promise<CartSummary> {

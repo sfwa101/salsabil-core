@@ -134,13 +134,6 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     cartLoadFailed = true;
   }
 
-  // MIGRATE-HOME-REAL-SHELF-TO-SDUI + VERTICAL-SLICE-2-MOBILE-HOME-SHELF-INTEGRATION (2026-09-22) —
-  // منتجات بخيار حجم (options من نوع 'size') مُستبعَدة من كل استهلاك لـRealCatalogShelfSDUI (سطح
-  // المكتب والمتنقل معاً منذ هذه الشريحة): قدرة ADD_TO_CART المسجَّلة داخله لا تدعم اختيار حجم
-  // (sizeId)، وإضافتها المباشرة كانت ستفشل عند CatalogService.validateSelection — نفس الحماية القائمة
-  // أصلاً في ProductCard.tsx (hasSizeOptions). هذا الاسم (desktopShelfProducts) يُمرَّر الآن لكلا
-  // الفرعين (سطح المكتب + المتنقل عبر MobileStorefront أدناه) — لم يعد حصرياً لسطح المكتب رغم اسمه.
-  const desktopShelfProducts = realCatalogProducts.filter((p) => !p.options.some((o) => o.type === 'size'));
   const initialQuantities: Record<string, number> = {};
   for (const line of cartSummary?.lines ?? []) {
     initialQuantities[line.product.id] = line.item.quantity;
@@ -148,15 +141,15 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
   return (
     <div className="bg-background min-h-screen w-full max-w-full overflow-x-hidden">
-      <div className="mx-auto max-w-[1340px] w-full lg:max-w-full lg:h-[calc(100vh-3.5rem)] lg:overflow-hidden flex flex-col lg:flex-row justify-between lg:gap-4 p-0 lg:px-4 lg:py-0">
+      <div className="mx-auto w-full max-w-[1400px] flex flex-col lg:flex-row gap-0 lg:gap-6 p-0 lg:px-6 lg:py-6 items-start">
         
         {/* Right Sidebar (Desktop only) */}
-        <div className="hidden lg:block w-64 shrink-0 h-full overflow-y-auto lg:py-4">
+        <div className="hidden lg:block w-60 shrink-0">
           <DesktopCategorySidebar districts={districts} />
         </div>
 
         {/* Center Column (Feed - Desktop Only) */}
-        <main className="hidden lg:flex flex-1 min-w-0 h-full overflow-y-auto px-2 py-4 flex-col gap-6">
+        <main className="hidden lg:flex flex-1 min-w-0 flex-col gap-6">
           {/* Story Bar — HOMEPAGE-SHELL-VISUAL-PARITY-PASS: StoryBar (تدرّجات Tailwind حرفية) استُبدِل
               بـCategoryBarStem عبر نفس محوّل CategoryBarNav المُثبَت أصلاً لتصفح الأحياء (a8c8c0d). */}
           <div className="bg-card rounded-2xl shadow-[var(--sb-shadow-soft)] p-4 border border-border/50">
@@ -168,10 +161,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
           {/* §31 بند 3، عبر SDUI منذ MIGRATE-HOME-REAL-SHELF-TO-SDUI — رف مستقل عن مسار بيان/المنشورات،
               يعرض الكتالوج القابل للشراء مباشرة عبر RealCatalogDataSource → DataResolver → PageEngine */}
-          {desktopShelfProducts.length > 0 && (
+          {realCatalogProducts.length > 0 && (
             <RealCatalogShelfSDUI
               title="منتجات ريف"
-              products={desktopShelfProducts}
+              products={realCatalogProducts}
               initialQuantities={initialQuantities}
             />
           )}
@@ -200,16 +193,14 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             posts={firstPage?.posts || []}
             hasMorePosts={firstPage?.hasMore || false}
             cartLines={cartSummary?.lines || []}
-            // VERTICAL-SLICE-2-MOBILE-HOME-SHELF-INTEGRATION (2026-09-22) — desktopShelfProducts
-            // (مُفلترة، بلا خيارات حجم) لا realCatalogProducts الخام — راجع التعليق أعلاه عند تعريفها.
-            realCatalogProducts={desktopShelfProducts}
+            realCatalogProducts={realCatalogProducts}
             initialQuantities={initialQuantities}
             reels={reels}
           />
         </div>
 
         {/* Left Sidebar (Desktop only) */}
-        <div className="hidden lg:block h-full">
+        <div className="hidden lg:block w-[380px] shrink-0">
           {cartLoadFailed ? (
             <CartLoadErrorPanel />
           ) : (

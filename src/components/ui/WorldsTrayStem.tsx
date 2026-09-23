@@ -3,12 +3,20 @@
 import React from 'react';
 import { X, Store, Building2, Truck, Globe } from 'lucide-react';
 import Image from 'next/image';
-import { DummyWorld } from '@/services/dummy-ui-service';
+
+export interface WorldTrayItem {
+  id: string;
+  name: string;
+  tag: string;
+  active: boolean;
+  imageUrl?: string;
+  iconName?: string;
+}
 
 export interface WorldsTrayProps {
   isOpen: boolean;
   onClose: () => void;
-  worlds: DummyWorld[];
+  worlds: WorldTrayItem[];
 }
 
 export const WorldsTrayStem: React.FC<WorldsTrayProps> = ({ isOpen, onClose, worlds }) => {
@@ -25,7 +33,7 @@ export const WorldsTrayStem: React.FC<WorldsTrayProps> = ({ isOpen, onClose, wor
     <>
       {/* Backdrop */}
       <div 
-        className={`fixed inset-0 bg-black/20 backdrop-blur-[2px] z-40 transition-opacity duration-300 ease-out ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+        className={`fixed inset-0 bg-scrim/20 backdrop-blur-[2px] z-40 transition-opacity duration-300 ease-out ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
         onClick={onClose}
         aria-hidden="true"
       />

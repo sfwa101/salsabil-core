@@ -22,7 +22,7 @@ export interface MobileHeaderProps {
 
 export const MobileHeaderStem: React.FC<MobileHeaderProps> = ({
   storeName = 'ريف المدينة',
-  currentAddress = 'التوصيل إلى جدة، حي النزهة',
+  currentAddress = 'العنوان غير محدد',
   logoUrl,
   onToggleWorlds,
   onOpenCart,
@@ -67,10 +67,11 @@ export const MobileHeaderStem: React.FC<MobileHeaderProps> = ({
           <span className="font-bold text-base text-foreground">{storeName}</span>
           <button 
             onClick={onAddressClick}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            disabled={!onAddressClick}
+            className="flex items-center gap-1 text-xs text-muted-foreground enabled:hover:text-foreground transition-colors disabled:cursor-default"
           >
             <span className="line-clamp-1 max-w-[120px]">{currentAddress}</span>
-            <ChevronDown size={14} />
+            {onAddressClick && <ChevronDown size={14} />}
           </button>
         </div>
         
@@ -111,7 +112,7 @@ export const MobileHeaderStem: React.FC<MobileHeaderProps> = ({
 
       {/* Row 3: Segmented Feed Switcher */}
       {onFeedTabChange && (
-        <div className="bg-slate-100/80 backdrop-blur-md p-1 rounded-2xl flex items-center justify-between gap-1 w-full mt-1">
+        <div className="bg-[var(--sb-muted)] backdrop-blur-md p-1 rounded-2xl flex items-center justify-between gap-1 w-full mt-1">
           {feedTabs.map(tab => {
             const isActive = activeFeedTab === tab.id;
             return (
@@ -120,8 +121,8 @@ export const MobileHeaderStem: React.FC<MobileHeaderProps> = ({
                 onClick={() => onFeedTabChange(tab.id)}
                 className={`flex-1 flex justify-center items-center py-1.5 px-2 rounded-xl text-xs transition-all ${
                   isActive 
-                    ? 'bg-white text-emerald-700 font-bold shadow-sm' 
-                    : 'text-slate-500 hover:text-slate-800'
+                    ? 'bg-[var(--sb-background)] text-primary font-bold shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {tab.label}
@@ -136,7 +137,7 @@ export const MobileHeaderStem: React.FC<MobileHeaderProps> = ({
       {!showBars && totalItems > 0 && (
         <button 
           onClick={onOpenCart}
-          className="fixed top-3 left-4 z-50 bg-white/90 backdrop-blur-xl shadow-lg border border-slate-200/60 rounded-full px-3 py-1.5 flex items-center gap-2 transition-all duration-300 animate-in fade-in slide-in-from-top-2 lg:hidden"
+          className="fixed top-3 left-4 z-50 bg-[var(--sb-bg-glass)] [backdrop-filter:var(--sb-blur-md)] shadow-lg border border-border/40 rounded-full px-3 py-1.5 flex items-center gap-2 transition-all duration-300 animate-in fade-in slide-in-from-top-2 lg:hidden"
           dir="rtl"
         >
           <div className="w-5 h-5 bg-primary text-primary-foreground flex items-center justify-center rounded-full text-[10px] font-bold">

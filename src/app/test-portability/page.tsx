@@ -124,18 +124,18 @@ export default function PortabilityTestPage() {
   }, [localCart]);
 
   return (
-    <div className="p-8 font-sans max-w-2xl mx-auto border-2 border-dashed border-red-500 rounded-lg">
+    <div className="p-8 font-sans max-w-2xl mx-auto border-2 border-dashed border-destructive rounded-lg">
       <h1 className="text-2xl font-bold mb-4">SDUI Portability Test Environment</h1>
-      <p className="mb-4 text-sm text-gray-600">This page runs PageEngine completely isolated from Reef business logic.</p>
+      <p className="mb-4 text-sm text-muted-foreground">This page runs PageEngine completely isolated from Reef business logic.</p>
       
-      <div className="mb-8 p-4 bg-gray-100 rounded">
+      <div className="mb-8 p-4 bg-muted rounded">
         <h2 className="font-semibold mb-2">Agnostic Local Cart State:</h2>
         <pre>{JSON.stringify(localCart, null, 2)}</pre>
         <h2 className="font-semibold mt-4 mb-2">Action Logs:</h2>
         <pre>{JSON.stringify(logs.slice(-5), null, 2)}</pre>
       </div>
 
-      <div className="border border-gray-300 rounded overflow-hidden">
+      <div className="border border-border rounded overflow-hidden">
         {resolvedJSON ? (
           <PageEngine pageData={resolvedJSON} onAction={runtime.dispatch} />
         ) : (

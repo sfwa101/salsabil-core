@@ -22,91 +22,104 @@ export function MobileHeroProductCard({
   const { quantity, setQuantity } = useOptimisticCartLine(
     product.id,
     cartLine?.unitPrice ?? product.basePrice,
-    cartLine ? { itemId: cartLine.item.id, quantity: cartLine.item.quantity } : undefined,
+    cartLine ? { itemId: cartLine.item.id, quantity: cartLine.item.quantity, selection: cartLine.item.selection } : undefined,
     showToast
   );
 
   return (
-    <div className="relative overflow-hidden rounded-3xl sb-glass shadow-sm">
+    <div className="w-full sb-glass border border-border/40 rounded-3xl overflow-hidden shadow-sm flex flex-col" dir="rtl">
       {/* Social Header (Publisher) */}
-      {category && (
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border/40">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center shrink-0 border border-border overflow-hidden">
+      <div className="flex items-center justify-between p-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center shrink-0 border border-border overflow-hidden">
+            {category ? (
               <span className="text-sm font-bold text-muted-foreground">{category.name.substring(0, 1)}</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[13px] font-bold text-card-foreground flex items-center gap-1">
-                {category.name}
-                <BadgeCheck size={14} className="text-primary fill-primary/10" />
-              </span>
-              <span className="text-[11px] text-muted-foreground font-medium">
-                {category.name}
-              </span>
-            </div>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-primary font-bold text-xs bg-primary/10">
+                ري
+              </div>
+            )}
           </div>
-          <Link href={`/${category.slug}`} className="bg-muted text-muted-foreground text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-0.5 active:scale-95 transition-transform hover:bg-accent">
-            القسم
+          <div className="flex flex-col">
+            <div className="flex items-center gap-1">
+              <span className="font-bold text-sm text-foreground">ريف المدينة</span>
+              <BadgeCheck size={14} className="text-primary fill-primary/10" />
+            </div>
+            {category && (
+              <div className="text-xs text-muted-foreground font-medium">
+                {category.name}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {category && (
+          <Link href={`/${category.slug}`} className="flex items-center gap-1 text-xs font-bold text-primary bg-primary/5 hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors">
+            <span>القسم</span>
             <ChevronLeft size={14} />
           </Link>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Hero Image & Floating Actions */}
-      <div className="relative h-56 w-full overflow-hidden bg-card">
-        {/* Top Badges (Right side) */}
-        {/* Placeholder for future dynamic badges */}
-
-        {/* Top Action Buttons (Left side) */}
-        <div className="absolute left-3 top-3 z-10 flex flex-col gap-2 pointer-events-auto">
-          <button className="flex h-9 w-9 items-center justify-center rounded-full bg-card/80 text-muted-foreground shadow-[var(--sb-shadow-soft)] backdrop-blur-md transition hover:text-destructive active:scale-95">
-            <Heart size={18} />
-          </button>
-          <button className="flex h-9 w-9 items-center justify-center rounded-full bg-card/80 text-muted-foreground shadow-[var(--sb-shadow-soft)] backdrop-blur-md transition hover:text-primary active:scale-95">
-            <Share2 size={18} />
-          </button>
-        </div>
-
-        <Link href={`/product/${product.id}`} className="block w-full h-full">
+      <Link href={`/product/${product.id}`} className="block w-full">
+        <div className="relative w-full h-52 sm:h-72 md:h-80 max-h-[42vh] md:max-h-[48vh] bg-muted group cursor-pointer">
           {product.imageUrl ? (
             <Image
               src={product.imageUrl}
               alt={product.name}
               fill
-              className="object-contain p-4"
+              className="object-cover"
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-muted-foreground">
               <ImageOff size={40} />
             </div>
           )}
-        </Link>
-      </div>
+
+          {/* Floating Actions (Top Left) */}
+          <div className="absolute top-4 left-4 flex flex-col gap-2 pointer-events-auto">
+            <button
+              onClick={(e) => e.preventDefault()}
+              className="w-10 h-10 rounded-full bg-card/80 backdrop-blur-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-card transition-all shadow-sm"
+            >
+              <Heart size={20} />
+            </button>
+            <button
+              onClick={(e) => e.preventDefault()}
+              className="w-10 h-10 rounded-full bg-card/80 backdrop-blur-md flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-card transition-all shadow-sm"
+            >
+              <Share2 size={20} />
+            </button>
+          </div>
+        </div>
+      </Link>
 
       {/* Content Details */}
-      <div className="flex flex-col px-5 pb-5">
+      <div className="p-4 sm:p-5 flex flex-col gap-2">
         <Link href={`/product/${product.id}`}>
-          <h2 className="text-2xl font-bold text-foreground leading-tight transition hover:text-primary mt-2">
+          <h3 className="text-lg font-bold text-foreground cursor-pointer hover:text-primary transition-colors">
             {product.name}
-          </h2>
+          </h3>
         </Link>
         
         {product.description && (
-          <p className="mt-2 text-sm text-muted-foreground line-clamp-2">
+          <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2">
             {product.description}
           </p>
         )}
 
-        <div className="mt-4 flex flex-row items-center justify-between gap-3">
-          <div className="flex flex-col text-right">
-            <span className="text-[24px] font-extrabold leading-none text-foreground flex items-baseline gap-1">
-              {product.basePrice}
-              <span className="text-sm font-bold text-muted-foreground">ج.م</span>
-            </span>
+        <div className="mt-4 flex items-center justify-between gap-4">
+          <div className="flex flex-col">
+            <div className="flex items-end gap-2 text-right">
+              <span className="text-2xl font-extrabold text-foreground">
+                {product.basePrice} <span className="text-sm font-bold text-muted-foreground">ج</span>
+              </span>
+            </div>
             <span className="text-[11px] text-muted-foreground font-bold mt-1">{product.unit}</span>
           </div>
 
-          <div className="flex-1 flex items-center justify-end min-w-[130px]">
+          <div className="flex-1 max-w-[200px] flex items-center justify-end">
             {quantity > 0 ? (
               <QuantityStepper
                 variant="pill"
@@ -118,10 +131,10 @@ export function MobileHeroProductCard({
               <button
                 type="button"
                 onClick={(e) => { e.preventDefault(); setQuantity(1); }}
-                className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full bg-primary text-primary-foreground text-[13px] font-bold shadow-sm active:scale-95 transition-transform"
+                className="w-full h-12 bg-primary hover:opacity-90 text-primary-foreground font-bold rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-all shadow-sm"
               >
-                <ShoppingCart size={16} strokeWidth={2.5} />
-                + أضف إلى السلة
+                <ShoppingCart size={18} />
+                <span>أضف للسلة</span>
               </button>
             )}
           </div>

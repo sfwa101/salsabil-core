@@ -14,11 +14,12 @@
 
 import { useRouter } from 'next/navigation';
 import { ShoppingBag } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { CartLineItem } from '@/components/CartLineItem';
 import { useCartTotal } from '@/components/CartTotalProvider';
 import { awaitPendingCartMutations } from '@/components/cartMutationGate';
+import { VendorCartGroupStem } from '@/components/ui/VendorCartGroupStem';
+import { CartBreakdownStem } from '@/components/ui/CartBreakdownStem';
 import type { CartLineSummary } from '@/core/modules/cart/types';
+import { groupByTenant } from '@/app/(reef)/cart/cart-grouping';
 
 interface DesktopCartSidebarProps {
   lines: CartLineSummary[];
@@ -26,8 +27,8 @@ interface DesktopCartSidebarProps {
 
 export function DesktopCartSidebar({ lines }: DesktopCartSidebarProps) {
   const router = useRouter();
-  const { total } = useCartTotal();
-  const hasItems = lines.length > 0;
+  const { total, itemCount } = useCartTotal();
+  const hasItems = itemCount > 0;
 
   // FIX-LIVE-BUG-SILENT-ADD-TO-CART-FAILURE — نفس ضمان CartCapsule.tsx→handleNavigateToCart القائم
   // أصلاً: ينتظر أي كتابة سلة معلَّقة قبل التنقّل، وإلا قد تصل /cart قبل وصول تلك الكتابة فعلياً.
@@ -36,7 +37,7 @@ export function DesktopCartSidebar({ lines }: DesktopCartSidebarProps) {
   }
 
   return (
-    <aside className="hidden lg:flex w-80 shrink-0 h-full flex-col bg-[var(--sb-bg-glass)] [backdrop-filter:var(--sb-blur-lg)] rounded-[var(--sb-radius-3xl)] shadow-[var(--sb-shadow-apple-soft)] border border-border/40 lg:my-4 overflow-hidden">
+    <aside className="hidden lg:flex sticky top-20 h-[calc(100vh-6.5rem)] w-[380px] shrink-0 flex-col bg-[var(--sb-bg-glass)] [backdrop-filter:var(--sb-blur-lg)] rounded-[var(--sb-radius-3xl)] shadow-[var(--sb-shadow-apple-soft)] border border-border/40 overflow-hidden">
       <div className="p-4 shrink-0 border-b border-border/40">
         <h2 className="text-xl font-bold flex items-center gap-2 text-foreground">
           <ShoppingBag size={20} className="text-primary" />
@@ -44,26 +45,44 @@ export function DesktopCartSidebar({ lines }: DesktopCartSidebarProps) {
         </h2>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 space-y-3 py-4">
+      <div className="flex-1 overflow-y-auto px-4 space-y-3 py-4 scrollbar-thin">
         {!hasItems ? (
-          <div className="flex flex-col items-center justify-center text-center text-muted-foreground gap-4 py-10">
+          <div className="flex flex-col items-center justify-center text-center text-muted-foreground gap-4 py-10 h-full">
             <ShoppingBag size={48} className="opacity-20" />
             <p className="font-medium text-sm">السلة فارغة حالياً</p>
           </div>
         ) : (
-          lines.map((line) => <CartLineItem key={line.item.id} line={line} />)
+          <>
+            {groupByTenant(lines, new Map()).map((group) => (
+              <VendorCartGroupStem
+                key={group.key}
+                vendorId={group.key}
+                vendorName={group.merchantName}
+                lines={group.lines}
+              />
+            ))}
+
+            <div className="text-center text-[11px] text-muted-foreground py-1 mt-2">
+              اسحب المنتج لليسار للحذف السريع
+            </div>
+
+            <div className="mt-4">
+              <CartBreakdownStem
+                subtotal={total}
+                tipAmount={0}
+                walletAmount={0}
+                finalTotal={total}
+              />
+            </div>
+          </>
         )}
       </div>
-
       {hasItems && (
-        <div className="p-4 shrink-0 border-t border-border/40 mt-auto">
-          <div className="flex justify-between items-center mb-4 text-foreground">
-            <span className="font-semibold">الإجمالي</span>
-            <span className="font-extrabold text-lg text-primary">{total.toLocaleString('ar-EG')} ج.م</span>
-          </div>
-          <Button onClick={handleCheckoutClick} className="w-full rounded-xl font-bold h-12 text-md shadow-sm">
-            إتمام الطلب
-          </Button>
+        <div className="p-4 shrink-0 border-t border-border/40 bg-[var(--sb-bg-glass)] backdrop-blur-sm">
+          <button onClick={handleCheckoutClick} className="w-full h-12 rounded-xl bg-primary hover:opacity-90 text-primary-foreground font-bold flex items-center justify-between px-4 shadow-md transition-all active:scale-[0.98]">
+            <span>إتمام الطلب</span>
+            <span>{total} ج.م</span>
+          </button>
         </div>
       )}
     </aside>

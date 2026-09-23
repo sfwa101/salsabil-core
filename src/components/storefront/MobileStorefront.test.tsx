@@ -11,6 +11,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { Product } from '@/core/modules/catalog/types';
+import type { CartLineSummary } from '@/core/modules/cart/types';
 import type { PostWithDetails } from '@/core/modules/bayan/types';
 
 declare global {
@@ -24,7 +25,20 @@ vi.mock('@/components/storefront/MobileHeroProductCard', () => ({
     <div data-testid="hero-card" data-product-id={product.id} />
   ),
 }));
-vi.mock('@/components/HorizontalShelf', () => ({ HorizontalShelf: () => null }));
+vi.mock('@/components/ui/HorizontalShelfStem', () => ({
+  HorizontalShelfStem: ({ title, items }: { title: string; items: React.ReactNode[] }) => (
+    <section data-testid="mobile-cycle-stem-shelf" data-title={title}>{items}</section>
+  ),
+}));
+vi.mock('@/components/StemProductCardAdapter', () => ({
+  StemProductCardAdapter: ({ product, cartLine }: { product: Product; cartLine?: CartLineSummary }) => (
+    <div
+      data-testid="mobile-cycle-adapter"
+      data-product-id={product.id}
+      data-cart-quantity={cartLine?.item.quantity ?? 0}
+    />
+  ),
+}));
 // HOMEPAGE-SHELL-VISUAL-PARITY-PASS (2026-09-22) — StoryBar/MobileSmallProductCard لم يعودا
 // مستوردَين هنا (استُبدِلا بـCategoryBarNav/StemProductCardAdapter). CategoryBarNav يستدعي
 // useRouter() حقيقياً (لا مزوّد App Router في هذا الاختبار jsdom) — يُموَّه بلا شرط، مطابقاً
@@ -96,6 +110,23 @@ async function render(feedTab: string, product: Product, post: PostWithDetails) 
   });
 }
 
+async function renderCycleShelf(products: Product[], posts: PostWithDetails[], cartLines: CartLineSummary[] = []) {
+  await act(async () => {
+    root.render(
+      <MobileStorefront
+        feedTab="all"
+        districts={[]}
+        categories={[]}
+        products={products}
+        posts={posts}
+        cartLines={cartLines}
+        hasMorePosts={false}
+        realCatalogProducts={[]}
+      />
+    );
+  });
+}
+
 describe('MobileStorefront — إزالة فرع/بيانات Reels الوهمية (TASK-04 regression)', () => {
   it('اختبار حاسم: feedTab="reel" لا يعرض أي عنصر <video> ولا أي أثر لأسماء تجار MOCK_REELS الوهمية', async () => {
     const product = makeProduct();
@@ -129,5 +160,56 @@ describe('MobileStorefront — إزالة فرع/بيانات Reels الوهمي
     const reelHtml = container.innerHTML;
 
     expect(reelHtml).toBe(allHtml);
+  });
+});
+
+describe('BATCH A — Mobile cycle shelf', () => {
+  it('keeps cycle interleaving while rendering cycle 2 with HorizontalShelfStem', async () => {
+    const product = makeProduct();
+    const posts = [0, 1, 2].map((index) => makePost({ id: `post-${index}`, productIds: [product.id] }));
+
+    await renderCycleShelf([product], posts);
+
+    expect(container.querySelectorAll('[data-testid="hero-card"]')).toHaveLength(2);
+    expect(container.querySelectorAll('[data-testid="mobile-cycle-stem-shelf"]')).toHaveLength(1);
+  });
+
+  it('preserves cycle product order, adapter cartLine wiring, and responsive wrappers', async () => {
+    const first = makeProduct({ id: 'product-1' });
+    const second = makeProduct({ id: 'product-2' });
+    const posts = [
+      makePost({ id: 'post-0', productIds: [first.id] }),
+      makePost({ id: 'post-1', productIds: [first.id] }),
+      makePost({ id: 'post-2', productIds: [second.id, first.id] }),
+    ];
+    const cartLine: CartLineSummary = {
+      item: {
+        id: 'item-1', cartId: 'cart-1', productId: second.id, quantity: 4, selection: {}, createdAt: first.createdAt,
+      },
+      product: second,
+      unitPrice: second.basePrice,
+      lineTotal: second.basePrice * 4,
+    };
+
+    await renderCycleShelf([first, second], posts, [cartLine]);
+
+    const shelf = container.querySelector('[data-testid="mobile-cycle-stem-shelf"]')!;
+    const adapters = Array.from(shelf.querySelectorAll('[data-testid="mobile-cycle-adapter"]'));
+    expect(adapters.map((node) => node.getAttribute('data-product-id'))).toEqual(['product-2', 'product-1']);
+    expect(adapters[0].getAttribute('data-cart-quantity')).toBe('4');
+    expect(adapters[0].parentElement?.className).toContain('w-[145px]');
+    expect(adapters[0].parentElement?.className).toContain('shrink-0');
+  });
+
+  it('does not drop the sixth real post when no Reels data exists', async () => {
+    const product = makeProduct();
+    const posts = Array.from({ length: 6 }, (_, index) =>
+      makePost({ id: `post-${index}`, productIds: [product.id] })
+    );
+
+    await renderCycleShelf([product], posts);
+
+    expect(container.querySelectorAll('[data-testid="hero-card"]')).toHaveLength(5);
+    expect(container.querySelectorAll('[data-testid="mobile-cycle-stem-shelf"]')).toHaveLength(1);
   });
 });

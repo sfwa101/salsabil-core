@@ -51,12 +51,11 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   // يُشترى معه" في السلة) بدل اختراع خوارزمية "منتجات ذات صلة" جديدة (AGENTS.md §2).
   //
   // VERTICAL-SLICE-4-PRODUCT-DETAIL-UPSELL (2026-09-22): يُعرَض الآن عبر RealCatalogShelfSDUI (نفس
-  // مكوّن الشريحتين 1-2 حرفياً بلا تعديل، مُعاد استخدامه لا مُستنسَخاً — AGENTS.md §2). منتجات بخيار
-  // حجم مُستبعَدة (نفس فلتر page.tsx الرئيسية) لأن ADD_TO_CART المسجَّلة داخل ذلك المكوّن لا تدعم
-  // sizeId. getCartSummaryIfExistsAction لا getCartSummaryAction عمداً — قراءة فقط بلا كتابة كوكي
+  // مكوّن الشريحتين 1-2 حرفياً بلا تعديل، مُعاد استخدامه لا مُستنسَخاً — AGENTS.md §2).
+  // getCartSummaryIfExistsAction لا getCartSummaryAction عمداً — قراءة فقط بلا كتابة كوكي
   // أثناء عرض RSC (نفس نمط [district]/[category]/page.tsx، راجع تعليق الدالة في cart/actions.ts).
   const showUpsell = getVisibleProductPageBlockIds(product, 'page').includes('upsellShelf');
-  const [rawUpsellProducts, upsellCartSummary] = await Promise.all([
+  const [upsellProducts, upsellCartSummary] = await Promise.all([
     showUpsell
       ? ordersService
           .getMostOrderedProductIds([product.id], UPSELL_LIMIT)
@@ -64,7 +63,6 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       : Promise.resolve([]),
     showUpsell ? getCartSummaryIfExistsAction() : Promise.resolve(null),
   ]);
-  const upsellProducts = rawUpsellProducts.filter((p) => !p.options.some((o) => o.type === 'size'));
   const upsellInitialQuantities: Record<string, number> = {};
   for (const line of upsellCartSummary?.lines ?? []) {
     upsellInitialQuantities[line.product.id] = line.item.quantity;

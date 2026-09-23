@@ -24,17 +24,45 @@ declare global {
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 import type { PostWithDetails } from '@/core/modules/bayan/types';
 import type { Product } from '@/core/modules/catalog/types';
+import type { ProductCardStemProps } from '@/types/ui-contracts';
 import { CartTotalProvider } from './CartTotalProvider';
 
-vi.mock('./HorizontalShelf', () => ({ HorizontalShelf: () => null }));
-vi.mock('./ProductCard', () => ({ ProductCard: () => null }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock('./ui/HorizontalShelfStem', () => ({
+  HorizontalShelfStem: ({ title, items }: { title: string; items: React.ReactNode[] }) => (
+    <section data-testid="post-card-stem-shelf" data-title={title}>{items}</section>
+  ),
+}));
+vi.mock('@/components/ui/StemProductCard', () => ({
+  StemProductCard: (props: ProductCardStemProps) => (
+    <button
+      data-testid="post-card-stem-product"
+      data-product-id={props.id}
+      data-requires-configuration={String(props.requiresConfiguration)}
+      onClick={() => props.onAction?.(
+        props.requiresConfiguration
+          ? { type: 'OPEN_CONFIGURATION', payload: { id: props.id } }
+          : {
+              type: 'OPEN_QUICK_VIEW',
+              payload: { product: { id: props.id, title: props.title, price: props.price, imageUrl: props.imageUrl, publisher: props.publisher } },
+            }
+      )}
+    >
+      {props.title}
+    </button>
+  ),
+}));
+vi.mock('./ProductSheetContent', () => ({
+  ProductSheetContent: ({ productId }: { productId: string }) => <div data-testid="opened-product-sheet">{productId}</div>,
+}));
 vi.mock('@/app/(reef)/cart/actions', () => ({
   addToCartAction: vi.fn(),
+  getCartSummaryAction: vi.fn(),
   updateCartItemAction: vi.fn(),
 }));
 
 const { PostCard } = await import('./PostCard');
-const { addToCartAction } = await import('@/app/(reef)/cart/actions');
+const { addToCartAction, getCartSummaryAction } = await import('@/app/(reef)/cart/actions');
 
 function makeProduct(overrides: Partial<Product> = {}): Product {
   return {
@@ -77,6 +105,11 @@ let root: Root;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(getCartSummaryAction).mockResolvedValue({
+    cart: { id: 'cart-1', userId: null, sessionToken: 'session-1', createdAt: new Date().toISOString() },
+    lines: [],
+    total: 0,
+  });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -90,7 +123,7 @@ afterEach(() => {
 async function render(post: PostWithDetails, products: Product[]) {
   await act(async () => {
     root.render(
-      <CartTotalProvider total={0}>
+      <CartTotalProvider total={0} itemCount={0}>
         <PostCard post={post} products={products} />
       </CartTotalProvider>
     );
@@ -143,6 +176,52 @@ describe('PostCard — زر "أضف إلى السلة" في Hero Product Details
     await render(makePost({ productIds: [] }), []);
 
     expect(findAddToCartButton(container)).toBeUndefined();
+    expect(addToCartAction).not.toHaveBeenCalled();
+  });
+});
+
+describe('BATCH A — PostCard product shelf', () => {
+  it('renders HorizontalShelfStem and preserves product order', async () => {
+    const first = makeProduct({ id: 'product-1', name: 'First' });
+    const second = makeProduct({ id: 'product-2', name: 'Second' });
+
+    await render(makePost({ productIds: [first.id, second.id] }), [first, second]);
+
+    const shelf = container.querySelector('[data-testid="post-card-stem-shelf"]');
+    expect(shelf?.getAttribute('data-title')).toBe('منتجات هذا المنشور');
+    expect(Array.from(shelf!.querySelectorAll('[data-product-id]')).map((node) => node.getAttribute('data-product-id')))
+      .toEqual(['product-1', 'product-2']);
+  });
+
+  it('keeps the adapter product-sheet callback wired', async () => {
+    const product = makeProduct();
+    await render(makePost(), [product]);
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="post-card-stem-product"]')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+
+    expect(document.querySelector('[data-testid="opened-product-sheet"]')?.textContent).toBe(product.id);
+  });
+
+  it('keeps size products in Stem and hands configuration to the existing product sheet', async () => {
+    const sized = makeProduct({
+      id: 'product-size',
+      options: [{ id: 'size-1', type: 'size', label: 'Large', priceModifier: 5 }],
+    });
+
+    await render(makePost({ productIds: [sized.id] }), [sized]);
+
+    const configuredCard = container.querySelector<HTMLButtonElement>('[data-testid="post-card-stem-product"]');
+    expect(configuredCard?.getAttribute('data-product-id')).toBe(sized.id);
+    expect(configuredCard?.getAttribute('data-requires-configuration')).toBe('true');
+
+    await act(async () => {
+      configuredCard!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+
+    expect(document.querySelector('[data-testid="opened-product-sheet"]')?.textContent).toBe(sized.id);
     expect(addToCartAction).not.toHaveBeenCalled();
   });
 });

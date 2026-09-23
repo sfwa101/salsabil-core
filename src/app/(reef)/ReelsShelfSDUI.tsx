@@ -20,11 +20,11 @@ import { SDUIComponent } from '@/sdui/contracts/component-contracts';
 import type { SDUIPage } from '@/sdui/schema/page.schema';
 import { ReelsHorizontalShelfStem } from '@/components/ui/ReelsHorizontalShelfStem';
 import { ReelsEmbedModalStem } from '@/components/ui/ReelsEmbedModalStem';
-import type { DummyReel } from '@/services/dummy-ui-service';
+import type { ReelSnapshot } from '@/sdui/actions/action-contracts';
 import type { RealReelSnapshot } from './data/ReelsDataSource';
 
 const SDUIReelsShelf: SDUIComponent = ({ props, onAction }) => {
-  const items = Array.isArray(props.items) ? (props.items as DummyReel[]) : [];
+  const items = Array.isArray(props.items) ? (props.items as ReelSnapshot[]) : [];
   return <ReelsHorizontalShelfStem items={items} onReelClick={(reel) => onAction?.({ type: 'OPEN_REEL', payload: reel })} />;
 };
 
@@ -37,13 +37,13 @@ interface ReelsShelfSDUIProps {
 }
 
 export function ReelsShelfSDUI({ reels }: ReelsShelfSDUIProps) {
-  const [activeReel, setActiveReel] = useState<DummyReel | null>(null);
+  const [activeReel, setActiveReel] = useState<ReelSnapshot | null>(null);
   const [isReelModalOpen, setIsReelModalOpen] = useState(false);
 
   const runtime = useMemo(() => {
     const appRuntime = new ApplicationRuntime();
     appRuntime.registerCapability('OPEN_REEL', (action) => {
-      setActiveReel(action.payload as DummyReel);
+      setActiveReel(action.payload);
       setIsReelModalOpen(true);
     });
     return appRuntime;

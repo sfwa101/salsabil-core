@@ -14,21 +14,22 @@
 import { BottomNavStem } from '@/components/ui/BottomNavStem';
 import { ReefHeader } from './ReefHeader';
 import { CartTotalProvider } from '@/components/CartTotalProvider';
-import { getCartTotalAction, getCartItemCountAction } from '@/app/(reef)/cart/actions';
+import { getCartSummaryAction } from '@/app/(reef)/cart/actions';
 
 export default async function ReefLayout({ children }: { children: React.ReactNode }) {
-  const [cartTotal, cartItemCount] = await Promise.all([
-    getCartTotalAction(),
-    getCartItemCountAction(),
-  ]);
+  const cartSummary = await getCartSummaryAction();
+
+  const cartTotal = cartSummary?.total ?? 0;
+  const cartItemCount = cartSummary?.lines.reduce((acc, l) => acc + l.item.quantity, 0) ?? 0;
+  const lines = cartSummary?.lines ?? [];
 
   return (
     // FIX-CART-CAPSULE-SYNC-AND-NAVIGATION-LAG-CRITICAL (الجزء 1) — يغلّف الشجرة بالكامل بحالة السلة
     // التفاؤلية المشتركة — CartLineItem/ProductCard/ProductOptions (في {children}) وReefHeader (هنا،
     // totalPrice عبر useCartTotal()) يقرآن/يكتبان نفس القيمة الآن، لا مصدرين منفصلين قد يتعارضان.
-    <CartTotalProvider total={cartTotal}>
+    <CartTotalProvider total={cartTotal} itemCount={cartItemCount}>
       <div data-world="reef-lavender" className="min-h-screen bg-background text-foreground">
-        <ReefHeader cartItemCount={cartItemCount} />
+        <ReefHeader lines={lines} />
 
         {/* pb-20: يمنع BottomNavStem (fixed bottom-5) من تغطية آخر عنصر في أي صفحة (reef) */}
         <div className="pb-20">{children}</div>

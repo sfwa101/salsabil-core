@@ -10,7 +10,7 @@ import { useRef, useState } from 'react';
 import Image from 'next/image';
 import type { PostWithDetails } from '@/core/modules/bayan/types';
 import type { Product } from '@/core/modules/catalog/types';
-import { HorizontalShelf } from './HorizontalShelf';
+import { HorizontalShelfStem } from './ui/HorizontalShelfStem';
 import { StemProductCardAdapter } from './StemProductCardAdapter';
 
 interface PostSheetContentProps {
@@ -62,13 +62,14 @@ export function PostSheetContent({ post, products, onSelectProduct }: PostSheetC
       {post.caption && <p className="px-1 text-sm leading-relaxed text-foreground">{post.caption}</p>}
 
       {products.length > 0 && (
-        <HorizontalShelf title="المنتجات المذكورة">
-          {products.map((product) => (
+        <HorizontalShelfStem
+          title="المنتجات المذكورة"
+          items={products.map((product) => (
             <div key={product.id} className="w-36 shrink-0 snap-start md:w-44 xl:w-48">
               <StemProductCardAdapter product={product} onOpenSheet={onSelectProduct} />
             </div>
           ))}
-        </HorizontalShelf>
+        />
       )}
     </div>
   );

@@ -37,7 +37,7 @@ import { CartActionButton } from '@/components/CartActionButton';
 import { QuantityStepper } from '@/components/QuantityStepper';
 import { useOptimisticCartLine } from '@/components/useOptimisticCartLine';
 import { useCartToast } from '@/components/useCartToast';
-import { removeCartItemAction } from '@/app/(reef)/cart/actions';
+import { CartLineItemStem } from '@/components/ui/CartLineItemStem';
 import type { CartLineSummary } from '@/core/modules/cart/types';
 
 export function CartLineItem({ line }: { line: CartLineSummary }) {
@@ -46,61 +46,26 @@ export function CartLineItem({ line }: { line: CartLineSummary }) {
   const { quantity, setQuantity } = useOptimisticCartLine(
     product.id,
     unitPrice,
-    { itemId: item.id, quantity: item.quantity },
+    { itemId: item.id, quantity: item.quantity, selection: item.selection },
     showToast
   );
 
   if (quantity <= 0) return toastNode;
 
-  const lineTotal = unitPrice * quantity;
-
   return (
-    <div className="flex gap-3 rounded-xl bg-card p-3 shadow-[var(--sb-shadow-soft)] ring-1 ring-border/50">
-      {product.imageUrl ? (
-        <Image
-          src={product.imageUrl}
-          alt={product.name}
-          width={80}
-          height={80}
-          loading="lazy"
-          className="h-20 w-20 shrink-0 rounded-lg object-cover"
-        />
-      ) : (
-        <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg bg-muted text-[10px] text-muted-foreground">
-          لا صورة
-        </div>
-      )}
-
-      <div className="flex flex-1 flex-col justify-between gap-1">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="line-clamp-2 text-sm font-medium text-foreground">{product.name}</p>
-            <p className="text-xs text-muted-foreground">
-              {unitPrice} جنيه × {quantity}
-            </p>
-          </div>
-          <form action={removeCartItemAction.bind(null, item.id) as () => void}>
-            <CartActionButton
-              ariaLabel="حذف"
-              variant="ghost"
-              size="icon-xs"
-              className="shrink-0 rounded-[10px] bg-destructive/10 text-destructive hover:bg-destructive/20"
-            >
-              <Trash2 size={14} />
-            </CartActionButton>
-          </form>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <span className="text-base font-extrabold text-primary">{lineTotal} جنيه</span>
-          <QuantityStepper
-            quantity={quantity}
-            onDecrement={() => setQuantity(quantity - 1)}
-            onIncrement={() => setQuantity(quantity + 1)}
-          />
-        </div>
-      </div>
+    <>
+      <CartLineItemStem
+        id={product.id}
+        title={product.name}
+        price={unitPrice}
+        quantity={quantity}
+        imageUrl={product.imageUrl}
+        unit={product.unit}
+        onUpdateQuantity={(id, price, newQuantity) => {
+          setQuantity(newQuantity);
+        }}
+      />
       {toastNode}
-    </div>
+    </>
   );
 }

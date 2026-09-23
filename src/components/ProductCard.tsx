@@ -65,7 +65,7 @@ export function ProductCard({
   const { quantity, setQuantity } = useOptimisticCartLine(
     product.id,
     cartLine?.unitPrice ?? product.basePrice,
-    cartLine ? { itemId: cartLine.item.id, quantity: cartLine.item.quantity } : undefined,
+    cartLine ? { itemId: cartLine.item.id, quantity: cartLine.item.quantity, selection: cartLine.item.selection } : undefined,
     showToast
   );
 

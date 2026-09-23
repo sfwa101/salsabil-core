@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useOptimistic, useState, useTransition } from 'react';
+import { Fragment, useEffect, useOptimistic, useRef, useState, useTransition } from 'react';
 import { calculatePriceAction } from '@/app/(reef)/product/[id]/actions';
 import { addToCartAction } from '@/app/(reef)/cart/actions';
 import { useCartToast } from '@/components/useCartToast';
@@ -33,6 +33,7 @@ export function ProductOptions({ product, accentColor }: { product: Product; acc
   const [price, setPrice] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const priceRequestRef = useRef(0);
   // transition منفصل عن حساب السعر أعلاه عمداً — لو استخدمنا نفس startTransition، isPending (الذي
   // يتحكم بعرض "..." في بلوك السعر) كان سيصبح true أثناء إضافة السلة أيضاً، فيظهر السعر "..." زوراً
   // أثناء عملية لا علاقة لها بحساب السعر إطلاقاً.
@@ -45,17 +46,25 @@ export function ProductOptions({ product, accentColor }: { product: Product; acc
   const [optimisticAdded, setOptimisticAdded] = useOptimistic(added, (_: boolean, next: boolean) => next);
   // FIX-CART-CAPSULE-SYNC-AND-NAVIGATION-LAG-CRITICAL (الجزء 1) — applyOptimisticDelta يُستدعى داخل
   // نفس startAddTransition أدناه، فإجمالي كبسولة الهيدر يتحرّك بنفس لحظة "✓ أُضيف للسلة" بالضبط.
-  const { applyOptimisticDelta } = useCartTotal();
+  const { applyOptimisticDelta, confirmOptimisticDelta, rollbackOptimisticDelta } = useCartTotal();
 
   useEffect(() => {
+    const requestId = ++priceRequestRef.current;
     startTransition(async () => {
-      const result = await calculatePriceAction(product.id, { sizeId, addonIds });
-      if ('error' in result) {
-        setError(result.error);
+      try {
+        const result = await calculatePriceAction(product.id, { sizeId, addonIds });
+        if (requestId !== priceRequestRef.current) return;
+        if ('error' in result) {
+          setError(result.error);
+          setPrice(null);
+        } else {
+          setError(null);
+          setPrice(result.price);
+        }
+      } catch (caughtError) {
+        if (requestId !== priceRequestRef.current) return;
+        setError(caughtError instanceof Error ? caughtError.message : 'تعذّر حساب السعر');
         setPrice(null);
-      } else {
-        setError(null);
-        setPrice(result.price);
       }
     });
   }, [product.id, sizeId, addonIds]);
@@ -67,16 +76,27 @@ export function ProductOptions({ product, accentColor }: { product: Product; acc
   function handleAddToCart() {
     startAddTransition(async () => {
       setOptimisticAdded(true);
-      applyOptimisticDelta(price ?? 0);
+      const optimisticDeltaId = applyOptimisticDelta(price ?? 0, 1);
       // FIX-LIVE-BUG-SILENT-ADD-TO-CART-FAILURE — تُسجَّل في القفل المشترك (cartMutationGate) حتى لا
       // تسبقها قراءة سلة (فتح الكبسولة أو التنقل لـ/cart) قبل اكتمالها فعلياً في قاعدة البيانات.
-      const result = await trackCartMutation(() =>
-        addToCartAction({ productId: product.id, quantity: 1, selection: { sizeId, addonIds } })
-      );
-      if ('error' in result) {
-        showToast(result.error);
-      } else {
+      try {
+        const result = await trackCartMutation(() =>
+          addToCartAction({ productId: product.id, quantity: 1, selection: { sizeId, addonIds } })
+        );
+        if ('error' in result) {
+          rollbackOptimisticDelta(optimisticDeltaId);
+          showToast(result.error);
+          return;
+        }
+        confirmOptimisticDelta(
+          optimisticDeltaId,
+          result.summary.total,
+          result.summary.lines.reduce((sum, line) => sum + line.item.quantity, 0)
+        );
         setAdded(true);
+      } catch (caughtError) {
+        rollbackOptimisticDelta(optimisticDeltaId);
+        showToast(caughtError instanceof Error ? caughtError.message : 'تعذّر تحديث السلة، حاول مرة أخرى');
       }
     });
   }
@@ -158,7 +178,7 @@ export function ProductOptions({ product, accentColor }: { product: Product; acc
             <button
               type="button"
               onClick={handleAddToCart}
-              disabled={!!error}
+              disabled={!!error || isPending || price === null}
               className="sb-press rounded-full bg-primary px-4 py-3 font-medium text-primary-foreground shadow-[var(--sb-shadow-pill)] transition hover:opacity-90 disabled:opacity-50"
               style={accentColor ? { backgroundColor: accentColor } : undefined}
             >

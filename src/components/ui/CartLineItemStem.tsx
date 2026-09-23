@@ -54,7 +54,7 @@ export const CartLineItemStem: React.FC<CartLineItemProps> = ({
       <div className="flex items-center justify-between gap-1 px-1.5 h-7 rounded-full bg-[var(--sb-muted)] border border-border/40 text-foreground shadow-sm min-w-[5rem] shrink-0 scale-95">
         <button 
           onClick={() => onUpdateQuantity(id, safePrice, Math.max(0, safeQuantity - 1))}
-          className="w-5 h-5 flex items-center justify-center hover:bg-black/10 rounded-full transition-colors"
+          className="w-5 h-5 flex items-center justify-center hover:bg-foreground/10 rounded-full transition-colors"
           aria-label="إنقاص الكمية"
         >
           {safeQuantity === 1 ? <Trash2 size={12} className="text-destructive" /> : <Minus size={12} strokeWidth={2.5} />}
@@ -66,7 +66,7 @@ export const CartLineItemStem: React.FC<CartLineItemProps> = ({
 
         <button 
           onClick={() => onUpdateQuantity(id, safePrice, safeQuantity + 1)}
-          className="w-5 h-5 flex items-center justify-center hover:bg-black/10 rounded-full transition-colors text-primary"
+          className="w-5 h-5 flex items-center justify-center hover:bg-foreground/10 rounded-full transition-colors text-primary"
           aria-label="زيادة الكمية"
         >
           <Plus size={12} strokeWidth={2.5} />

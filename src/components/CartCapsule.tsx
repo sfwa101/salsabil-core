@@ -66,7 +66,7 @@ function CartCapsuleLineRow({
   const { quantity, setQuantity } = useOptimisticCartLine(
     line.product.id,
     line.unitPrice,
-    { itemId: line.item.id, quantity: getSafeNumber(line.item.quantity, 0) },
+    { itemId: line.item.id, quantity: getSafeNumber(line.item.quantity, 0), selection: line.item.selection },
     onError
   );
 
@@ -81,7 +81,6 @@ function CartCapsuleLineRow({
       <div className="flex items-center gap-3 border-b border-border py-4">
         {line.product.imageUrl && (
           <div className="w-16 h-16 shrink-0 rounded-xl bg-muted overflow-hidden border border-border/50">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={line.product.imageUrl} alt={line.product.name} className="w-full h-full object-cover" />
           </div>
         )}
@@ -105,7 +104,6 @@ function CartCapsuleLineRow({
     <div className="flex items-center gap-3 border-b border-border py-3">
       {line.product.imageUrl && (
         <div className="w-14 h-14 shrink-0 rounded-lg bg-muted overflow-hidden">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={line.product.imageUrl} alt={line.product.name} className="w-full h-full object-cover" />
         </div>
       )}

@@ -29,7 +29,7 @@ import Image from 'next/image';
 import { BadgeCheck, Heart, Share2, Plus, ChevronLeft } from 'lucide-react';
 import type { PostMedia, PostType, PostWithDetails } from '@/core/modules/bayan/types';
 import type { Product } from '@/core/modules/catalog/types';
-import { HorizontalShelf } from './HorizontalShelf';
+import { HorizontalShelfStem } from './ui/HorizontalShelfStem';
 import { StemProductCardAdapter } from './StemProductCardAdapter';
 import { BottomSheet } from './BottomSheet';
 import { ProductSheetContent } from './ProductSheetContent';
@@ -207,13 +207,14 @@ export function PostCard({ post, products }: PostCardProps) {
       </div>
 
       {products.length > 0 && (
-        <HorizontalShelf title="منتجات هذا المنشور">
-          {products.map((product) => (
+        <HorizontalShelfStem
+          title="منتجات هذا المنشور"
+          items={products.map((product) => (
             <div key={product.id} className="w-36 shrink-0 snap-start md:w-44 xl:w-48">
               <StemProductCardAdapter product={product} onOpenSheet={openProductSheet} />
             </div>
           ))}
-        </HorizontalShelf>
+        />
       )}
 
       <BottomSheet
