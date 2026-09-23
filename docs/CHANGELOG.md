@@ -1,8 +1,8 @@
 ---
 title: سجل التغييرات
 status: ACTIVE
-version: 1.35
-last_updated: 2026-09-23
+version: 1.36
+last_updated: 2026-09-24
 owner: Claude (تلقائي مع كل مهمة كبيرة)
 source_of_truth: هذا الملف + Git log
 ---
@@ -12,6 +12,30 @@ source_of_truth: هذا الملف + Git log
 > يُسجَّل هنا فقط التغييرات المهمة (معمارية، قواعد أعمال، قاعدة بيانات، أمان، UX، قرارات، خارطة طريق) — لا كل commit صغير.
 
 ---
+
+## 2026-09-24 — STAGING-BASELINE-FOUNDER-TAXONOMY-FOUNDATION: نشر staging + أساس تصنيف المؤسس (27 عالماً)
+
+- **`feat/stem-design-tokens` مدفوع لـ`origin`** — نفس الفرع الذي يستضيف `staging.reefam.com` فعلياً
+  (تحقَّقتُ عبر `vercel inspect`: الدومين مُعرَّف على preview هذا الفرع بالضبط؛ `reefam.com`/الإنتاج
+  بلا أي نشر إطلاقاً اليوم، فلا خطر لمس إنتاج). يتضمَّن دفعة Stem البصرية المقبولة سابقاً + إصلاح
+  Cloudflare (راجع الدخول السابق) + هذه المهمة.
+- **شجرة تصنيف** — `docs/input/FOUNDER_APPROVED_TAXONOMY.md` (27 عالماً، 168 قسماً رئيسياً، 594
+  قسماً فرعياً، مُتحقَّق منه عبر `founder-taxonomy-parser.test.ts` ضد الملف الحقيقي) يُضاف كصفوف
+  جديدة في نفس `catalog_districts/categories/subcategories` — الأحياء الـ19 القديمة تُخفى
+  (`is_active=false`) لا تُحذَف (73% من كتالوج staging يشير إليها فعلياً). راجع `DD-026` في
+  `docs/DECISIONS.md`.
+- **Admin**: حذف محروس (يرفض لو مرجعي)، نقل بين آباء، تعديل slug، إخفاء/إظهار على مستوى القسم
+  الرئيسي/الفرعي (عمود `is_active` جديد — لم يكن موجوداً) — امتداد لواجهة `admin/taxonomy` القائمة
+  فعلياً، لا واجهة جديدة.
+- **عضوية عامة** (`catalog_node_product_links`/`catalog_node_post_links`، جديدان) — تخدم خير
+  البلد/السلال/الميزان/الوصفات بآلية واحدة بلا تكرار صف منتج/منشور. لا واجهة تعبئة بعد
+  (`DECISION-DEBT-003`).
+- **مهم**: SQL Migration (`scripts/2026-09-23-founder-taxonomy-foundation.sql`) لم يُطبَّق يدوياً
+  على أي بيئة بعد (لا اتصال Postgres مباشر متاح من الكود — SQL Editor يدوي حصراً). الكود يتدهور
+  بلطف (Graceful degradation، مُتحقَّق منه بالاختبارات واختبار تكامل حي) حتى يُطبَّق — لا كسر للصفحة
+  العامة بأي ترتيب نشر/تطبيق.
+- `npm run typecheck`/`arch:check` نظيفان، 414/414 اختبار وحدة و68/68 اختبار تكامل ناجح (بعد إصلاح
+  تدهور لطيف اكتُشف حياً أثناء هذه المهمة نفسها).
 
 ## 2026-09-23 — CLOUDFLARE-IMAGE-DIRECT-DELIVERY: تثبيت commit لإصلاح موجود منذ 2026-09-20 بلا commit
 

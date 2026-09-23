@@ -1,8 +1,8 @@
 ---
 title: مرجع قاعدة البيانات
 status: ACTIVE
-version: 1.13
-last_updated: 2026-09-09
+version: 1.14
+last_updated: 2026-09-24
 owner: المؤسس (أبوحتاب) + Claude
 source_of_truth: Supabase Project الفعلي (للجداول المنفَّذة) + هذا الملف (للتخطيط)
 ---
@@ -85,6 +85,64 @@ create table categories (
 );
 ```
 **الحالة:** `IMPLEMENTED` — قسم تجريبي واحد ("حي الطعام اليومي"). `parent_id` موجود لدعم الأقسام الفرعية لاحقاً — غير مُستخدَم فعلياً بعد.
+
+### `catalog_districts`, `catalog_categories`, `catalog_subcategories` — شجرة حي ← قسم رئيسي ← قسم فرعي — Evidence: `IMPLEMENTED` (TASK-17/18، `scripts/01-districts-architecture-migration.sql`)، امتداد `MIGRATION WRITTEN, NOT YET APPLIED` (STAGING-BASELINE-FOUNDER-TAXONOMY-FOUNDATION، 2026-09-23/24، `scripts/2026-09-23-founder-taxonomy-foundation.sql`)
+```sql
+create table catalog_districts (
+  id uuid primary key default gen_random_uuid(),
+  slug text unique not null,
+  name_ar text not null,
+  tagline text,                        -- جديد (2026-09-23/24) — الوصف تحت اسم الحي في ملف المؤسس
+  sort_order int not null default 0,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create table catalog_categories (
+  id uuid primary key default gen_random_uuid(),
+  district_id uuid not null references catalog_districts(id) on delete cascade,
+  slug text not null,
+  name_ar text not null,
+  sort_order int not null default 0,
+  is_active boolean not null default true,  -- جديد (2026-09-23/24) — لم يكن موجوداً، لا "إخفاء" ممكناً قبله
+  created_at timestamptz not null default now(),
+  unique (district_id, slug)
+);
+
+create table catalog_subcategories (
+  id uuid primary key default gen_random_uuid(),
+  category_id uuid not null references catalog_categories(id) on delete cascade,
+  slug text not null,
+  name_ar text not null,
+  sort_order int not null default 0,
+  is_active boolean not null default true,  -- جديد (2026-09-23/24)، نفس سبب catalog_categories
+  created_at timestamptz not null default now(),
+  unique (category_id, slug)
+);
+
+-- جديدان (2026-09-23/24) — عضوية عامة (قسم فرعي ← منتج/منشور)، للأحياء التجميعية/الهجينة/الوصفية
+-- (السلال، خير البلد، الميزان، الوصفات) — بلا تكرار صف المنتج/المنشور أبداً.
+create table catalog_node_product_links (
+  catalog_subcategory_id uuid not null references catalog_subcategories(id) on delete cascade,
+  product_id uuid not null references products(id) on delete cascade,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now(),
+  primary key (catalog_subcategory_id, product_id)
+);
+
+create table catalog_node_post_links (
+  catalog_subcategory_id uuid not null references catalog_subcategories(id) on delete cascade,
+  post_id uuid not null references posts(id) on delete cascade,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now(),
+  primary key (catalog_subcategory_id, post_id)
+);
+```
+`products` يحمل أعمدة FK اختيارية إلى هذه الشجرة (`district_id`/`catalog_category_id`/`catalog_subcategory_id`، كلها `nullable`) بجانب `category_id` القديم (الجدول أعلاه) — حالة انتقال مُقصودة وموثَّقة (`src/core/modules/catalog/types.ts` تعليق `Product.categoryId`)، لا تكرار غير مقصود.
+
+**قرار 2026-09-23/24 مهم**: الأحياء الـ19 المُنشأة بـTASK-17 (`scripts/01-districts-architecture-migration.sql`) **لا تُحذَف ولا تُعدَّل** عند استيراد شجرة المؤسس الـ27 عالماً (`docs/input/FOUNDER_APPROVED_TAXONOMY.md`) — تُخفى فقط (`is_active=false`) لأن 5,527 من 7,555 منتج على staging (73%، تحقُّق حي عبر service_role) يشيرون لها فعلياً عبر `district_id`/`catalog_category_id`. الحذف/التعديل كان سيكسر مراجع منتجات حقيقية. راجع DD الجديد في `docs/DECISIONS.md` والتقرير الكامل في `docs/audits/2026-09-23-founder-taxonomy-reconciliation.md`.
+
+**حالة تطبيق الأعمدة/الجداول الجديدة**: SQL مكتوب (`scripts/2026-09-23-founder-taxonomy-foundation.sql`) لكن **لم يُطبَّق يدوياً بعد على أي بيئة** وقت كتابة هذا القسم (لا اتصال Postgres مباشر متاح من الكود لتنفيذ DDL — SQL Editor يدوي حصراً، راجع §8 أدناه). الكود التطبيقي (`catalog.repository.ts`) يتدهور بلطف (Graceful degradation، أكواد خطأ PostgREST `42703`/`PGRST205`) لو نُشِر قبل التطبيق — القراءة العامة تعمل بسلوكها القديم (كل الصفوف نشطة، لا عضوية) حتى يُطبَّق العمود/الجدول، بدل كسر الصفحة.
 
 ### `products`
 ```sql

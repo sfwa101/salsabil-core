@@ -1,9 +1,9 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.42
+version: 1.43
 authority: Security & Correctness (قسم DECISION DEBT REGISTRY) + Engineering Decision Log (باقي الملف)
-last_updated: 2026-09-23
+last_updated: 2026-09-24
 last_verified: 2026-09-14
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف
@@ -3148,6 +3148,72 @@ Review by: عند أي طلب لإعادة تفعيل Vercel Image Optimization 
 Blocking: NO — يُصلِح استهلاك حصة قائمة، لا يمنع أي عمل حالي
 Status: ACTIVE
 Related: next.config.ts، next.config.test.ts، docs/audits/2026-09-20-cart-rounding-images-cleanup-districts-report.md §3أ
+```
+
+### DD-026
+```
+Decision: (1) شجرة تصنيف المؤسس الـ27 عالماً (`docs/input/FOUNDER_APPROVED_TAXONOMY.md`) تُضاف كصفوف
+          جديدة داخل نفس جداول `catalog_districts/catalog_categories/catalog_subcategories` القائمة
+          فعلياً (TASK-17/18) — لا معمارية تصنيف موازية ثانية. الأحياء الـ19 القديمة (المُنشأة بـ
+          `scripts/01-districts-architecture-migration.sql`) **تُخفى (`is_active=false`) لا تُحذَف
+          ولا تُعدَّل** — جسر توافق مؤقت موثَّق صراحة، لا حل نهائي.
+          (2) عضوية عامة (قسم فرعي ← منتج/منشور) عبر جدولين جديدين صغيرين
+          (`catalog_node_product_links`، `catalog_node_post_links`) تخدم الأربعة عوالم الخاصة (خير
+          البلد/السلال/الميزان/الوصفات) كلها بآلية واحدة، بدل أربعة أنظمة خاصة منفصلة (Collections/
+          Tags/Hybrid/Content) — بطلب صريح من المؤسس في هذه الجلسة. الوصفات تُمثَّل كمنشورات بيان
+          (`posts`/`post_products`، DD-024) لا جدول `recipes` جديد.
+          (3) الكود التطبيقي (`catalog.repository.ts`) يتدهور بلطف (Graceful degradation) لو نُشِر
+          هذا الكود قبل تطبيق SQL Migration يدوياً على بيئة معيَّنة — يكتشف عمود/جدول غير موجود
+          (أكواد PostgREST `42703`/`PGRST205`) ويتراجع للسلوك القديم (كل الصفوف نشطة، لا عضوية) بدل
+          كسر الصفحة العامة كاملة.
+Reason: تحقُّق حي عبر service_role (2026-09-23/24) أثبت أن 5,527 من 7,555 منتج على staging (73%)
+          يشيرون فعلياً لأحد الأحياء/الأقسام الـ19 القديمة عبر `district_id`/`catalog_category_id` —
+          ليست بيانات تجريبية مُهمَلة كما بدا من قراءة التاسك أول مرة. حذف/إعادة تسمية تلك الشجرة
+          كان سيكسر مراجع منتجات حقيقية حية بلا داعٍ، بينما المهمة تمنع صراحة أي إعادة تصنيف/حذف
+          منتجات في نفس التاسك (مؤجَّل لتاسك "إعادة ضبط الكتالوج" المنفصل). الإخفاء بدل الحذف هو
+          الخيار الوحيد المتوافق مع كل القيود معاً.
+          الجسر التقني (2): الأربعة عوالم الخاصة جميعها — عند التحليل — تحتاج فعلياً "قسم فرعي يعرض
+          منتجات/محتوى إضافياً بلا امتلاكه" فقط؛ لا حاجة حقيقية لأربعة نماذج بيانات مختلفة.
+          الجسر التقني (3): لا نظام Migrations رسمي (docs/DATABASE.md §8)، ولا اتصال Postgres مباشر
+          متاح من الكود لتنفيذ DDL — SQL Editor يدوي حصراً بيد المؤسس، بتوقيت غير مضمون بالنسبة لنشر
+          هذا الكود. تحقَّقتُ حياً (dev وstaging) أن هذا العمود/الجدول غير مُطبَّقين وقت كتابة هذا
+          الإدخال — التدهور اللطيف ليس تحوّطاً نظرياً، بل ضرورة فعلية مؤكَّدة (بلاه، الصفحة العامة
+          للتصنيف كانت ستنكسر كاملة فور نشر هذا الفرع).
+Risk: (1) الأحياء القديمة المخفية تبقى مرجعاً حياً لمعظم الكتالوج — أي مهمة "إعادة ضبط الكتالوج"
+          مستقبلية يجب أن تتعامل معها صراحة (إعادة تصنيف أو حذف مع منتجاتها معاً)، لا تتجاهلها. (2)
+          جدولا العضوية الجديدان فاضيان تماماً اليوم — الأساس (Schema/Domain Contract/Tests) فقط، لا
+          محتوى فعلي ولا واجهة إدارة لتعبئته (راجع DECISION-DEBT-003 أدناه). (3) SQL Migration
+          (`scripts/2026-09-23-founder-taxonomy-foundation.sql`) وسكربت الاستيراد
+          (`scripts/2026-09-23-import-founder-taxonomy.ts --apply`) **لم يُطبَّقا/يُشغَّلا فعلياً على
+          أي بيئة بعد** — هذا الإدخال يوثِّق القرار والتصميم المُنفَّذ في الكود، لا تنفيذاً فعلياً على
+          staging. راجع Task Report لهذه المهمة للحالة الدقيقة.
+Owner: Founder
+Created: 2026-09-23/24
+Review by: عند تنفيذ SQL Migration فعلياً + تشغيل سكربت الاستيراد --apply؛ وعند بدء تاسك "إعادة ضبط
+          الكتالوج" المنفصل (يجب أن يتعامل مع الأحياء القديمة المخفية صراحة)
+Blocking: NO — أساس بلا تنفيذ فعلي بعد، لا يغيّر أي سلوك حي حتى يُطبَّق يدوياً
+Status: ACTIVE (تصميم مُقفَل)، PENDING_MANUAL_APPLICATION (تنفيذ فعلي على أي بيئة)
+Related: scripts/2026-09-23-founder-taxonomy-foundation.sql، scripts/2026-09-23-import-founder-
+          taxonomy.ts، docs/audits/2026-09-23-founder-taxonomy-reconciliation.md، DD-024، AGENTS.md
+          §14 (L4)، DECISION-DEBT-003
+```
+
+### DECISION-DEBT-003 — لا واجهة إدارة لتعبئة عضوية العقدة (Collections/خير البلد/الميزان/الوصفات)
+```
+ماذا وُجد: جدولا `catalog_node_product_links`/`catalog_node_post_links` وطبقة service/repository
+          الكاملة موجودون (DD-026)، لكن لا شاشة Admin لربط منتج/منشور بقسم فرعي معيَّن — الربط اليوم
+          ممكن فقط برمجياً (`catalogService.linkProductToNode`/`linkPostToNode` مباشرة عبر سكربت أو
+          console) لا من لوحة الإدارة.
+لماذا لم يُصلَح الآن: طلب المؤسس الصريح في هذه الجلسة نفسها — "Schema + domain contracts + tests
+          are in scope; full advanced business behavior/content authoring UI may remain deferred"،
+          لتفادي تضخيم نطاق تاسك أساسه أصلاً ضخم (نشر staging + شجرة تصنيف كاملة + إدارة ديناميكية).
+الخطر المتبقي: الأربعة عوالم الخاصة (خير البلد/السلال/الميزان/الوصفات) تبقى شجرة تصنيف فاضية بلا
+          منتجات ظاهرة فعلياً للعميل حتى تُبنى واجهة تعبئة (أو تُستخدَم سكربتات يدوية مؤقتة) — لا خطر
+          أمني أو بيانات، فقط ميزة غير مكتملة الاستخدام الفعلي.
+Owner: Founder
+Created: 2026-09-24
+Status: OPEN
+Related: DD-026
 ```
 
 ### DECISION-DEBT-001 — `design-system/no-literal-tailwind-colors` غير مُطبَّق آلياً على أي بوابة Git
