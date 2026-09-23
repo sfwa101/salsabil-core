@@ -31,10 +31,21 @@ export type AuditAction =
   // §31 بند 8 — إدارة تصنيفات/أحياء من لوحة الإدارة، بدل SQL يدوي
   | 'catalog.district_created'
   | 'catalog.district_updated'
+  | 'catalog.district_deleted'
   | 'catalog.category_created'
   | 'catalog.category_updated'
+  | 'catalog.category_moved'
+  | 'catalog.category_deleted'
   | 'catalog.subcategory_created'
   | 'catalog.subcategory_updated'
+  | 'catalog.subcategory_moved'
+  | 'catalog.subcategory_deleted'
+  // STAGING-BASELINE-FOUNDER-TAXONOMY-FOUNDATION (2026-09-23) — عضوية قسم فرعي ← منتج/منشور، للأحياء
+  // التجميعية/الهجينة/الوصفية (السلال/خير البلد/الميزان/الوصفات)
+  | 'catalog.node_product_linked'
+  | 'catalog.node_product_unlinked'
+  | 'catalog.node_post_linked'
+  | 'catalog.node_post_unlinked'
   // §31 بند 9 — أول كود يستهلك delivery_offices/drivers/delivery_jobs
   | 'delivery.job_created'
   | 'delivery.driver_added'

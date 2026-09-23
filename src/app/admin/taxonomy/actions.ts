@@ -24,9 +24,9 @@ async function requireAdmin() {
   return session;
 }
 
-const createDistrictSchema = z.object({ slug: slugSchema, nameAr: nameArSchema, sortOrder: sortOrderSchema });
+const createDistrictSchema = z.object({ slug: slugSchema, nameAr: nameArSchema, tagline: z.string().trim().nullable().optional(), sortOrder: sortOrderSchema });
 
-export async function createDistrictAction(input: { slug: string; nameAr: string; sortOrder: number }): Promise<ActionResult> {
+export async function createDistrictAction(input: { slug: string; nameAr: string; tagline?: string | null; sortOrder: number }): Promise<ActionResult> {
   let session;
   try {
     session = await requireAdmin();
@@ -45,9 +45,23 @@ export async function createDistrictAction(input: { slug: string; nameAr: string
   }
 }
 
-const updateDistrictSchema = z.object({ id: uuidSchema, nameAr: nameArSchema, sortOrder: sortOrderSchema, isActive: z.boolean() });
+const updateDistrictSchema = z.object({
+  id: uuidSchema,
+  slug: slugSchema.optional(),
+  nameAr: nameArSchema,
+  tagline: z.string().trim().nullable().optional(),
+  sortOrder: sortOrderSchema,
+  isActive: z.boolean(),
+});
 
-export async function updateDistrictAction(input: { id: string; nameAr: string; sortOrder: number; isActive: boolean }): Promise<ActionResult> {
+export async function updateDistrictAction(input: {
+  id: string;
+  slug?: string;
+  nameAr: string;
+  tagline?: string | null;
+  sortOrder: number;
+  isActive: boolean;
+}): Promise<ActionResult> {
   let session;
   try {
     session = await requireAdmin();
@@ -58,7 +72,31 @@ export async function updateDistrictAction(input: { id: string; nameAr: string; 
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'مدخلات غير صحيحة' };
 
   try {
-    await catalogService.updateDistrict(parsed.data.id, { nameAr: parsed.data.nameAr, sortOrder: parsed.data.sortOrder, isActive: parsed.data.isActive }, { id: session.userId, role: session.role });
+    await catalogService.updateDistrict(
+      parsed.data.id,
+      { slug: parsed.data.slug, nameAr: parsed.data.nameAr, tagline: parsed.data.tagline, sortOrder: parsed.data.sortOrder, isActive: parsed.data.isActive },
+      { id: session.userId, role: session.role }
+    );
+    revalidatePath('/admin/taxonomy');
+    return { success: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'حدث خطأ غير متوقع' };
+  }
+}
+
+export async function deleteDistrictAction(id: string): Promise<ActionResult> {
+  let session;
+  try {
+    session = await requireAdmin();
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'حدث خطأ غير متوقع' };
+  }
+  const parsed = uuidSchema.safeParse(id);
+  if (!parsed.success) return { error: 'معرّف غير صحيح' };
+
+  try {
+    const result = await catalogService.deleteDistrict(parsed.data, { id: session.userId, role: session.role });
+    if (!result.deleted) return { error: result.reason };
     revalidatePath('/admin/taxonomy');
     return { success: true };
   } catch (e) {
@@ -87,9 +125,9 @@ export async function createCategoryAction(input: { districtId: string; slug: st
   }
 }
 
-const updateCategorySchema = z.object({ id: uuidSchema, nameAr: nameArSchema, sortOrder: sortOrderSchema });
+const updateCategorySchema = z.object({ id: uuidSchema, slug: slugSchema.optional(), nameAr: nameArSchema, sortOrder: sortOrderSchema, isActive: z.boolean() });
 
-export async function updateCategoryAction(input: { id: string; nameAr: string; sortOrder: number }): Promise<ActionResult> {
+export async function updateCategoryAction(input: { id: string; slug?: string; nameAr: string; sortOrder: number; isActive: boolean }): Promise<ActionResult> {
   let session;
   try {
     session = await requireAdmin();
@@ -100,7 +138,50 @@ export async function updateCategoryAction(input: { id: string; nameAr: string; 
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'مدخلات غير صحيحة' };
 
   try {
-    await catalogService.updateCatalogCategory(parsed.data.id, { nameAr: parsed.data.nameAr, sortOrder: parsed.data.sortOrder }, { id: session.userId, role: session.role });
+    await catalogService.updateCatalogCategory(
+      parsed.data.id,
+      { slug: parsed.data.slug, nameAr: parsed.data.nameAr, sortOrder: parsed.data.sortOrder, isActive: parsed.data.isActive },
+      { id: session.userId, role: session.role }
+    );
+    revalidatePath('/admin/taxonomy');
+    return { success: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'حدث خطأ غير متوقع' };
+  }
+}
+
+export async function moveCategoryAction(input: { id: string; newDistrictId: string }): Promise<ActionResult> {
+  let session;
+  try {
+    session = await requireAdmin();
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'حدث خطأ غير متوقع' };
+  }
+  const parsed = z.object({ id: uuidSchema, newDistrictId: uuidSchema }).safeParse(input);
+  if (!parsed.success) return { error: 'مدخلات غير صحيحة' };
+
+  try {
+    await catalogService.moveCatalogCategory(parsed.data.id, parsed.data.newDistrictId, { id: session.userId, role: session.role });
+    revalidatePath('/admin/taxonomy');
+    return { success: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'حدث خطأ غير متوقع' };
+  }
+}
+
+export async function deleteCategoryAction(id: string): Promise<ActionResult> {
+  let session;
+  try {
+    session = await requireAdmin();
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'حدث خطأ غير متوقع' };
+  }
+  const parsed = uuidSchema.safeParse(id);
+  if (!parsed.success) return { error: 'معرّف غير صحيح' };
+
+  try {
+    const result = await catalogService.deleteCatalogCategory(parsed.data, { id: session.userId, role: session.role });
+    if (!result.deleted) return { error: result.reason };
     revalidatePath('/admin/taxonomy');
     return { success: true };
   } catch (e) {
@@ -129,9 +210,9 @@ export async function createSubcategoryAction(input: { categoryId: string; slug:
   }
 }
 
-const updateSubcategorySchema = z.object({ id: uuidSchema, nameAr: nameArSchema, sortOrder: sortOrderSchema });
+const updateSubcategorySchema = z.object({ id: uuidSchema, slug: slugSchema.optional(), nameAr: nameArSchema, sortOrder: sortOrderSchema, isActive: z.boolean() });
 
-export async function updateSubcategoryAction(input: { id: string; nameAr: string; sortOrder: number }): Promise<ActionResult> {
+export async function updateSubcategoryAction(input: { id: string; slug?: string; nameAr: string; sortOrder: number; isActive: boolean }): Promise<ActionResult> {
   let session;
   try {
     session = await requireAdmin();
@@ -142,7 +223,50 @@ export async function updateSubcategoryAction(input: { id: string; nameAr: strin
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'مدخلات غير صحيحة' };
 
   try {
-    await catalogService.updateCatalogSubcategory(parsed.data.id, { nameAr: parsed.data.nameAr, sortOrder: parsed.data.sortOrder }, { id: session.userId, role: session.role });
+    await catalogService.updateCatalogSubcategory(
+      parsed.data.id,
+      { slug: parsed.data.slug, nameAr: parsed.data.nameAr, sortOrder: parsed.data.sortOrder, isActive: parsed.data.isActive },
+      { id: session.userId, role: session.role }
+    );
+    revalidatePath('/admin/taxonomy');
+    return { success: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'حدث خطأ غير متوقع' };
+  }
+}
+
+export async function moveSubcategoryAction(input: { id: string; newCategoryId: string }): Promise<ActionResult> {
+  let session;
+  try {
+    session = await requireAdmin();
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'حدث خطأ غير متوقع' };
+  }
+  const parsed = z.object({ id: uuidSchema, newCategoryId: uuidSchema }).safeParse(input);
+  if (!parsed.success) return { error: 'مدخلات غير صحيحة' };
+
+  try {
+    await catalogService.moveCatalogSubcategory(parsed.data.id, parsed.data.newCategoryId, { id: session.userId, role: session.role });
+    revalidatePath('/admin/taxonomy');
+    return { success: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'حدث خطأ غير متوقع' };
+  }
+}
+
+export async function deleteSubcategoryAction(id: string): Promise<ActionResult> {
+  let session;
+  try {
+    session = await requireAdmin();
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'حدث خطأ غير متوقع' };
+  }
+  const parsed = uuidSchema.safeParse(id);
+  if (!parsed.success) return { error: 'معرّف غير صحيح' };
+
+  try {
+    const result = await catalogService.deleteCatalogSubcategory(parsed.data, { id: session.userId, role: session.role });
+    if (!result.deleted) return { error: result.reason };
     revalidatePath('/admin/taxonomy');
     return { success: true };
   } catch (e) {

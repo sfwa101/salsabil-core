@@ -31,12 +31,28 @@ vi.mock('./catalog.repository', () => ({
     findAllDistrictsForAdmin: vi.fn(),
     insertDistrict: vi.fn(),
     updateDistrict: vi.fn(),
+    countCategoriesForDistrict: vi.fn(),
+    deleteDistrict: vi.fn(),
     findAllCategoriesForAdmin: vi.fn(),
     insertCatalogCategory: vi.fn(),
     updateCatalogCategory: vi.fn(),
+    moveCatalogCategory: vi.fn(),
+    countSubcategoriesForCategory: vi.fn(),
+    deleteCatalogCategory: vi.fn(),
     findAllSubcategoriesForAdmin: vi.fn(),
     insertCatalogSubcategory: vi.fn(),
     updateCatalogSubcategory: vi.fn(),
+    findCatalogCategoryById: vi.fn(),
+    moveCatalogSubcategory: vi.fn(),
+    countProductsOwningCatalogSubcategory: vi.fn(),
+    countMembershipsForCatalogSubcategory: vi.fn(),
+    deleteCatalogSubcategory: vi.fn(),
+    linkProductToNode: vi.fn(),
+    unlinkProductFromNode: vi.fn(),
+    listLinkedProductsForNode: vi.fn(),
+    linkPostToNode: vi.fn(),
+    unlinkPostFromNode: vi.fn(),
+    listLinkedPostIdsForNode: vi.fn(),
   },
 }));
 
@@ -291,7 +307,7 @@ describe('CatalogService — شجرة التصنيف الجديدة (TASK-18، �
   });
 
   it('getDistricts يفوّض لـ findDistricts', async () => {
-    const districts = [{ id: 'd-1', slug: 'hy-alrjl', nameAr: 'حي الرجل', sortOrder: 1, isActive: true }];
+    const districts = [{ id: 'd-1', slug: 'hy-alrjl', nameAr: 'حي الرجل', tagline: null, sortOrder: 1, isActive: true }];
     vi.mocked(catalogRepository.findDistricts).mockResolvedValue(districts);
 
     const result = await catalogService.getDistricts();
@@ -488,9 +504,9 @@ describe('CatalogService.updateMerchantOfferStock (§31 بند 5)', () => {
 
 // §31 بند 8 — إدارة تصنيفات/أحياء من لوحة الإدارة
 describe('CatalogService — إدارة شجرة التصنيف (§31 بند 8)', () => {
-  const district = { id: 'district-1', slug: 'nasr-city', nameAr: 'مدينة نصر', sortOrder: 1, isActive: true };
-  const category = { id: 'cat-1', districtId: 'district-1', slug: 'daily-food', nameAr: 'أطعمة يومية', sortOrder: 1 };
-  const subcategory = { id: 'sub-1', categoryId: 'cat-1', slug: 'dairy', nameAr: 'ألبان', sortOrder: 1 };
+  const district = { id: 'district-1', slug: 'nasr-city', nameAr: 'مدينة نصر', tagline: null, sortOrder: 1, isActive: true };
+  const category = { id: 'cat-1', districtId: 'district-1', slug: 'daily-food', nameAr: 'أطعمة يومية', sortOrder: 1, isActive: true };
+  const subcategory = { id: 'sub-1', categoryId: 'cat-1', slug: 'dairy', nameAr: 'ألبان', sortOrder: 1, isActive: true };
 
   it('listAllDistrictsForAdmin يفوّض لـ findAllDistrictsForAdmin', async () => {
     vi.mocked(catalogRepository.findAllDistrictsForAdmin).mockResolvedValue([district]);
@@ -519,6 +535,25 @@ describe('CatalogService — إدارة شجرة التصنيف (§31 بند 8)'
     expect(auditService.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'catalog.district_updated', entityId: 'district-1' }));
   });
 
+  it('deleteDistrict يُرفَض لو له أقسام رئيسية تابعة، لا يستدعي الحذف الفعلي', async () => {
+    vi.mocked(catalogRepository.countCategoriesForDistrict).mockResolvedValue(2);
+
+    const result = await catalogService.deleteDistrict('district-1', actor);
+
+    expect(result).toEqual({ deleted: false, reason: expect.stringContaining('2') });
+    expect(catalogRepository.deleteDistrict).not.toHaveBeenCalled();
+  });
+
+  it('deleteDistrict ينفّذ الحذف الفعلي ويسجّل تدقيقاً لو بلا أقسام تابعة', async () => {
+    vi.mocked(catalogRepository.countCategoriesForDistrict).mockResolvedValue(0);
+
+    const result = await catalogService.deleteDistrict('district-1', actor);
+
+    expect(result).toEqual({ deleted: true });
+    expect(catalogRepository.deleteDistrict).toHaveBeenCalledWith('district-1');
+    expect(auditService.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'catalog.district_deleted', entityId: 'district-1' }));
+  });
+
   it('createCatalogCategory ينشئ حياً ويسجّل تدقيقاً', async () => {
     vi.mocked(catalogRepository.insertCatalogCategory).mockResolvedValue(category);
 
@@ -531,10 +566,36 @@ describe('CatalogService — إدارة شجرة التصنيف (§31 بند 8)'
   it('updateCatalogCategory يُحدِّث ويسجّل تدقيقاً', async () => {
     vi.mocked(catalogRepository.updateCatalogCategory).mockResolvedValue({ ...category, sortOrder: 3 });
 
-    const result = await catalogService.updateCatalogCategory('cat-1', { nameAr: 'أطعمة يومية', sortOrder: 3 }, actor);
+    const result = await catalogService.updateCatalogCategory('cat-1', { nameAr: 'أطعمة يومية', sortOrder: 3, isActive: true }, actor);
 
     expect(result.sortOrder).toBe(3);
     expect(auditService.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'catalog.category_updated', entityId: 'cat-1' }));
+  });
+
+  it('moveCatalogCategory يرفض حياً هدفاً غير موجود قبل أي كتابة', async () => {
+    vi.mocked(catalogRepository.findAllDistrictsForAdmin).mockResolvedValue([district]);
+
+    await expect(catalogService.moveCatalogCategory('cat-1', 'missing-district', actor)).rejects.toThrow('غير موجود');
+    expect(catalogRepository.moveCatalogCategory).not.toHaveBeenCalled();
+  });
+
+  it('moveCatalogCategory ينقل ويسجّل تدقيقاً لحي هدف موجود فعلاً', async () => {
+    vi.mocked(catalogRepository.findAllDistrictsForAdmin).mockResolvedValue([district, { ...district, id: 'district-2', slug: 'other' }]);
+    vi.mocked(catalogRepository.moveCatalogCategory).mockResolvedValue({ ...category, districtId: 'district-2' });
+
+    const result = await catalogService.moveCatalogCategory('cat-1', 'district-2', actor);
+
+    expect(result.districtId).toBe('district-2');
+    expect(auditService.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'catalog.category_moved', entityId: 'cat-1' }));
+  });
+
+  it('deleteCatalogCategory يُرفَض لو له أقسام فرعية تابعة', async () => {
+    vi.mocked(catalogRepository.countSubcategoriesForCategory).mockResolvedValue(1);
+
+    const result = await catalogService.deleteCatalogCategory('cat-1', actor);
+
+    expect(result).toEqual({ deleted: false, reason: expect.stringContaining('1') });
+    expect(catalogRepository.deleteCatalogCategory).not.toHaveBeenCalled();
   });
 
   it('createCatalogSubcategory ينشئ حياً ويسجّل تدقيقاً', async () => {
@@ -549,9 +610,36 @@ describe('CatalogService — إدارة شجرة التصنيف (§31 بند 8)'
   it('updateCatalogSubcategory يُحدِّث ويسجّل تدقيقاً', async () => {
     vi.mocked(catalogRepository.updateCatalogSubcategory).mockResolvedValue({ ...subcategory, nameAr: 'ألبان وأجبان' });
 
-    const result = await catalogService.updateCatalogSubcategory('sub-1', { nameAr: 'ألبان وأجبان', sortOrder: 1 }, actor);
+    const result = await catalogService.updateCatalogSubcategory('sub-1', { nameAr: 'ألبان وأجبان', sortOrder: 1, isActive: true }, actor);
 
     expect(result.nameAr).toBe('ألبان وأجبان');
     expect(auditService.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'catalog.subcategory_updated', entityId: 'sub-1' }));
+  });
+
+  it('deleteCatalogSubcategory يُرفَض لو له منتجات مملوكة أو عضويات', async () => {
+    vi.mocked(catalogRepository.countProductsOwningCatalogSubcategory).mockResolvedValue(3);
+    vi.mocked(catalogRepository.countMembershipsForCatalogSubcategory).mockResolvedValue(0);
+
+    const result = await catalogService.deleteCatalogSubcategory('sub-1', actor);
+
+    expect(result).toEqual({ deleted: false, reason: expect.stringContaining('3') });
+    expect(catalogRepository.deleteCatalogSubcategory).not.toHaveBeenCalled();
+  });
+
+  it('deleteCatalogSubcategory ينفّذ الحذف الفعلي لو بلا منتجات مملوكة وبلا عضويات', async () => {
+    vi.mocked(catalogRepository.countProductsOwningCatalogSubcategory).mockResolvedValue(0);
+    vi.mocked(catalogRepository.countMembershipsForCatalogSubcategory).mockResolvedValue(0);
+
+    const result = await catalogService.deleteCatalogSubcategory('sub-1', actor);
+
+    expect(result).toEqual({ deleted: true });
+    expect(catalogRepository.deleteCatalogSubcategory).toHaveBeenCalledWith('sub-1');
+  });
+
+  it('linkProductToNode يربط منتجاً كنسياً بقسم فرعي إضافي ويسجّل تدقيقاً — بلا إنشاء صف منتج جديد', async () => {
+    await catalogService.linkProductToNode({ catalogSubcategoryId: 'sub-basket', productId: 'prod-1' }, actor);
+
+    expect(catalogRepository.linkProductToNode).toHaveBeenCalledWith({ catalogSubcategoryId: 'sub-basket', productId: 'prod-1' });
+    expect(auditService.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'catalog.node_product_linked', entityId: 'sub-basket' }));
   });
 });

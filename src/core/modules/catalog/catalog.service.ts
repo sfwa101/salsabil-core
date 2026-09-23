@@ -20,6 +20,15 @@ import type {
 } from './types';
 import type { UserRole } from '../../kernel/khalil/types';
 
+// Postgres unique_violation (23505) على أي من قيود UNIQUE(slug)/UNIQUE(parent,slug) في شجرة التصنيف
+// → رسالة عربية مفهومة للمدير بدل خطأ Postgres خام. أي خطأ آخر يُعاد رمياً كما هو (لا يُبتلَع).
+function rethrowFriendlySlugError(error: unknown): never {
+  if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === '23505') {
+    throw new Error('هذا المعرّف (slug) مستخدَم بالفعل — اختر معرّفاً آخر');
+  }
+  throw error;
+}
+
 export class CatalogService {
   async listCategories(): Promise<Category[]> {
     return catalogRepository.findCategories();
@@ -107,8 +116,11 @@ export class CatalogService {
     return catalogRepository.findAllDistrictsForAdmin();
   }
 
-  async createDistrict(input: { slug: string; nameAr: string; sortOrder: number }, actor: { id: string; role: UserRole }): Promise<District> {
-    const district = await catalogRepository.insertDistrict(input);
+  async createDistrict(
+    input: { slug: string; nameAr: string; tagline?: string | null; sortOrder: number },
+    actor: { id: string; role: UserRole }
+  ): Promise<District> {
+    const district = await catalogRepository.insertDistrict(input).catch(rethrowFriendlySlugError);
     await auditService.log({
       actorId: actor.id,
       actorRole: actor.role,
@@ -122,10 +134,10 @@ export class CatalogService {
 
   async updateDistrict(
     id: string,
-    input: { nameAr: string; sortOrder: number; isActive: boolean },
+    input: { slug?: string; nameAr: string; tagline?: string | null; sortOrder: number; isActive: boolean },
     actor: { id: string; role: UserRole }
   ): Promise<District> {
-    const district = await catalogRepository.updateDistrict(id, input);
+    const district = await catalogRepository.updateDistrict(id, input).catch(rethrowFriendlySlugError);
     await auditService.log({
       actorId: actor.id,
       actorRole: actor.role,
@@ -137,6 +149,19 @@ export class CatalogService {
     return district;
   }
 
+  // حذف حي — يُرفَض صراحة إن كان له قسم رئيسي واحد على الأقل تابع له (لا حذف متتالٍ صامت، §13). لا
+  // حاجة لفحص منتجات مباشرة هنا — لا FK مباشر من products إلى catalog_districts سوى عبر district_id،
+  // والحي المرجعي بمنتجات دائماً له أقسام رئيسية بالفعل، فيُرفَض من فحص الأقسام أولاً.
+  async deleteDistrict(id: string, actor: { id: string; role: UserRole }): Promise<{ deleted: true } | { deleted: false; reason: string }> {
+    const categoryCount = await catalogRepository.countCategoriesForDistrict(id);
+    if (categoryCount > 0) {
+      return { deleted: false, reason: `لا يمكن الحذف — يوجد ${categoryCount} قسم رئيسي تابع لهذا الحي. أخفِه (نشط=لا) بدل الحذف، أو انقل/احذف أقسامه أولاً.` };
+    }
+    await catalogRepository.deleteDistrict(id);
+    await auditService.log({ actorId: actor.id, actorRole: actor.role, action: 'catalog.district_deleted', entityType: 'catalog_district', entityId: id, metadata: {} });
+    return { deleted: true };
+  }
+
   async listAllCategoriesForAdmin(districtId: string): Promise<CatalogCategory[]> {
     return catalogRepository.findAllCategoriesForAdmin(districtId);
   }
@@ -145,7 +170,7 @@ export class CatalogService {
     input: { districtId: string; slug: string; nameAr: string; sortOrder: number },
     actor: { id: string; role: UserRole }
   ): Promise<CatalogCategory> {
-    const category = await catalogRepository.insertCatalogCategory(input);
+    const category = await catalogRepository.insertCatalogCategory(input).catch(rethrowFriendlySlugError);
     await auditService.log({
       actorId: actor.id,
       actorRole: actor.role,
@@ -157,8 +182,12 @@ export class CatalogService {
     return category;
   }
 
-  async updateCatalogCategory(id: string, input: { nameAr: string; sortOrder: number }, actor: { id: string; role: UserRole }): Promise<CatalogCategory> {
-    const category = await catalogRepository.updateCatalogCategory(id, input);
+  async updateCatalogCategory(
+    id: string,
+    input: { slug?: string; nameAr: string; sortOrder: number; isActive: boolean },
+    actor: { id: string; role: UserRole }
+  ): Promise<CatalogCategory> {
+    const category = await catalogRepository.updateCatalogCategory(id, input).catch(rethrowFriendlySlugError);
     await auditService.log({
       actorId: actor.id,
       actorRole: actor.role,
@@ -170,6 +199,34 @@ export class CatalogService {
     return category;
   }
 
+  // نقل قسم رئيسي لحي آخر — يتحقَّق أن الحي الهدف موجود فعلياً قبل الاستدعاء (لا يثق بمعرّف عشوائي من
+  // العميل، §11). تصادم slug مع قسم موجود فعلاً تحت الحي الجديد يُرفَض عبر قيد UNIQUE(district_id,slug)
+  // نفسه — rethrowFriendlySlugError يترجمه لرسالة مفهومة بدل خطأ Postgres خام.
+  async moveCatalogCategory(id: string, newDistrictId: string, actor: { id: string; role: UserRole }): Promise<CatalogCategory> {
+    const targetDistrict = await catalogRepository.findAllDistrictsForAdmin().then((all) => all.find((d) => d.id === newDistrictId));
+    if (!targetDistrict) throw new Error('الحي الهدف غير موجود');
+    const category = await catalogRepository.moveCatalogCategory(id, newDistrictId).catch(rethrowFriendlySlugError);
+    await auditService.log({
+      actorId: actor.id,
+      actorRole: actor.role,
+      action: 'catalog.category_moved',
+      entityType: 'catalog_category',
+      entityId: id,
+      metadata: { newDistrictId },
+    });
+    return category;
+  }
+
+  async deleteCatalogCategory(id: string, actor: { id: string; role: UserRole }): Promise<{ deleted: true } | { deleted: false; reason: string }> {
+    const subcategoryCount = await catalogRepository.countSubcategoriesForCategory(id);
+    if (subcategoryCount > 0) {
+      return { deleted: false, reason: `لا يمكن الحذف — يوجد ${subcategoryCount} قسم فرعي تابع له. أخفِه بدل الحذف، أو انقل/احذف أقسامه الفرعية أولاً.` };
+    }
+    await catalogRepository.deleteCatalogCategory(id);
+    await auditService.log({ actorId: actor.id, actorRole: actor.role, action: 'catalog.category_deleted', entityType: 'catalog_category', entityId: id, metadata: {} });
+    return { deleted: true };
+  }
+
   async listAllSubcategoriesForAdmin(categoryId: string): Promise<CatalogSubcategory[]> {
     return catalogRepository.findAllSubcategoriesForAdmin(categoryId);
   }
@@ -178,7 +235,7 @@ export class CatalogService {
     input: { categoryId: string; slug: string; nameAr: string; sortOrder: number },
     actor: { id: string; role: UserRole }
   ): Promise<CatalogSubcategory> {
-    const subcategory = await catalogRepository.insertCatalogSubcategory(input);
+    const subcategory = await catalogRepository.insertCatalogSubcategory(input).catch(rethrowFriendlySlugError);
     await auditService.log({
       actorId: actor.id,
       actorRole: actor.role,
@@ -192,10 +249,10 @@ export class CatalogService {
 
   async updateCatalogSubcategory(
     id: string,
-    input: { nameAr: string; sortOrder: number },
+    input: { slug?: string; nameAr: string; sortOrder: number; isActive: boolean },
     actor: { id: string; role: UserRole }
   ): Promise<CatalogSubcategory> {
-    const subcategory = await catalogRepository.updateCatalogSubcategory(id, input);
+    const subcategory = await catalogRepository.updateCatalogSubcategory(id, input).catch(rethrowFriendlySlugError);
     await auditService.log({
       actorId: actor.id,
       actorRole: actor.role,
@@ -205,6 +262,101 @@ export class CatalogService {
       metadata: input,
     });
     return subcategory;
+  }
+
+  async moveCatalogSubcategory(id: string, newCategoryId: string, actor: { id: string; role: UserRole }): Promise<CatalogSubcategory> {
+    const targetCategory = await catalogRepository.findCatalogCategoryById(newCategoryId);
+    if (!targetCategory) throw new Error('القسم الرئيسي الهدف غير موجود');
+    const subcategory = await catalogRepository.moveCatalogSubcategory(id, newCategoryId).catch(rethrowFriendlySlugError);
+    await auditService.log({
+      actorId: actor.id,
+      actorRole: actor.role,
+      action: 'catalog.subcategory_moved',
+      entityType: 'catalog_subcategory',
+      entityId: id,
+      metadata: { newCategoryId },
+    });
+    return subcategory;
+  }
+
+  // مرجعية = ملكية منتج مباشرة (catalog_subcategory_id) أو عضوية (catalog_node_product_links/
+  // catalog_node_post_links) — كلاهما يُرفَض به الحذف الفعلي، لا الأول فقط.
+  async deleteCatalogSubcategory(id: string, actor: { id: string; role: UserRole }): Promise<{ deleted: true } | { deleted: false; reason: string }> {
+    const [ownedProducts, memberships] = await Promise.all([
+      catalogRepository.countProductsOwningCatalogSubcategory(id),
+      catalogRepository.countMembershipsForCatalogSubcategory(id),
+    ]);
+    if (ownedProducts > 0 || memberships > 0) {
+      return {
+        deleted: false,
+        reason: `لا يمكن الحذف — ${ownedProducts} منتج مملوك مباشرة و${memberships} عضوية (سلال/خير البلد/الميزان/الوصفات) تشير إليه. أخفِه بدل الحذف.`,
+      };
+    }
+    await catalogRepository.deleteCatalogSubcategory(id);
+    await auditService.log({ actorId: actor.id, actorRole: actor.role, action: 'catalog.subcategory_deleted', entityType: 'catalog_subcategory', entityId: id, metadata: {} });
+    return { deleted: true };
+  }
+
+  // ==========================================================================
+  // عضوية عامة (قسم فرعي ← منتج/منشور) — للأحياء التجميعية/الهجينة/الوصفية (السلال/خير البلد/
+  // الميزان/الوصفات، راجع الملاحظات الخاصة في docs/input/FOUNDER_APPROVED_TAXONOMY.md). لا تُنشئ صف
+  // منتج جديداً أبداً — فقط تربط منتجاً/منشوراً كنسياً موجوداً فعلياً بقسم فرعي إضافي.
+  // ==========================================================================
+
+  async linkProductToNode(input: { catalogSubcategoryId: string; productId: string; sortOrder?: number }, actor: { id: string; role: UserRole }): Promise<void> {
+    await catalogRepository.linkProductToNode(input);
+    await auditService.log({
+      actorId: actor.id,
+      actorRole: actor.role,
+      action: 'catalog.node_product_linked',
+      entityType: 'catalog_subcategory',
+      entityId: input.catalogSubcategoryId,
+      metadata: { productId: input.productId },
+    });
+  }
+
+  async unlinkProductFromNode(catalogSubcategoryId: string, productId: string, actor: { id: string; role: UserRole }): Promise<void> {
+    await catalogRepository.unlinkProductFromNode(catalogSubcategoryId, productId);
+    await auditService.log({
+      actorId: actor.id,
+      actorRole: actor.role,
+      action: 'catalog.node_product_unlinked',
+      entityType: 'catalog_subcategory',
+      entityId: catalogSubcategoryId,
+      metadata: { productId },
+    });
+  }
+
+  async listLinkedProductsForNode(catalogSubcategoryId: string): Promise<Product[]> {
+    return catalogRepository.listLinkedProductsForNode(catalogSubcategoryId);
+  }
+
+  async linkPostToNode(input: { catalogSubcategoryId: string; postId: string; sortOrder?: number }, actor: { id: string; role: UserRole }): Promise<void> {
+    await catalogRepository.linkPostToNode(input);
+    await auditService.log({
+      actorId: actor.id,
+      actorRole: actor.role,
+      action: 'catalog.node_post_linked',
+      entityType: 'catalog_subcategory',
+      entityId: input.catalogSubcategoryId,
+      metadata: { postId: input.postId },
+    });
+  }
+
+  async unlinkPostFromNode(catalogSubcategoryId: string, postId: string, actor: { id: string; role: UserRole }): Promise<void> {
+    await catalogRepository.unlinkPostFromNode(catalogSubcategoryId, postId);
+    await auditService.log({
+      actorId: actor.id,
+      actorRole: actor.role,
+      action: 'catalog.node_post_unlinked',
+      entityType: 'catalog_subcategory',
+      entityId: catalogSubcategoryId,
+      metadata: { postId },
+    });
+  }
+
+  async listLinkedPostIdsForNode(catalogSubcategoryId: string): Promise<string[]> {
+    return catalogRepository.listLinkedPostIdsForNode(catalogSubcategoryId);
   }
 
   /**

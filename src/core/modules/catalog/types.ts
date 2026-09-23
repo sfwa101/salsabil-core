@@ -69,6 +69,7 @@ export interface District {
   id: string;
   slug: string;
   nameAr: string;
+  tagline: string | null;
   sortOrder: number;
   isActive: boolean;
 }
@@ -79,6 +80,7 @@ export interface CatalogCategory {
   slug: string;
   nameAr: string;
   sortOrder: number;
+  isActive: boolean;
 }
 
 export interface CatalogSubcategory {
@@ -87,6 +89,7 @@ export interface CatalogSubcategory {
   slug: string;
   nameAr: string;
   sortOrder: number;
+  isActive: boolean;
 }
 
 // اختيار العميل عند إضافة المنتج للسلة

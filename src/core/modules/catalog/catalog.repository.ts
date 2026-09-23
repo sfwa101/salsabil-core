@@ -19,6 +19,32 @@ import type {
   ReviewQueueStatus,
 } from './types';
 
+// STAGING-BASELINE-FOUNDER-TAXONOMY-FOUNDATION (2026-09-23/24) — لا نظام Migrations رسمي
+// (docs/DATABASE.md §8)، فلا ضمان أن SQL الجديد (is_active على catalog_categories/subcategories،
+// جدولا catalog_node_*_links) طُبِّق يدوياً على أي بيئة معيَّنة وقت نشر هذا الكود. هذه الأكواد
+// (PostgREST) تُميِّز "عمود غير موجود" عن "جدول غير موجود" — تُستخدَم لتفريق الحالتين عن أي خطأ حقيقي
+// آخر يجب أن يبقى يفشل بصوت عالٍ كالمعتاد.
+const UNDEFINED_COLUMN_ERROR_CODE = '42703';
+const MISSING_TABLE_ERROR_CODE = 'PGRST205';
+
+const warnedMissingIsActiveColumns = new Set<string>();
+function warnMissingIsActiveColumnOnce(table: string): void {
+  if (warnedMissingIsActiveColumns.has(table)) return;
+  warnedMissingIsActiveColumns.add(table);
+  console.warn(
+    `⚠️ ${table}.is_active غير موجود بعد على هذه البيئة — scripts/2026-09-23-founder-taxonomy-foundation.sql لم يُطبَّق يدوياً. فلترة الإخفاء معطَّلة مؤقتاً (كل الصفوف تُعامَل كنشطة).`
+  );
+}
+
+let warnedMissingNodeLinksTable = false;
+function warnMissingNodeLinksTableOnce(): void {
+  if (warnedMissingNodeLinksTable) return;
+  warnedMissingNodeLinksTable = true;
+  console.warn(
+    '⚠️ catalog_node_product_links غير موجود بعد على هذه البيئة — scripts/2026-09-23-founder-taxonomy-foundation.sql لم يُطبَّق يدوياً. عضوية المنتجات (سلال/خير البلد/الميزان) معطَّلة مؤقتاً، المنتجات المملوكة مباشرة تعمل بشكل طبيعي.'
+  );
+}
+
 interface CategoryRow {
   id: string;
   name: string;
@@ -51,6 +77,7 @@ interface DistrictRow {
   id: string;
   slug: string;
   name_ar: string;
+  tagline: string | null;
   sort_order: number;
   is_active: boolean;
 }
@@ -61,6 +88,7 @@ interface CatalogCategoryRow {
   slug: string;
   name_ar: string;
   sort_order: number;
+  is_active: boolean;
 }
 
 interface CatalogSubcategoryRow {
@@ -69,6 +97,7 @@ interface CatalogSubcategoryRow {
   slug: string;
   name_ar: string;
   sort_order: number;
+  is_active: boolean;
 }
 
 function toCategory(row: CategoryRow): Category {
@@ -106,6 +135,7 @@ function toDistrict(row: DistrictRow): District {
     id: row.id,
     slug: row.slug,
     nameAr: row.name_ar,
+    tagline: row.tagline,
     sortOrder: row.sort_order,
     isActive: row.is_active,
   };
@@ -118,6 +148,7 @@ function toCatalogCategory(row: CatalogCategoryRow): CatalogCategory {
     slug: row.slug,
     nameAr: row.name_ar,
     sortOrder: row.sort_order,
+    isActive: row.is_active,
   };
 }
 
@@ -128,6 +159,7 @@ function toCatalogSubcategory(row: CatalogSubcategoryRow): CatalogSubcategory {
     slug: row.slug,
     nameAr: row.name_ar,
     sortOrder: row.sort_order,
+    isActive: row.is_active,
   };
 }
 
@@ -290,14 +322,22 @@ export class CatalogRepository {
     return data ? toDistrict(data as DistrictRow) : null;
   }
 
+  // STAGING-BASELINE-FOUNDER-TAXONOMY-FOUNDATION (2026-09-23/24) — is_active جديد على
+  // catalog_categories، يُطبَّق يدوياً عبر scripts/2026-09-23-founder-taxonomy-foundation.sql (لا
+  // نظام Migrations رسمي، docs/DATABASE.md §8 — لا ضمان توقيت التطبيق قبل نشر هذا الكود). لو لم
+  // يُطبَّق العمود بعد على هذه البيئة تحديداً (42703 = undefined_column)، يُعاد المحاولة بلا فلتر
+  // is_active — يُبقي الواجهة العامة تعمل بسلوكها القديم (كل الأقسام ظاهرة) بدل كسر الصفحة كاملة،
+  // حتى يُطبَّق العمود. بعد التطبيق، الفلتر يعمل تلقائياً بلا أي تغيير كود آخر.
   async findCategoriesForDistrict(districtId: string): Promise<CatalogCategory[]> {
-    const { data, error } = await supabase
-      .from('catalog_categories')
-      .select('*')
-      .eq('district_id', districtId)
-      .order('sort_order');
-    if (error) throw error;
-    return (data as CatalogCategoryRow[]).map(toCatalogCategory);
+    const filtered = await supabase.from('catalog_categories').select('*').eq('district_id', districtId).eq('is_active', true).order('sort_order');
+    if (filtered.error?.code === UNDEFINED_COLUMN_ERROR_CODE) {
+      warnMissingIsActiveColumnOnce('catalog_categories');
+      const fallback = await supabase.from('catalog_categories').select('*').eq('district_id', districtId).order('sort_order');
+      if (fallback.error) throw fallback.error;
+      return (fallback.data as CatalogCategoryRow[]).map((row) => toCatalogCategory({ ...row, is_active: true }));
+    }
+    if (filtered.error) throw filtered.error;
+    return (filtered.data as CatalogCategoryRow[]).map(toCatalogCategory);
   }
 
   async findCatalogCategoryBySlug(districtId: string, slug: string): Promise<CatalogCategory | null> {
@@ -311,14 +351,18 @@ export class CatalogRepository {
     return data ? toCatalogCategory(data as CatalogCategoryRow) : null;
   }
 
+  // نفس تحفُّظ findCategoriesForDistrict أعلاه — is_active على catalog_subcategories جديد أيضاً،
+  // بلا ضمان توقيت تطبيق يدوي على أي بيئة معيَّنة.
   async findSubcategoriesForCategory(categoryId: string): Promise<CatalogSubcategory[]> {
-    const { data, error } = await supabase
-      .from('catalog_subcategories')
-      .select('*')
-      .eq('category_id', categoryId)
-      .order('sort_order');
-    if (error) throw error;
-    return (data as CatalogSubcategoryRow[]).map(toCatalogSubcategory);
+    const filtered = await supabase.from('catalog_subcategories').select('*').eq('category_id', categoryId).eq('is_active', true).order('sort_order');
+    if (filtered.error?.code === UNDEFINED_COLUMN_ERROR_CODE) {
+      warnMissingIsActiveColumnOnce('catalog_subcategories');
+      const fallback = await supabase.from('catalog_subcategories').select('*').eq('category_id', categoryId).order('sort_order');
+      if (fallback.error) throw fallback.error;
+      return (fallback.data as CatalogSubcategoryRow[]).map((row) => toCatalogSubcategory({ ...row, is_active: true }));
+    }
+    if (filtered.error) throw filtered.error;
+    return (filtered.data as CatalogSubcategoryRow[]).map(toCatalogSubcategory);
   }
 
   async findCatalogSubcategoryBySlug(categoryId: string, slug: string): Promise<CatalogSubcategory | null> {
@@ -356,20 +400,29 @@ export class CatalogRepository {
     return (data as DistrictRow[]).map(toDistrict);
   }
 
-  async insertDistrict(input: { slug: string; nameAr: string; sortOrder: number }): Promise<District> {
+  async insertDistrict(input: { slug: string; nameAr: string; tagline?: string | null; sortOrder: number }): Promise<District> {
     const { data, error } = await supabaseAdmin
       .from('catalog_districts')
-      .insert({ slug: input.slug, name_ar: input.nameAr, sort_order: input.sortOrder, is_active: true })
+      .insert({ slug: input.slug, name_ar: input.nameAr, tagline: input.tagline ?? null, sort_order: input.sortOrder, is_active: true })
       .select('*')
       .single();
     if (error) throw error;
     return toDistrict(data as DistrictRow);
   }
 
-  async updateDistrict(id: string, input: { nameAr: string; sortOrder: number; isActive: boolean }): Promise<District> {
+  async updateDistrict(
+    id: string,
+    input: { slug?: string; nameAr: string; tagline?: string | null; sortOrder: number; isActive: boolean }
+  ): Promise<District> {
     const { data, error } = await supabaseAdmin
       .from('catalog_districts')
-      .update({ name_ar: input.nameAr, sort_order: input.sortOrder, is_active: input.isActive })
+      .update({
+        ...(input.slug !== undefined ? { slug: input.slug } : {}),
+        name_ar: input.nameAr,
+        tagline: input.tagline ?? null,
+        sort_order: input.sortOrder,
+        is_active: input.isActive,
+      })
       .eq('id', id)
       .select('*')
       .single();
@@ -377,7 +430,23 @@ export class CatalogRepository {
     return toDistrict(data as DistrictRow);
   }
 
-  // لا فلترة is_active هنا (العمود غير موجود أصلاً على catalog_categories — راجع CatalogCategoryRow).
+  // يُرجِع صفراً لو كان الحي مرجعاً فعلياً (قسم رئيسي واحد على الأقل تابع له) — الحذف الفعلي عبر
+  // deleteDistrict في catalog.service.ts يتحقَّق من هذا قبل الاستدعاء الفعلي هنا (فصل التحقق عن التنفيذ،
+  // لا تكراراً — الفحص الفعلي في مكان واحد).
+  async countCategoriesForDistrict(districtId: string): Promise<number> {
+    const { count, error } = await supabaseAdmin
+      .from('catalog_categories')
+      .select('*', { count: 'exact', head: true })
+      .eq('district_id', districtId);
+    if (error) throw error;
+    return count ?? 0;
+  }
+
+  async deleteDistrict(id: string): Promise<void> {
+    const { error } = await supabaseAdmin.from('catalog_districts').delete().eq('id', id);
+    if (error) throw error;
+  }
+
   async findAllCategoriesForAdmin(districtId: string): Promise<CatalogCategory[]> {
     const { data, error } = await supabaseAdmin.from('catalog_categories').select('*').eq('district_id', districtId).order('sort_order');
     if (error) throw error;
@@ -387,22 +456,55 @@ export class CatalogRepository {
   async insertCatalogCategory(input: { districtId: string; slug: string; nameAr: string; sortOrder: number }): Promise<CatalogCategory> {
     const { data, error } = await supabaseAdmin
       .from('catalog_categories')
-      .insert({ district_id: input.districtId, slug: input.slug, name_ar: input.nameAr, sort_order: input.sortOrder })
+      .insert({ district_id: input.districtId, slug: input.slug, name_ar: input.nameAr, sort_order: input.sortOrder, is_active: true })
       .select('*')
       .single();
     if (error) throw error;
     return toCatalogCategory(data as CatalogCategoryRow);
   }
 
-  async updateCatalogCategory(id: string, input: { nameAr: string; sortOrder: number }): Promise<CatalogCategory> {
+  async updateCatalogCategory(
+    id: string,
+    input: { slug?: string; nameAr: string; sortOrder: number; isActive: boolean }
+  ): Promise<CatalogCategory> {
     const { data, error } = await supabaseAdmin
       .from('catalog_categories')
-      .update({ name_ar: input.nameAr, sort_order: input.sortOrder })
+      .update({
+        ...(input.slug !== undefined ? { slug: input.slug } : {}),
+        name_ar: input.nameAr,
+        sort_order: input.sortOrder,
+        is_active: input.isActive,
+      })
       .eq('id', id)
       .select('*')
       .single();
     if (error) throw error;
     return toCatalogCategory(data as CatalogCategoryRow);
+  }
+
+  async moveCatalogCategory(id: string, newDistrictId: string): Promise<CatalogCategory> {
+    const { data, error } = await supabaseAdmin
+      .from('catalog_categories')
+      .update({ district_id: newDistrictId })
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return toCatalogCategory(data as CatalogCategoryRow);
+  }
+
+  async countSubcategoriesForCategory(categoryId: string): Promise<number> {
+    const { count, error } = await supabaseAdmin
+      .from('catalog_subcategories')
+      .select('*', { count: 'exact', head: true })
+      .eq('category_id', categoryId);
+    if (error) throw error;
+    return count ?? 0;
+  }
+
+  async deleteCatalogCategory(id: string): Promise<void> {
+    const { error } = await supabaseAdmin.from('catalog_categories').delete().eq('id', id);
+    if (error) throw error;
   }
 
   async findAllSubcategoriesForAdmin(categoryId: string): Promise<CatalogSubcategory[]> {
@@ -414,17 +516,25 @@ export class CatalogRepository {
   async insertCatalogSubcategory(input: { categoryId: string; slug: string; nameAr: string; sortOrder: number }): Promise<CatalogSubcategory> {
     const { data, error } = await supabaseAdmin
       .from('catalog_subcategories')
-      .insert({ category_id: input.categoryId, slug: input.slug, name_ar: input.nameAr, sort_order: input.sortOrder })
+      .insert({ category_id: input.categoryId, slug: input.slug, name_ar: input.nameAr, sort_order: input.sortOrder, is_active: true })
       .select('*')
       .single();
     if (error) throw error;
     return toCatalogSubcategory(data as CatalogSubcategoryRow);
   }
 
-  async updateCatalogSubcategory(id: string, input: { nameAr: string; sortOrder: number }): Promise<CatalogSubcategory> {
+  async updateCatalogSubcategory(
+    id: string,
+    input: { slug?: string; nameAr: string; sortOrder: number; isActive: boolean }
+  ): Promise<CatalogSubcategory> {
     const { data, error } = await supabaseAdmin
       .from('catalog_subcategories')
-      .update({ name_ar: input.nameAr, sort_order: input.sortOrder })
+      .update({
+        ...(input.slug !== undefined ? { slug: input.slug } : {}),
+        name_ar: input.nameAr,
+        sort_order: input.sortOrder,
+        is_active: input.isActive,
+      })
       .eq('id', id)
       .select('*')
       .single();
@@ -432,14 +542,150 @@ export class CatalogRepository {
     return toCatalogSubcategory(data as CatalogSubcategoryRow);
   }
 
-  async findProductsByCatalogSubcategory(subcategoryId: string): Promise<Product[]> {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .eq('catalog_subcategory_id', subcategoryId)
-      .eq('is_active', true);
+  async findCatalogCategoryById(id: string): Promise<CatalogCategory | null> {
+    const { data, error } = await supabaseAdmin.from('catalog_categories').select('*').eq('id', id).maybeSingle();
     if (error) throw error;
-    return (data as ProductRow[]).map(toProduct);
+    return data ? toCatalogCategory(data as CatalogCategoryRow) : null;
+  }
+
+  async moveCatalogSubcategory(id: string, newCategoryId: string): Promise<CatalogSubcategory> {
+    const { data, error } = await supabaseAdmin
+      .from('catalog_subcategories')
+      .update({ category_id: newCategoryId })
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return toCatalogSubcategory(data as CatalogSubcategoryRow);
+  }
+
+  // مرجعية = منتج (ملكية مباشرة أو عضوية) — لا حذف فعلي هنا لو أي منهما > 0 (الفحص في service).
+  async countProductsOwningCatalogSubcategory(subcategoryId: string): Promise<number> {
+    const { count, error } = await supabaseAdmin
+      .from('products')
+      .select('*', { count: 'exact', head: true })
+      .eq('catalog_subcategory_id', subcategoryId);
+    if (error) throw error;
+    return count ?? 0;
+  }
+
+  async countMembershipsForCatalogSubcategory(subcategoryId: string): Promise<number> {
+    const [productLinks, postLinks] = await Promise.all([
+      supabaseAdmin.from('catalog_node_product_links').select('*', { count: 'exact', head: true }).eq('catalog_subcategory_id', subcategoryId),
+      supabaseAdmin.from('catalog_node_post_links').select('*', { count: 'exact', head: true }).eq('catalog_subcategory_id', subcategoryId),
+    ]);
+    if (productLinks.error) throw productLinks.error;
+    if (postLinks.error) throw postLinks.error;
+    return (productLinks.count ?? 0) + (postLinks.count ?? 0);
+  }
+
+  async deleteCatalogSubcategory(id: string): Promise<void> {
+    const { error } = await supabaseAdmin.from('catalog_subcategories').delete().eq('id', id);
+    if (error) throw error;
+  }
+
+  // يجمع بين المنتجات المملوكة أصلاً لهذا القسم الفرعي (catalog_subcategory_id) والمنتجات المُلحَقة
+  // به فقط عبر عضوية (catalog_node_product_links — الأحياء التجميعية/الهجينة/الوصفية: السلال/خير
+  // البلد/الميزان) بلا أي تكرار لصف المنتج نفسه. Set على id يمنع ظهور نفس المنتج مرتين لو كان مملوكاً
+  // للقسم وله عضوية فيه أيضاً في نفس الوقت (حالة نظرية، لا تُفترَض مستحيلة).
+  // STAGING-BASELINE-FOUNDER-TAXONOMY-FOUNDATION (2026-09-23/24) — catalog_node_product_links جديد،
+  // يُطبَّق يدوياً (نفس تحفُّظ findCategoriesForDistrict أعلاه). لو الجدول غير موجود بعد على هذه
+  // البيئة (PGRST205 = جدول غير موجود في الـschema cache)، يُتجاهَل جانب العضوية تماماً ويُرجَع فقط
+  // المنتجات المملوكة مباشرة — نفس السلوك القديم قبل هذه الميزة، بدل كسر الصفحة.
+  async findProductsByCatalogSubcategory(subcategoryId: string): Promise<Product[]> {
+    const [ownedResult, linkedResult] = await Promise.all([
+      supabase.from('products').select('*').eq('catalog_subcategory_id', subcategoryId).eq('is_active', true),
+      supabase
+        .from('catalog_node_product_links')
+        .select('sort_order, products(*)')
+        .eq('catalog_subcategory_id', subcategoryId)
+        .order('sort_order'),
+    ]);
+    if (ownedResult.error) throw ownedResult.error;
+    if (linkedResult.error && linkedResult.error.code !== MISSING_TABLE_ERROR_CODE) throw linkedResult.error;
+    if (linkedResult.error) warnMissingNodeLinksTableOnce();
+
+    const seen = new Set<string>();
+    const products: Product[] = [];
+    for (const row of ownedResult.data as ProductRow[]) {
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      products.push(toProduct(row));
+    }
+    if (!linkedResult.error) {
+      for (const link of linkedResult.data as unknown as Array<{ products: ProductRow | null }>) {
+        const row = link.products;
+        if (!row || !row.is_active || seen.has(row.id)) continue;
+        seen.add(row.id);
+        products.push(toProduct(row));
+      }
+    }
+    return products;
+  }
+
+  // عضوية عامة (قسم فرعي ← منتج) — لا تُغيِّر catalog_subcategory_id الأصلي للمنتج، فقط تُلحقه ضمن
+  // نتائج findProductsByCatalogSubcategory لقسم فرعي آخر (السلال/خير البلد/الميزان). كتابة عبر
+  // service_role حصراً، نفس نمط بقية جداول التصنيف.
+  async linkProductToNode(input: { catalogSubcategoryId: string; productId: string; sortOrder?: number }): Promise<void> {
+    const { error } = await supabaseAdmin
+      .from('catalog_node_product_links')
+      .upsert(
+        { catalog_subcategory_id: input.catalogSubcategoryId, product_id: input.productId, sort_order: input.sortOrder ?? 0 },
+        { onConflict: 'catalog_subcategory_id,product_id' }
+      );
+    if (error) throw error;
+  }
+
+  async unlinkProductFromNode(catalogSubcategoryId: string, productId: string): Promise<void> {
+    const { error } = await supabaseAdmin
+      .from('catalog_node_product_links')
+      .delete()
+      .eq('catalog_subcategory_id', catalogSubcategoryId)
+      .eq('product_id', productId);
+    if (error) throw error;
+  }
+
+  async listLinkedProductsForNode(catalogSubcategoryId: string): Promise<Product[]> {
+    const { data, error } = await supabaseAdmin
+      .from('catalog_node_product_links')
+      .select('sort_order, products(*)')
+      .eq('catalog_subcategory_id', catalogSubcategoryId)
+      .order('sort_order');
+    if (error) throw error;
+    return (data as unknown as Array<{ products: ProductRow | null }>)
+      .map((row) => row.products)
+      .filter((row): row is ProductRow => row !== null)
+      .map(toProduct);
+  }
+
+  // نفس المبدأ لمنشورات بيان (الوصفات = محتوى + روابط منتجات — راجع DD-024، لا جدول recipes جديد).
+  async linkPostToNode(input: { catalogSubcategoryId: string; postId: string; sortOrder?: number }): Promise<void> {
+    const { error } = await supabaseAdmin
+      .from('catalog_node_post_links')
+      .upsert(
+        { catalog_subcategory_id: input.catalogSubcategoryId, post_id: input.postId, sort_order: input.sortOrder ?? 0 },
+        { onConflict: 'catalog_subcategory_id,post_id' }
+      );
+    if (error) throw error;
+  }
+
+  async unlinkPostFromNode(catalogSubcategoryId: string, postId: string): Promise<void> {
+    const { error } = await supabaseAdmin
+      .from('catalog_node_post_links')
+      .delete()
+      .eq('catalog_subcategory_id', catalogSubcategoryId)
+      .eq('post_id', postId);
+    if (error) throw error;
+  }
+
+  async listLinkedPostIdsForNode(catalogSubcategoryId: string): Promise<string[]> {
+    const { data, error } = await supabaseAdmin
+      .from('catalog_node_post_links')
+      .select('post_id')
+      .eq('catalog_subcategory_id', catalogSubcategoryId)
+      .order('sort_order');
+    if (error) throw error;
+    return (data as Array<{ post_id: string }>).map((row) => row.post_id);
   }
 
   // ==========================================================================

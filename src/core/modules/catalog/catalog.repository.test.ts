@@ -202,4 +202,52 @@ describe('CatalogRepository — شجرة التصنيف الجديدة (TASK-18)
 
     await expect(catalogRepository.findDistricts()).rejects.toThrow('db error');
   });
+
+  // STAGING-BASELINE-FOUNDER-TAXONOMY-FOUNDATION (2026-09-23/24) — is_active على
+  // catalog_categories/catalog_subcategories وجدول catalog_node_product_links جديدون، يُطبَّقان يدوياً
+  // (لا نظام Migrations رسمي). هذه المجموعة تثبّت أن findCategoriesForDistrict/
+  // findSubcategoriesForCategory/findProductsByCatalogSubcategory تتدهور بلطف (Graceful degradation)
+  // بدل كسر الصفحة كاملة، لو نُشِر هذا الكود قبل تطبيق السكربت يدوياً على بيئة معيَّنة — تحقَّقتُ من
+  // كود الخطأ الفعلي حياً (42703 لعمود غير موجود، PGRST205 لجدول غير موجود) قبل كتابة هذا الاختبار.
+  describe('التدهور اللطيف عند غياب schema الجديد (is_active/catalog_node_product_links) مؤقتاً', () => {
+    it('findCategoriesForDistrict يتراجع لاستعلام بلا is_active عند 42703، ويُعامِل كل الصفوف كنشطة', async () => {
+      const failing = makeQueryBuilder({ data: null, error: { code: '42703', message: 'column catalog_categories.is_active does not exist' } });
+      const fallback = makeQueryBuilder({ data: [catalogCategoryRow], error: null });
+      vi.mocked(supabase.from).mockReturnValueOnce(failing as never).mockReturnValueOnce(fallback as never);
+
+      const result = await catalogRepository.findCategoriesForDistrict('district-1');
+
+      expect(result).toEqual([{ id: 'cat-1', districtId: 'district-1', slug: 'anaya-whlaqa', nameAr: 'عناية وحلاقة', sortOrder: 1, isActive: true }]);
+    });
+
+    it('findSubcategoriesForCategory يتراجع لاستعلام بلا is_active عند 42703', async () => {
+      const failing = makeQueryBuilder({ data: null, error: { code: '42703', message: 'column catalog_subcategories.is_active does not exist' } });
+      const fallback = makeQueryBuilder({ data: [catalogSubcategoryRow], error: null });
+      vi.mocked(supabase.from).mockReturnValueOnce(failing as never).mockReturnValueOnce(fallback as never);
+
+      const result = await catalogRepository.findSubcategoriesForCategory('cat-1');
+
+      expect(result).toEqual([
+        { id: 'sub-1', categoryId: 'cat-1', slug: 'shfrat-wmakynat-hlaqa', nameAr: 'شفرات وماكينات حلاقة', sortOrder: 1, isActive: true },
+      ]);
+    });
+
+    it('findCategoriesForDistrict يرمي أي خطأ آخر غير 42703 كما هو، بلا تراجع صامت', async () => {
+      const failing = makeQueryBuilder({ data: null, error: { code: '500', message: 'server error' } });
+      vi.mocked(supabase.from).mockReturnValue(failing as never);
+
+      await expect(catalogRepository.findCategoriesForDistrict('district-1')).rejects.toMatchObject({ code: '500' });
+    });
+
+    it('findProductsByCatalogSubcategory يتجاهل جانب العضوية عند PGRST205 (الجدول غير موجود بعد)، ويُرجع المنتجات المملوكة فقط', async () => {
+      const ownedBuilder = makeQueryBuilder({ data: [productRow], error: null });
+      const linkedBuilder = makeQueryBuilder({ data: null, error: { code: 'PGRST205', message: "Could not find the table 'public.catalog_node_product_links'" } });
+      vi.mocked(supabase.from).mockImplementation((table: string) => (table === 'products' ? ownedBuilder : linkedBuilder) as never);
+
+      const result = await catalogRepository.findProductsByCatalogSubcategory('sub-1');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('prod-1');
+    });
+  });
 });

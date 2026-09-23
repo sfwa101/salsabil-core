@@ -22,8 +22,9 @@ export default async function AdminTaxonomyPage() {
 
   const districts = await catalogService.listAllDistrictsForAdmin();
 
-  // شجرة كاملة بجولة واحدة متوازية لكل مستوى — حجم الشجرة صغير جداً اليوم (~19 حياً)، نفس تحفّظ
-  // findAllProducts الموثَّق أصلاً في الكود ("لا خطر أداء اليوم... يُعاد تقييمه عند النمو الفعلي").
+  // شجرة كاملة بجولة واحدة متوازية لكل مستوى — حجم الشجرة صغير (46 حياً كحد أقصى بعد دمج شجرة
+  // المؤسس، راجع DD الجديد في docs/DECISIONS.md)، نفس تحفّظ findAllProducts الموثَّق أصلاً في الكود
+  // ("لا خطر أداء اليوم... يُعاد تقييمه عند النمو الفعلي").
   const districtsWithCategories = await Promise.all(
     districts.map(async (district) => {
       const categories = await catalogService.listAllCategoriesForAdmin(district.id);
@@ -35,6 +36,12 @@ export default async function AdminTaxonomyPage() {
       );
       return { district, categories: categoriesWithSubcategories };
     })
+  );
+
+  // للنقل بين الآباء (نقل قسم رئيسي لحي آخر، نقل قسم فرعي لقسم رئيسي آخر) — قائمة مسطَّحة صغيرة تكفي
+  // لعناصر <select>، لا حاجة لجولة إضافية لكل عنصر شجرة.
+  const allCategoriesFlat = districtsWithCategories.flatMap(({ district, categories }) =>
+    categories.map(({ category }) => ({ id: category.id, nameAr: category.nameAr, districtNameAr: district.nameAr }))
   );
 
   return (
@@ -54,7 +61,13 @@ export default async function AdminTaxonomyPage() {
           <p className="text-center text-muted-foreground">لا توجد أحياء بعد</p>
         ) : (
           districtsWithCategories.map(({ district, categories }) => (
-            <TaxonomyDistrictCard key={district.id} district={district} categories={categories} />
+            <TaxonomyDistrictCard
+              key={district.id}
+              district={district}
+              categories={categories}
+              allDistricts={districts}
+              allCategoriesFlat={allCategoriesFlat}
+            />
           ))
         )}
       </section>
