@@ -1,8 +1,8 @@
 ---
 title: سجل التغييرات
 status: ACTIVE
-version: 1.34
-last_updated: 2026-09-22
+version: 1.35
+last_updated: 2026-09-23
 owner: Claude (تلقائي مع كل مهمة كبيرة)
 source_of_truth: هذا الملف + Git log
 ---
@@ -12,6 +12,19 @@ source_of_truth: هذا الملف + Git log
 > يُسجَّل هنا فقط التغييرات المهمة (معمارية، قواعد أعمال، قاعدة بيانات، أمان، UX، قرارات، خارطة طريق) — لا كل commit صغير.
 
 ---
+
+## 2026-09-23 — CLOUDFLARE-IMAGE-DIRECT-DELIVERY: تثبيت commit لإصلاح موجود منذ 2026-09-20 بلا commit
+
+- **`next.config.ts`** — `images.unoptimized: true` (كان يجلس بلا commit في نسخة العمل المحلية منذ
+  2026-09-20، عبر أكثر من فرع/انتقال، بلا اكتشاف). التحقيق أثبت أن هذا هو السبب المباشر لاستهلاك حصة
+  Vercel Image Optimization في الإنتاج (Transformations ~6.5K/5K، Cache Writes ~13K/100K) — الإصلاح
+  نفسه كان مُتحقَّقاً منه حياً على `staging.reefam.com` بتاريخ 2026-09-20 لكنه لم يصل `main` قط. راجع
+  `DD-025` في `docs/DECISIONS.md`.
+- **`next.config.test.ts`** (جديد) — حارس آلي يفشل إن رجع `images.unoptimized` لـ`false` سهواً.
+- بحث شامل عن أي مسار آخر يبني `/_next/image` يدوياً أو يستخدم `<Image>` بخاصية تتجاوز إعداد config
+  العام — صفر نتائج (كل الـ15 مكوّناً المستخدِمة لـnext/image تعتمد الإعداد العام حصراً، ولا مسار
+  برمجي لتجاوزه لكل مكوّن Image فردي حسب كود next نفسه).
+- `npm run typecheck` نظيف، `npm run arch:check` نظيف (0 مخالفات)، 369/369 اختبار وحدة ناجح.
 
 ## 2026-09-22 — P0-SECURITY-GOVERNANCE-CLOSURE: حارس مسار + إغلاق SEC-P1-1 + ADR-035 (توثيق/حارس فقط، بلا منطق أعمال جديد)
 

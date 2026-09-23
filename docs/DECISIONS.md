@@ -1,9 +1,9 @@
 ---
 title: سجل القرارات المعمارية (Decision Log / ADR Index)
 status: ACTIVE
-version: 1.41
+version: 1.42
 authority: Security & Correctness (قسم DECISION DEBT REGISTRY) + Engineering Decision Log (باقي الملف)
-last_updated: 2026-09-22
+last_updated: 2026-09-23
 last_verified: 2026-09-14
 owner: المؤسس (أبوحتاب)
 source_of_truth: هذا الملف
@@ -3112,6 +3112,42 @@ Blocking: NO — لا يمنع أي عمل حالي؛ يُغيِّر آلية ا
 Status: ACTIVE
 Related: AGENTS.md §5، §6، §14 (Capability Levels)، §17 (Guardian Matrix — AI Agent Authority)، DD-023،
           نص مهمة "Fast-Track Execution: Complete Remaining Backlog" (2026-09-22/23)
+```
+
+### DD-025
+```
+Decision: تثبيت `images.unoptimized: true` في `next.config.ts` كإصلاح دائم (لا مؤقت) لمسار توصيل صور
+          Cloudflare/CDN — كل صور next/image (منتجات، سلة، منشورات Bayan، Reels) تُخدَّم مباشرة من
+          مصدرها (`assets.reefam.com`/`images.kheirzaman.com`/غيرها https) بلا مرور عبر محسِّن
+          Vercel (`/_next/image`)، بصرف النظر عن أي prop على أي مكوّن Image فردي (تحقَّقتُ من
+          `node_modules/next/dist/shared/lib/get-img-props.js`: `config.unoptimized` يفرض
+          `unoptimized = true` بلا شرط، قبل أي منطق آخر — لا يوجد مسار لأي مكوّن Image فردي لتجاوز
+          هذا صراحة). تُضاف `next.config.test.ts` (جديد) كحارس آلي يفشل إن رجع هذا الإعداد لـ`false`
+          سهواً.
+Reason: مهمة "CLOUDFLARE IMAGE DIRECT-DELIVERY FIX" (2026-09-23) بدأت من رصد استهلاك حصة Vercel Image
+          Optimization في الإنتاج (Transformations ~6.5K/5K، Cache Writes ~13K/100K). التحقيق كشف أن
+          هذا الإصلاح بعينه **قُرِّر ونُفِّذ وتحقَّق منه حياً على staging.reefam.com فعلياً بتاريخ
+          2026-09-20** (`docs/audits/2026-09-20-cart-rounding-images-cleanup-districts-report.md` §3أ
+          — قبل/بعد `curl` مباشر يثبت 402→200) — **لكنه لم يُدمَج قط بأي commit في أي فرع** (تحقَّقتُ:
+          `git log --all` لا يحتوي أي commit يضيف `unoptimized`؛ `feature/ui-antigravity` نفسه، الفرع
+          المذكور في ذلك التقرير، لا يحتوي التعديل). بقي التعديل جالساً بلا commit في نسخة العمل
+          المحلية فقط عبر انتقالين لاحقين للفرع الحالي (`feat/stem-design-tokens`) حتى اكتُشف واعتُمد
+          صراحة ضمن هذه المهمة (2026-09-23). هذا يعني أن الإنتاج الحقيقي (`main`) **لم يتوقف يوماً عن
+          استهلاك حصة Vercel** منذ 2026-09-20 رغم أن التقرير وقتها وصف الإصلاح كمكتمل — فجوة بين
+          "تحقَّق حياً على staging" و"نُشر فعلياً على main" لم تُلاحَظ حتى الآن.
+Risk: لا خطر أمني جديد — `unoptimized: true` **يُعطِّل** مسار `/_next/image` تماماً (تحقَّقتُ: لا كود
+          في المستودع يبني رابط `/_next/image` يدوياً)، فيصبح `remotePatterns: hostname: '**'`
+          الموجود مسبقاً (مبرَّر أصلاً بحرية رابط صور منشورات Bayan) **بلا أثر فعلي حالياً** (لا مسار
+          يستهلكه) — لا يُعامَل كـ"بروكسي صور مفتوح" لأن المحسِّن نفسه معطَّل. **قرار مستقبلي منفصل**
+          يبقى مفتوحاً: أي إعادة تفعيل للمحسِّن لاحقاً (ترقية خطة Vercel أو نقل لمصدر بلا حصة) يجب أن
+          تُراجِع `remotePatterns` وقتها لتضييقه، لا تعيد فتحه واسعاً كما هو الآن بلا مراجعة.
+Owner: Founder
+Created: 2026-09-20 (قرار وتحقُّق حي أصلي، غير مُسجَّل في هذا الملف وقتها)، 2026-09-23 (تثبيت + commit
+          فعلي + هذا الإدخال، بعد اكتشاف فجوة عدم الـcommit)
+Review by: عند أي طلب لإعادة تفعيل Vercel Image Optimization (ترقية خطة أو مصدر صور جديد بلا حصة)
+Blocking: NO — يُصلِح استهلاك حصة قائمة، لا يمنع أي عمل حالي
+Status: ACTIVE
+Related: next.config.ts، next.config.test.ts، docs/audits/2026-09-20-cart-rounding-images-cleanup-districts-report.md §3أ
 ```
 
 ### DECISION-DEBT-001 — `design-system/no-literal-tailwind-colors` غير مُطبَّق آلياً على أي بوابة Git
