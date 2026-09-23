@@ -3216,6 +3216,45 @@ Status: OPEN
 Related: DD-026
 ```
 
+### DECISION-DEBT-004 — `/cart` و`/checkout` يفشلان 500 لكل زائر جديد (سباق كتابة session_token) — مُكتشَف حياً على staging عند نشر هذه المهمة، غير مرتبط بالتصنيف
+```
+ماذا وُجد: كل طلب أول لـ`/cart` أو `/checkout` (زائر بلا كوكي سلة سابقة) يفشل بـHTTP 500 فعلياً على
+          staging.reefam.com بعد نشر هذه المهمة — تحقُّق حي: 5 طلبات متزامنة لـ`/cart` → 5×500، ونفس
+          الشيء لـ`/checkout`. السبب الجذري المؤكَّد (سجلات Vercel الفعلية):
+          `duplicate key value violates unique constraint "carts_session_token_key"` — نفس السباق
+          الذي وثَّقه ومنعه ADR سابق (`docs/DECISIONS.md`، سطر ~348-353: "لو استدعى الـHeader
+          `getOrCreateCart` كصفحتَي /cart/checkout بالضبط، يتسابق الاثنان... فيفشل الخاسر"). الفرق
+          هنا: `src/app/(reef)/layout.tsx` (المُعدَّل ضمن دفعة Stem المقبولة سابقاً، غير مُلمَّس في هذه
+          المهمة) يستدعي `getCartSummaryAction()` (يكتب كوكي + يُنشئ سلة) مباشرة على السطر 20 — نفس
+          الدالة الكاتبة التي تستدعيها `cart/page.tsx` وصفحة `/checkout` بشكل مستقل تماماً. الاثنان
+          (layout + page) عنصرا React Server Components يُنفَّذان بالتوازي على أول زيارة (لا كوكي
+          موجود بعد)، فيتسابقان على إدراج نفس `session_token` الجديد → القيد الفريد يفشل للخاسر →
+          500 غير مُعالَج. الأصل الذي منع هذا السباق (Header يقرأ فقط عبر `getExistingCartIdentity`،
+          لا يكتب) لا يزال سليماً في `src/app/(reef)/cart/actions.ts` — العطل الجديد مصدره
+          `layout.tsx` نفسه الذي أصبح كاتباً ثانياً مستقلاً، لا الـHeader القديم.
+لماذا لم يُصلَح الآن: خارج نطاق المهمة صراحة ("do NOT alter cart semantics/logic unnecessarily") —
+          هذه المهمة أساس تصنيف Admin ديناميكي، لا تعديل منطق سلة. الإصلاح الصحيح يحتاج قراراً
+          هندسياً (إما `layout.tsx` يتحول لقراءة فقط مثل الـHeader القديم — لكنه يحتاج المجموع/العدّ
+          لـ`CartTotalProvider` لا فقط العدّ، فقد يحتاج دالة قراءة-فقط جديدة توازي
+          `getCartItemCountAction`؛ أو معالجة `23505` بإعادة قراءة retry-on-conflict في
+          `cartRepository.createCartForSession` كما اقترح البديل (ج) المرفوض أصلاً في ذلك الـADR
+          لنفس السبب لكنه الآن الأسهل لأن نقطتي الكتابة كلتاهما مشروعتان هذه المرة) — قرار يفوق نطاق
+          هذه المهمة.
+الخطر المتبقي: **حرج** — أي زائر حقيقي جديد (بلا كوكي سلة سابق) يفتح `/cart` أو `/checkout` مباشرة
+          (لا عبر "أضف للسلة" أولاً) يرى صفحة خطأ فورية. هذا يمنع أي شراء حقيقي يبدأ بزيارة مباشرة
+          لهاتين الصفحتين — مانع إطلاق فعلي (Launch Blocker)، مُكتشَف بفعل تحقُّق نشر staging لهذه
+          المهمة نفسها (لم يكن مُختبَراً حياً من قبل — الدفعة كانت غير مدفوعة/غير منشورة أصلاً حتى
+          commit `daa9e97` في هذه المهمة).
+Owner: Founder
+Created: 2026-09-24 (اكتُشف حياً أثناء تحقُّق نشر STAGING-BASELINE-FOUNDER-TAXONOMY-FOUNDATION)
+Review by: قبل أي إعلان "جاهز لأول بيع حقيقي" — يجب إصلاحه أولاً، منفصل تماماً عن تاسك التصنيف
+Blocking: YES — مانع إطلاق فعلي، لكن غير مرتبط بأساس التصنيف نفسه (لا يمنع READY FOR CATALOG RESET
+          الخاص بهذه المهمة، يمنع فقط "الموقع جاهز لعملاء حقيقيين")
+Status: OPEN
+Related: ADR (سطر ~320-394، تصميم session_token الأصلي)، src/app/(reef)/layout.tsx،
+          src/app/(reef)/cart/actions.ts، src/app/(reef)/checkout/page.tsx
+```
+
 ### DECISION-DEBT-001 — `design-system/no-literal-tailwind-colors` غير مُطبَّق آلياً على أي بوابة Git
 ```
 ماذا وُجد: قاعدة ESLint `design-system/no-literal-tailwind-colors` (أُضيفت `f4eeada`، 2026-09-20، مع
