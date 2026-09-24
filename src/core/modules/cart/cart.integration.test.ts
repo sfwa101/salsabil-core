@@ -59,6 +59,24 @@ describe('Cart integration (Supabase حقيقي)', () => {
     cartId = first.id;
   });
 
+  // DECISION-DEBT-004 — تحقُّق تراجع حي (لا Mock) ضد القيد الفريد الحقيقي carts_session_token_key:
+  // layout.tsx وcart/page.tsx (أو checkout/page.tsx) يستدعيان getOrCreateCart بالتوازي لنفس
+  // session_token عند أول زيارة لزائر جديد (RSC تُحلّل عنصرين مستقلين بالتوازي في نفس الجولة).
+  // قبل الإصلاح: أحد الطلبين المتزامنين يفشل بخطأ Postgres 23505 غير مُعالَج (500 حي على staging).
+  // بعد الإصلاح: كل الطلبات المتزامنة تنجح وتتقارب على نفس السلة، بلا استثناء.
+  it('طلبات getOrCreateCart متزامنة بنفس session_token جديد لا تفشل بخطأ قيد فريد (سباق layout+page)', async () => {
+    const freshToken = randomUUID();
+
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => cartService.getOrCreateCart({ sessionToken: freshToken }))
+    );
+
+    const uniqueCartIds = new Set(results.map((cart) => cart.id));
+    expect(uniqueCartIds.size).toBe(1);
+
+    await supabaseAdmin.from('carts').delete().eq('session_token', freshToken);
+  });
+
   it('إضافة "دجاجة كاملة طازجة" بحجم صغير فعلياً تُعيد سعراً محسوباً حياً = 100', async () => {
     const summary = await cartService.addItem(cartId, {
       productId,

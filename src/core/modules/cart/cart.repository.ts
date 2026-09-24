@@ -67,6 +67,11 @@ function toCartItem(row: CartItemRow): CartItem {
   };
 }
 
+// Postgres unique_violation — نفس الفحص المستخدَم في catalog.service.ts (rethrowFriendlySlugError).
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && (error as { code: string }).code === '23505';
+}
+
 function toEmbeddedProduct(row: EmbeddedProductRow): Product {
   return {
     id: row.id,
@@ -102,15 +107,34 @@ export class CartRepository {
     return data ? toCart(data as CartRow) : null;
   }
 
+  // DECISION-DEBT-004: getOrCreateCart (cart.service.ts) ليست ذرّية (SELECT ثم INSERT منفصلين) —
+  // layout.tsx وcart/page.tsx (أو checkout/page.tsx) عنصرا RSC مستقلان يُنفَّذان بالتوازي لنفس
+  // الطلب الأول لزائر جديد، كلاهما يستدعي getOrCreateCart بنفس session_token (موحَّد فعلياً عبر
+  // proxy.ts قبل وصول أي منهما) فيتسابقان على INSERT نفس القيمة الفريدة. بدل منع السباق من الجذر
+  // (كلا نقطتي الكتابة مشروعتان فعلياً هذه المرة، بعكس حالة الـHeader القديمة في ADR-016) — يُعالَج
+  // هنا بإعادة قراءة عند فشل القيد الفريد (23505) بدل رميه كخطأ غير مُعالَج (500). أي خطأ آخر يُعاد
+  // رمياً كما هو — لا ابتلاع صامت. نفس نمط rethrowFriendlySlugError في catalog.service.ts.
   async createCartForUser(userId: string): Promise<Cart> {
     const { data, error } = await supabaseAdmin.from('carts').insert({ user_id: userId }).select('*').single();
-    if (error) throw error;
+    if (error) {
+      if (isUniqueViolation(error)) {
+        const existing = await this.findCartByUserId(userId);
+        if (existing) return existing;
+      }
+      throw error;
+    }
     return toCart(data as CartRow);
   }
 
   async createCartForSession(sessionToken: string): Promise<Cart> {
     const { data, error } = await supabaseAdmin.from('carts').insert({ session_token: sessionToken }).select('*').single();
-    if (error) throw error;
+    if (error) {
+      if (isUniqueViolation(error)) {
+        const existing = await this.findCartBySessionToken(sessionToken);
+        if (existing) return existing;
+      }
+      throw error;
+    }
     return toCart(data as CartRow);
   }
 
