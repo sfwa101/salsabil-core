@@ -3250,9 +3250,32 @@ Created: 2026-09-24 (اكتُشف حياً أثناء تحقُّق نشر STAGIN
 Review by: قبل أي إعلان "جاهز لأول بيع حقيقي" — يجب إصلاحه أولاً، منفصل تماماً عن تاسك التصنيف
 Blocking: YES — مانع إطلاق فعلي، لكن غير مرتبط بأساس التصنيف نفسه (لا يمنع READY FOR CATALOG RESET
           الخاص بهذه المهمة، يمنع فقط "الموقع جاهز لعملاء حقيقيين")
-Status: OPEN
-Related: ADR (سطر ~320-394، تصميم session_token الأصلي)، src/app/(reef)/layout.tsx،
-          src/app/(reef)/cart/actions.ts، src/app/(reef)/checkout/page.tsx
+Status: RESOLVED
+
+⚠️ تحديث الحل (2026-09-24، P0-GUEST-CART-CHECKOUT-REGRESSION، لا استبدال — يُقرأ مع النص الأصلي أعلاه):
+السبب الجذري المؤكَّد بالتتبّع الحي (لا افتراض من هذا السجل) كان **طبقتين** متراكبتين، ليس واحدة:
+(أ) `getOrCreateCart` (`cart.service.ts`) غير ذرّية — SELECT ثم INSERT منفصلين — `layout.tsx` و
+`cart/page.tsx`/`checkout/page.tsx` يستدعيان `getCartSummaryAction()` بالتوازي بنفس `session_token`
+(موحَّد فعلياً عبر `proxy.ts` — مشكلة تصادم التوكن الأصلية في هذا السجل **لم تعد قائمة**، توسيع
+matcher الخاص به لكل صفحات (reef) أغلقها بالفعل قبل هذه المهمة). الحل: `cartRepository.
+createCartForSession`/`createCartForUser` تلتقطان `23505` (unique_violation) وتُعيدان القراءة بدل
+رمي الخطأ. (ب) هذا الحل وحده **لم يكفِ** — تحقُّق حي مباشر (تشخيص مؤقت مُنشَر لـstaging ثم أُزيل فور
+جمع الدليل) كشف أن Next.js **Request Memoization** (`node_modules/next/dist/docs/01-app/
+03-api-reference/04-functions/fetch.md`، قسم Memoization: طلبات GET المتطابقة تُذكَّر طوال جولة
+عرض الطلب الواحد بالكامل) كانت تُعيد نتيجة القراءة الأولى المخزَّنة ("غير موجود"، قبل الإدراج) لقراءة
+إعادة المحاولة نفسها بعد فشل القيد الفريد — فيبقى الخاسر يرى "غير موجود" ويُعيد رمي الخطأ الأصلي رغم
+التزام الفائز فعلياً. لا يظهر هذا محلياً إطلاقاً (Vitest/Node المباشر لا يُصحِّحان `fetch` كما يفعل
+Next.js وقت التشغيل — احتمال 100/100 نجاح في اختبار Node مباشر ضد staging DB نفسها، مقابل ~80% فشل
+حي عبر Next.js SSR). الحل النهائي: تمرير `AbortSignal` جديد (الآلية الرسمية الوحيدة الموثَّقة لتجاوز
+الذاكرة المؤقتة لطلب bعينه) على قراءتَي إعادة المحاولة فقط، دون المساس بالتذكّر المفيد في بقية قراءات
+السلة.
+تحقُّق حي بعد النشر: 20 زائر جديد متتالٍ + 10 متزامنون فعلياً (`/` ثم `/cart`) = صفر 500 من 60+20
+طلباً؛ ورحلة Playwright كاملة (زائر جديد ← منتج حقيقي ← إضافة للسلة ← `/cart` يعرض البند ← `/checkout`
+يعرض البند) نجحت 4/4 مرات بلا خطأ console واحد، بلا إرسال أي طلب فعلي.
+Resolved: 2026-09-24 — P0-GUEST-CART-CHECKOUT-REGRESSION (راجع commits `bba6420`، `aaeb613`)
+Related (إضافية): src/core/modules/cart/cart.repository.ts، src/core/modules/cart/
+          cart.integration.test.ts (اختبار تراجع تزامن حي جديد)، src/proxy.ts (matcher الحالي، غير
+          مُعدَّل هنا، مُتحقَّق منه سليماً)
 ```
 
 ### DECISION-DEBT-001 — `design-system/no-literal-tailwind-colors` غير مُطبَّق آلياً على أي بوابة Git
