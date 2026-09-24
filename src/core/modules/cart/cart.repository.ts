@@ -114,12 +114,28 @@ export class CartRepository {
   // (كلا نقطتي الكتابة مشروعتان فعلياً هذه المرة، بعكس حالة الـHeader القديمة في ADR-016) — يُعالَج
   // هنا بإعادة قراءة عند فشل القيد الفريد (23505) بدل رميه كخطأ غير مُعالَج (500). أي خطأ آخر يُعاد
   // رمياً كما هو — لا ابتلاع صامت. نفس نمط rethrowFriendlySlugError في catalog.service.ts.
+  //
+  // ⚠️ لماذا إعادة القراءة هنا لا تستخدم findCartByUserId/findCartBySessionToken أعلاه: Next.js
+  // "Request Memoization" (node_modules/next/dist/docs/.../04-functions/fetch.md §Memoization)
+  // يُذكّر طلبات fetch المتطابقة (نفس URL) طوال جولة عرض الطلب الواحدة بالكامل، لا فقط طلبات
+  // متزامنة فعلياً — القراءة الأولى (قبل الإدراج، داخل getOrCreateCart، لم تجد شيئاً وقتها بحق) لها
+  // نفس URL الاستعلام تماماً، فتُعيد Next.js نتيجتها المخزَّنة "غير موجود" هنا بدل استعلام حقيقي —
+  // تحقُّق حي مباشر على staging.reefam.com (لا محلياً، Vitest لا يُشغِّل بيئة Next.js فيُخفي هذا كلياً؛
+  // احتمال 20/20 نجاح في اختبار Node مباشر بلا Next.js أيضاً — راجع Task Report للتفصيل الكامل).
+  // AbortSignal جديد لكل استدعاء هو الآلية الرسمية الوحيدة الموثَّقة لتجاوز الذاكرة المؤقتة لهذه
+  // القراءة تحديداً بلا المساس بالتذكّر المفيد في بقية القراءات (findCartById وغيرها).
   async createCartForUser(userId: string): Promise<Cart> {
     const { data, error } = await supabaseAdmin.from('carts').insert({ user_id: userId }).select('*').single();
     if (error) {
       if (isUniqueViolation(error)) {
-        const existing = await this.findCartByUserId(userId);
-        if (existing) return existing;
+        const { data: existing, error: retryError } = await supabaseAdmin
+          .from('carts')
+          .select('*')
+          .eq('user_id', userId)
+          .abortSignal(new AbortController().signal)
+          .maybeSingle();
+        if (retryError) throw retryError;
+        if (existing) return toCart(existing as CartRow);
       }
       throw error;
     }
@@ -130,8 +146,14 @@ export class CartRepository {
     const { data, error } = await supabaseAdmin.from('carts').insert({ session_token: sessionToken }).select('*').single();
     if (error) {
       if (isUniqueViolation(error)) {
-        const existing = await this.findCartBySessionToken(sessionToken);
-        if (existing) return existing;
+        const { data: existing, error: retryError } = await supabaseAdmin
+          .from('carts')
+          .select('*')
+          .eq('session_token', sessionToken)
+          .abortSignal(new AbortController().signal)
+          .maybeSingle();
+        if (retryError) throw retryError;
+        if (existing) return toCart(existing as CartRow);
       }
       throw error;
     }
